@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kidzone</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./landing.js"></script>
+  </head>
+  <body>
+    <header class="hero">
+      <img
+        class="hero-art"
+        src="./assets/game-maker-desk.png"
+        alt=""
+      >
+      <div class="hero-copy">
+        <p class="hero-kicker">Tiny games and bright experiments</p>
+        <h1>Kidzone</h1>
+        <p>
+          Pick a project, change one idea, and send your next pull request into
+          the world.
+        </p>
+        <a href="#projects">See the projects</a>
+      </div>
+    </header>
+    <main>
+      <section class="project-shelf" id="projects" aria-labelledby="projects-title">
+        <div class="shelf-heading">
+          <h2 id="projects-title">Project shelf</h2>
+          <p data-project-count>Loading projects...</p>
+        </div>
+        <div class="project-grid" data-project-grid></div>
+      </section>
+    </main>
+  </body>
+</html>

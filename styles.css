@@ -1,0 +1,264 @@
+:root {
+  color-scheme: light;
+  --ink: #172332;
+  --paper: #fff4c9;
+  --sun: #ffd35f;
+  --coral: #f16b5b;
+  --leaf: #4ca86f;
+  --lake: #187c96;
+  --cloud: #fffaf0;
+  --line: #172332;
+  --shadow: #28784d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+a {
+  color: inherit;
+}
+
+.hero {
+  position: relative;
+  display: grid;
+  align-items: center;
+  width: 100%;
+  min-height: 28rem;
+  height: min(68svh, 42rem);
+  overflow: hidden;
+  border-bottom: 4px solid var(--line);
+  isolation: isolate;
+}
+
+.hero::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgb(255 246 205 / 72%);
+  content: "";
+}
+
+.hero-art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.hero-copy {
+  display: grid;
+  gap: 1rem;
+  width: min(72rem, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+.hero-kicker {
+  justify-self: start;
+  padding: 0.45rem 0.7rem;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--sun);
+  box-shadow: 0.22rem 0.22rem 0 var(--lake);
+  font-weight: 800;
+}
+
+.hero h1 {
+  max-width: 34rem;
+  font-size: 6rem;
+  line-height: 0.95;
+}
+
+.hero-copy > p:not(.hero-kicker) {
+  max-width: 31rem;
+  font-size: 1.3rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.hero-copy > a {
+  justify-self: start;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  color: var(--cloud);
+  background: var(--coral);
+  box-shadow: 0.32rem 0.32rem 0 var(--shadow);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+main {
+  padding: 0 0 4rem;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgb(255 255 255 / 16%) 0 1rem,
+      transparent 1rem 3rem
+    ),
+    var(--paper);
+}
+
+.project-shelf {
+  display: grid;
+  gap: 1.5rem;
+  width: min(72rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding-top: 2rem;
+}
+
+.shelf-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 3px solid var(--line);
+  padding-bottom: 0.9rem;
+}
+
+.shelf-heading h2 {
+  font-size: 2.2rem;
+}
+
+.shelf-heading p {
+  color: #36536a;
+  font-weight: 800;
+}
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 1rem;
+}
+
+.project-card {
+  display: grid;
+  min-height: 19rem;
+  border: 3px solid var(--line);
+  border-radius: 8px;
+  background: var(--cloud);
+  box-shadow: 0.42rem 0.42rem 0 var(--line);
+  overflow: hidden;
+}
+
+.project-card > a {
+  display: grid;
+  align-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  color: inherit;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 76%), transparent 46%),
+    var(--card-color, var(--sun));
+  text-decoration: none;
+}
+
+.project-card:nth-child(3n + 1) {
+  --card-color: #ffe38c;
+}
+
+.project-card:nth-child(3n + 2) {
+  --card-color: #b8edf2;
+}
+
+.project-card:nth-child(3n) {
+  --card-color: #ffd2ca;
+}
+
+.project-card h3 {
+  max-width: 14ch;
+  font-size: 2rem;
+  line-height: 1.08;
+}
+
+.project-card p {
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.project-card-top {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.project-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  min-height: 2rem;
+}
+
+.project-tag {
+  padding: 0.25rem 0.5rem;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: rgb(255 250 240 / 82%);
+  font-size: 0.85rem;
+  font-weight: 850;
+}
+
+.project-cta {
+  justify-self: start;
+  padding: 0.55rem 0.7rem;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  color: var(--cloud);
+  background: var(--lake);
+  font-weight: 850;
+}
+
+.project-empty {
+  padding: 1rem;
+  border: 3px dashed var(--line);
+  border-radius: 8px;
+  background: var(--cloud);
+  font-weight: 750;
+}
+
+@media (max-width: 42rem) {
+  .hero h1 {
+    font-size: 3.4rem;
+  }
+
+  .hero-copy > p:not(.hero-kicker) {
+    font-size: 1.05rem;
+  }
+
+  .shelf-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .shelf-heading h2 {
+    font-size: 1.8rem;
+  }
+
+  .project-card {
+    min-height: 16rem;
+  }
+
+  .project-card h3 {
+    font-size: 1.7rem;
+  }
+}

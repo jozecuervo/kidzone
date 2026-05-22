@@ -1,0 +1,16 @@
+{
+  "projects": [
+    {
+      "slug": "make-a-game",
+      "title": "Would you like to make a game?",
+      "summary": "Start with a tiny playable canvas, change one idea, and send the first Kidzone pull request.",
+      "href": "./projects/make-a-game/",
+      "cta": "Open the starter game",
+      "tags": [
+        "starter",
+        "game"
+      ],
+      "order": 1
+    }
+  ]
+}
