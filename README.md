@@ -85,6 +85,10 @@ server or GitHub Pages instead of relying on a raw file open.
 - [Kidzone next features](./docs/NEXT.md)
 - [Contributing](./CONTRIBUTING.md)
 
+## License
+
+Kidzone is open source under the [MIT License](./LICENSE).
+
 ## Open Questions
 
 - Which age range should the first few projects target?
