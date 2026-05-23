@@ -6,10 +6,34 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const kidzoneRoot = dirname(scriptDir);
 const projectsRoot = join(kidzoneRoot, "projects");
 const indexPath = join(projectsRoot, "index.json");
+const runtimeTypes = new Set(["static"]);
+const networkAccessModes = new Set(["none", "declared-external-dependency"]);
 
 function assertString(value, label, slug) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${slug}/project.json needs a non-empty ${label}.`);
+  }
+}
+
+function assertBoolean(value, label, slug) {
+  if (typeof value !== "boolean") {
+    throw new Error(`${slug}/project.json needs a boolean ${label}.`);
+  }
+}
+
+function assertObject(value, label, slug) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${slug}/project.json needs a ${label} object.`);
+  }
+}
+
+function assertStringArray(value, label, slug) {
+  if (!Array.isArray(value) || !value.length) {
+    throw new Error(`${slug}/project.json needs a non-empty ${label} array.`);
+  }
+
+  if (!value.every((item) => typeof item === "string" && item.trim())) {
+    throw new Error(`${slug}/project.json ${label} must contain strings.`);
   }
 }
 
@@ -18,6 +42,53 @@ function assertSafeEntry(entry, slug) {
 
   if (entry.startsWith("/") || entry.split("/").includes("..")) {
     throw new Error(`${slug}/project.json entry must stay inside the project folder.`);
+  }
+}
+
+function assertSafety(metadata, slug) {
+  assertString(metadata.ageRange, "ageRange", slug);
+  assertStringArray(metadata.interaction, "interaction", slug);
+  assertObject(metadata.safety, "safety", slug);
+  assertString(metadata.safety.privacy, "safety.privacy", slug);
+  assertString(metadata.safety.adultHelp, "safety.adultHelp", slug);
+  assertString(metadata.safety.notes, "safety.notes", slug);
+}
+
+function assertRuntime(metadata, slug) {
+  assertObject(metadata.runtime, "runtime", slug);
+  assertString(metadata.runtime.type, "runtime.type", slug);
+
+  if (!runtimeTypes.has(metadata.runtime.type)) {
+    throw new Error(`${slug}/project.json runtime.type must be one of: ${[...runtimeTypes].join(", ")}.`);
+  }
+
+  assertBoolean(metadata.runtime.requiresServer, "runtime.requiresServer", slug);
+  assertString(metadata.runtime.networkAccess, "runtime.networkAccess", slug);
+
+  if (!networkAccessModes.has(metadata.runtime.networkAccess)) {
+    throw new Error(
+      `${slug}/project.json runtime.networkAccess must be one of: ${[...networkAccessModes].join(", ")}.`
+    );
+  }
+
+  assertBoolean(metadata.runtime.storesData, "runtime.storesData", slug);
+
+  if (!Array.isArray(metadata.runtime.externalDependencies)) {
+    throw new Error(`${slug}/project.json runtime.externalDependencies must be an array.`);
+  }
+
+  for (const dependency of metadata.runtime.externalDependencies) {
+    assertObject(dependency, "runtime.externalDependencies item", slug);
+    assertString(dependency.name, "runtime.externalDependencies[].name", slug);
+    assertString(dependency.url, "runtime.externalDependencies[].url", slug);
+    assertString(dependency.reason, "runtime.externalDependencies[].reason", slug);
+  }
+
+  if (
+    metadata.runtime.networkAccess === "none" &&
+    metadata.runtime.externalDependencies.length
+  ) {
+    throw new Error(`${slug}/project.json cannot list external dependencies when networkAccess is none.`);
   }
 }
 
@@ -52,6 +123,9 @@ function projectRecord(slug, metadata) {
     throw new Error(`${slug}/project.json order must be a number.`);
   }
 
+  assertSafety(metadata, slug);
+  assertRuntime(metadata, slug);
+
   return {
     slug,
     title: metadata.title,
@@ -66,7 +140,11 @@ function projectRecord(slug, metadata) {
     entry,
     cta: metadata.cta ?? "Open project",
     tags: metadata.tags ?? [],
-    order: metadata.order ?? 999
+    order: metadata.order ?? 999,
+    ageRange: metadata.ageRange,
+    interaction: metadata.interaction,
+    safety: metadata.safety,
+    runtime: metadata.runtime
   };
 }
 
@@ -88,13 +166,7 @@ export async function projectIndex() {
   const projects = [];
 
   for (const directory of projectDirectories) {
-    try {
-      projects.push(await readProject(directory));
-    } catch (error) {
-      if (error?.code !== "ENOENT") {
-        throw error;
-      }
-    }
+    projects.push(await readProject(directory));
   }
 
   projects.sort(

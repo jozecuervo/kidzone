@@ -10,5 +10,21 @@
     "platformer",
     "arcade"
   ],
-  "order": 60
+  "order": 60,
+  "ageRange": "8-12",
+  "interaction": [
+    "keyboard"
+  ],
+  "safety": {
+    "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "Adult preview may be useful for younger players because of cartoon hazards.",
+    "notes": "Includes chasing and survival-style platformer hazards."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "none",
+    "storesData": false,
+    "externalDependencies": []
+  }
 }

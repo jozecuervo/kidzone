@@ -11,5 +11,23 @@
     "color",
     "game"
   ],
-  "order": 80
+  "order": 80,
+  "ageRange": "6-10",
+  "interaction": [
+    "pointer",
+    "touch",
+    "keyboard"
+  ],
+  "safety": {
+    "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "None required for ordinary play.",
+    "notes": "No timers or score pressure; wrong mixes simply retry the same level."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "none",
+    "storesData": false,
+    "externalDependencies": []
+  }
 }

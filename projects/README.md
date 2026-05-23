@@ -32,3 +32,7 @@ node ./scripts/update-project-index.mjs
 
 The `_template` folder is the static starting point copied by the new-project
 script.
+
+Project metadata must also follow the [Kidzone project contract](./PROJECT_CONTRACT.md)
+so safety, privacy, runtime, and dependency expectations stay visible to people
+and agents.

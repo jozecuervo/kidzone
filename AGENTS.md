@@ -26,6 +26,9 @@ after more than one project clearly needs it.
 - A publishable mini-project should expose `projects/<project-slug>/index.html`.
 - A publishable mini-project should include `project.json` metadata for the
   generated landing page index.
+- `project.json` should follow `projects/PROJECT_CONTRACT.md`, including age
+  range, interactions, safety/privacy notes, storage, network access, and
+  dependency declarations.
 - `projects/_template/` is the starting point for a new mini-project.
 - Use `node ./scripts/new-project.mjs` for new folders and
   `node ./scripts/update-project-index.mjs` after metadata changes.

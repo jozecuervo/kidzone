@@ -10,5 +10,22 @@
     "math",
     "craft"
   ],
-  "order": 30
+  "order": 30,
+  "ageRange": "7-10",
+  "interaction": [
+    "keyboard",
+    "pointer"
+  ],
+  "safety": {
+    "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "Adult help may be useful for younger players practicing arithmetic.",
+    "notes": "Wrong answers reduce yarn, so a gentler mode may be a future improvement."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "none",
+    "storesData": false,
+    "externalDependencies": []
+  }
 }

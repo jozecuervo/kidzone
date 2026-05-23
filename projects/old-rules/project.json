@@ -10,5 +10,22 @@
     "retro",
     "escape"
   ],
-  "order": 70
+  "order": 70,
+  "ageRange": "8-12",
+  "interaction": [
+    "keyboard",
+    "pointer"
+  ],
+  "safety": {
+    "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "Adult preview may be useful because the theme includes sneaking and being chased.",
+    "notes": "Retro escape game with cartoon household trouble and mild chase tension."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "none",
+    "storesData": false,
+    "externalDependencies": []
+  }
 }

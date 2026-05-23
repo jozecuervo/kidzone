@@ -10,12 +10,44 @@ function projectTag(label) {
   return tag;
 }
 
+function projectBadge(label) {
+  const badge = document.createElement("span");
+
+  badge.className = "project-safety-badge";
+  badge.textContent = label;
+
+  return badge;
+}
+
+function projectSafetyBadges(project) {
+  const badges = [];
+
+  if (project.ageRange) {
+    badges.push(`Ages ${project.ageRange}`);
+  }
+
+  if (project.interaction?.includes("camera")) {
+    badges.push("Camera: adult help");
+  } else if (project.runtime?.networkAccess === "declared-external-dependency") {
+    badges.push("External dependency");
+  } else if (project.runtime?.networkAccess === "none") {
+    badges.push("No network");
+  }
+
+  if (project.runtime?.storesData === false) {
+    badges.push("No saved data");
+  }
+
+  return badges;
+}
+
 function projectCard(project) {
   const card = document.createElement("article");
   const link = document.createElement("a");
   const top = document.createElement("div");
   const meta = document.createElement("div");
   const tags = document.createElement("div");
+  const safety = document.createElement("div");
   const date = document.createElement("time");
   const title = document.createElement("h3");
   const description = document.createElement("p");
@@ -25,6 +57,7 @@ function projectCard(project) {
   top.className = "project-card-top";
   meta.className = "project-meta";
   tags.className = "project-tags";
+  safety.className = "project-safety";
   cta.className = "project-cta";
 
   link.href = project.href;
@@ -42,13 +75,17 @@ function projectCard(project) {
     tags.append(projectTag(tag));
   }
 
+  for (const badge of projectSafetyBadges(project)) {
+    safety.append(projectBadge(badge));
+  }
+
   meta.append(tags);
 
   if (project.date) {
     meta.append(date);
   }
 
-  top.append(meta, title, description);
+  top.append(meta, title, description, safety);
   link.append(top, cta);
   card.append(link);
 

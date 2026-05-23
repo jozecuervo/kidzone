@@ -216,8 +216,15 @@ main {
   gap: 0.45rem;
 }
 
+.project-safety {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .project-tag,
-.project-meta time {
+.project-meta time,
+.project-safety-badge {
   padding: 0.25rem 0.5rem;
   border: 2px solid var(--line);
   border-radius: 8px;
@@ -229,6 +236,13 @@ main {
 .project-meta time {
   flex: 0 0 auto;
   background: var(--cloud);
+}
+
+.project-safety-badge {
+  border-color: #36536a;
+  color: #172332;
+  background: rgb(255 255 255 / 72%);
+  font-size: 0.78rem;
 }
 
 .project-cta {
