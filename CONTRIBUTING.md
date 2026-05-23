@@ -28,3 +28,14 @@ node ./scripts/update-project-index.mjs
 
 Keep project files self-contained and links relative so the same work runs on
 the local server and GitHub Pages.
+
+## Before A Pull Request
+
+Run:
+
+```sh
+node ./scripts/check.mjs
+```
+
+The check catches stale project-card metadata, missing project files, and broken
+JavaScript syntax before CI has to tell you.

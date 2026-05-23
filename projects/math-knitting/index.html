@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Knitting Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Math Knitting Game</h1>
+        <p class="instructions">Solve math problems to knit your project! Get it right to add yarn, get it wrong and lose yarn!</p>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="label">Yarn:</span>
+                <span class="value" id="yarn-count">5</span>
+            </div>
+            <div class="stat">
+                <span class="label">Problems Solved:</span>
+                <span class="value" id="problems-solved">0</span>
+            </div>
+        </div>
+
+        <div class="knitting-area">
+            <div class="yarn-spool">
+                <div class="spool-body"></div>
+                <div class="spool-yarn"></div>
+            </div>
+            <svg class="yarn-thread" width="100%" height="200">
+                <path id="yarn-path" d="" stroke="#ff6b6b" stroke-width="3" fill="none" stroke-dasharray="5,5">
+                    <animate attributeName="stroke-dashoffset" from="0" to="10" dur="0.5s" repeatCount="indefinite"/>
+                </path>
+            </svg>
+            <div class="knitting-shape">
+                <div id="knitting-project"></div>
+            </div>
+        </div>
+
+        <div class="game-area">
+            <div class="problem">
+                <span id="problem-text">?</span>
+            </div>
+
+            <div class="answer-section">
+                <input type="number" id="answer-input" placeholder="Your answer" autofocus>
+                <button id="submit-btn">Submit</button>
+            </div>
+
+            <div id="feedback" class="feedback"></div>
+        </div>
+
+        <div class="game-over" id="game-over" style="display: none;">
+            <h2>Game Over!</h2>
+            <p>You ran out of yarn!</p>
+            <p>Problems Solved: <span id="final-score">0</span></p>
+            <button id="restart-btn">Start New Project</button>
+        </div>
+
+        <div class="victory" id="victory" style="display: none;">
+            <h2>🎉 Project Complete! 🎉</h2>
+            <div class="completed-scarf">
+                <div class="scarf-top"></div>
+                <div class="scarf-body"></div>
+                <div class="scarf-bottom"></div>
+            </div>
+            <p class="victory-message">You've knitted a beautiful scarf!</p>
+            <p>Problems Solved: <span id="victory-score">0</span></p>
+            <button id="new-project-btn">Start New Project</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

@@ -66,6 +66,12 @@ Refresh `projects/index.json` after editing project metadata:
 node ./scripts/update-project-index.mjs
 ```
 
+Run the full local check before pushing:
+
+```sh
+node ./scripts/check.mjs
+```
+
 The landing page reads that generated index, so preview it through the local
 server or GitHub Pages instead of relying on a raw file open.
 

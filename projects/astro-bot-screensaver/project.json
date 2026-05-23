@@ -1,0 +1,14 @@
+{
+  "title": "Astro Bot Screensaver",
+  "summary": "A bouncing Astro Bot-inspired screensaver with animated dot-matrix eyes and playful motion.",
+  "description": "Watch multiple bot faces drift, blink, glow, and track the pointer with animated LED-style eyes.",
+  "date": "2025-11-30",
+  "dateSource": "earliest creation timestamp across project files",
+  "entry": "astro.html",
+  "cta": "Start the screensaver",
+  "tags": [
+    "animation",
+    "canvas"
+  ],
+  "order": 40
+}

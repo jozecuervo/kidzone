@@ -1,4 +1,4 @@
-import { access, cp, writeFile } from "node:fs/promises";
+import { access, cp, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { updateProjectIndex } from "./update-project-index.mjs";
@@ -23,6 +23,35 @@ function fail(message) {
   process.exitCode = 1;
 }
 
+function escapeHtml(text) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+async function personalizeTemplate(projectRoot) {
+  const indexPath = join(projectRoot, "index.html");
+  const index = await readFile(indexPath, "utf8");
+
+  await writeFile(
+    indexPath,
+    index
+      .replace(
+        "<title>Kidzone Mini-Project</title>",
+        `<title>${escapeHtml(title)}</title>`
+      )
+      .replace("<h1>New mini-project</h1>", `<h1>${escapeHtml(title)}</h1>`),
+    "utf8"
+  );
+  await writeFile(
+    join(projectRoot, "README.md"),
+    `# ${title}\n\nStart with one small playable idea and keep this project folder self-contained.\n`,
+    "utf8"
+  );
+}
+
 if (!slug) {
   fail('Usage: node ./scripts/new-project.mjs <slug> "Project Title"');
 } else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
@@ -39,12 +68,17 @@ if (!slug) {
     }
 
     await cp(templateRoot, projectRoot, { recursive: true });
+    await personalizeTemplate(projectRoot);
     await writeFile(
       join(projectRoot, "project.json"),
       `${JSON.stringify(
         {
           title,
           summary: "A new Kidzone mini-project ready for its first idea.",
+          description: "A new Kidzone mini-project ready for its first idea.",
+          date: new Date().toISOString().slice(0, 10),
+          dateSource: "generated when the project was scaffolded",
+          entry: "index.html",
           cta: "Open project",
           tags: ["new"],
           order: 999

@@ -29,6 +29,8 @@ after more than one project clearly needs it.
 - `projects/_template/` is the starting point for a new mini-project.
 - Use `node ./scripts/new-project.mjs` for new folders and
   `node ./scripts/update-project-index.mjs` after metadata changes.
+- Run `node ./scripts/check.mjs` before pushing project metadata or script
+  changes.
 - Do not assume deployment at `/`; Kidzone may be served below a repository path.
 - Use the local static server for preview needs, but keep publishable projects
   deployable to GitHub Pages without server-only behavior.

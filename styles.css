@@ -202,20 +202,33 @@ main {
   gap: 0.8rem;
 }
 
+.project-meta {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 2rem;
+}
+
 .project-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  min-height: 2rem;
 }
 
-.project-tag {
+.project-tag,
+.project-meta time {
   padding: 0.25rem 0.5rem;
   border: 2px solid var(--line);
   border-radius: 8px;
   background: rgb(255 250 240 / 82%);
   font-size: 0.85rem;
   font-weight: 850;
+}
+
+.project-meta time {
+  flex: 0 0 auto;
+  background: var(--cloud);
 }
 
 .project-cta {

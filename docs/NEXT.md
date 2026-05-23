@@ -4,8 +4,10 @@
 
 - Let the project shelf grow from `project.json` metadata with one card per
   mini-project.
-- Make the first contributor path small: edit a starter project, preview it,
-  and open a pull request.
+- Add new mini-projects from the scaffold script and keep the shelf index checked
+  in CI.
+- Make the first contributor path small: edit the starter game, preview it, and
+  open a pull request.
 - Add a second mini-game after the first starter proves the folder pattern.
 
 ## After That

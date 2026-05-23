@@ -1,0 +1,274 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    background: linear-gradient(to bottom, #1a1a2e 0%, #0f0f1e 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    position: relative;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+}
+
+#game-svg {
+    display: block;
+    background: linear-gradient(to bottom, #4a5568 0%, #2d3748 50%, #1a202c 100%);
+    border: 3px solid #2d3748;
+    cursor: crosshair;
+}
+
+#ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 20px;
+    border-radius: 10px;
+    color: white;
+    font-size: 18px;
+    z-index: 100;
+    pointer-events: none;
+}
+
+#level-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+#level-name {
+    font-size: 22px;
+    font-weight: bold;
+    color: #f6ad55;
+    margin-bottom: 5px;
+}
+
+#level-selector {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+}
+
+.level-btn {
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #4a5568;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.level-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: #f6ad55;
+    transform: translateY(-2px);
+}
+
+.level-btn.active {
+    background: #f6ad55;
+    border-color: #f6ad55;
+    color: #1a202c;
+}
+
+#ui button {
+    pointer-events: all;
+    background: #e53e3e;
+    border: none;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: background 0.3s;
+    margin-left: 10px;
+}
+
+#ui button:hover {
+    background: #c53030;
+}
+
+#pickup-btn {
+    background: #48bb78;
+}
+
+#pickup-btn:hover {
+    background: #38a169;
+}
+
+#pickup-btn.active {
+    background: #4299e1;
+    animation: pulse 1s infinite;
+}
+
+#explode-btn {
+    background: #d69e2e;
+}
+
+#explode-btn:hover {
+    background: #b7791f;
+}
+
+#explode-btn.active {
+    background: #f56565;
+    animation: pulse 1s infinite;
+}
+
+#poop-btn {
+    background: #805ad5;
+}
+
+#poop-btn:hover {
+    background: #6b46c1;
+}
+
+#poop-btn.active {
+    background: #9f7aea;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+#goo-counter, #goal-counter {
+    font-weight: bold;
+}
+
+#goo-count {
+    color: #48bb78;
+    font-size: 22px;
+}
+
+#goal-count {
+    color: #f6ad55;
+    font-size: 22px;
+}
+
+.goo-ball {
+    cursor: pointer;
+    transition: r 0.1s;
+}
+
+.goo-ball:hover {
+    filter: brightness(1.2);
+}
+
+.goo-ball.placed {
+    cursor: default;
+}
+
+#game-svg.explode-mode {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><text y="20" font-size="20">💥</text></svg>') 12 12, crosshair;
+}
+
+#game-svg.explode-mode .goo-ball {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><text y="20" font-size="20">💥</text></svg>') 12 12, pointer;
+}
+
+#game-svg.explode-mode .goo-ball.placed:hover {
+    animation: shake 0.3s infinite;
+    filter: brightness(1.5) drop-shadow(0 0 8px rgba(245, 101, 101, 0.8));
+}
+
+#game-svg.pickup-mode {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><text y="20" font-size="20">✋</text></svg>') 12 12, crosshair;
+}
+
+#game-svg.pickup-mode .goo-ball {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><text y="20" font-size="20">✋</text></svg>') 12 12, pointer;
+}
+
+#game-svg.pickup-mode .goo-ball.placed:hover {
+    animation: bob 0.5s infinite;
+    filter: brightness(1.3) drop-shadow(0 0 8px rgba(72, 187, 120, 0.8));
+}
+
+@keyframes shake {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    25% { transform: translate(-1px, -1px) rotate(-2deg); }
+    75% { transform: translate(1px, 1px) rotate(2deg); }
+}
+
+@keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+.connection {
+    stroke: #2d3748;
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+
+.connection.stressed {
+    stroke: #fc8181;
+    stroke-width: 4;
+}
+
+.pipe {
+    fill: url(#pipe-gradient);
+    stroke: #2d3748;
+    stroke-width: 3;
+}
+
+.ground {
+    fill: #1a202c;
+    stroke: #2d3748;
+    stroke-width: 3;
+}
+
+.particle {
+    animation: float-away 1s ease-out forwards;
+}
+
+@keyframes float-away {
+    to {
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+}
+
+.poop-emoji {
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.goal-reached {
+    animation: goal-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes goal-pulse {
+    from {
+        filter: brightness(1) drop-shadow(0 0 10px #48bb78);
+    }
+    to {
+        filter: brightness(1.5) drop-shadow(0 0 30px #48bb78);
+    }
+}

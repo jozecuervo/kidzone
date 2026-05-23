@@ -1,0 +1,14 @@
+{
+  "title": "Cheeseworld",
+  "summary": "A platform game about collecting cheese, leveling up, and dodging a cat and grumpy old man.",
+  "description": "Move, jump, collect cheese, grab speed boosts, and survive the hazards in this mousey platformer.",
+  "date": "2026-01-24",
+  "dateSource": "earliest creation timestamp across project files",
+  "entry": "index.html",
+  "cta": "Enter Cheeseworld",
+  "tags": [
+    "platformer",
+    "arcade"
+  ],
+  "order": 60
+}

@@ -3,14 +3,114 @@
     {
       "slug": "make-a-game",
       "title": "Would you like to make a game?",
+      "description": "A tiny canvas game starter with a moving comet, collectible sparks, and obvious first pull request ideas.",
+      "date": "2026-05-22",
+      "dateSource": "earliest creation timestamp across project files",
       "summary": "Start with a tiny playable canvas, change one idea, and send the first Kidzone pull request.",
       "href": "./projects/make-a-game/",
+      "entry": "index.html",
       "cta": "Open the starter game",
       "tags": [
         "starter",
         "game"
       ],
       "order": 1
+    },
+    {
+      "slug": "world-of-poo",
+      "title": "World of Poo",
+      "description": "Build goo structures toward the pipe, manage limited goo balls, switch modes, and solve each physics level.",
+      "date": "2025-11-19",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A goo-physics puzzle game with bridges, pipes, level goals, pickup mode, explosions, and extra mischief.",
+      "href": "./projects/world-of-poo/",
+      "entry": "index.html",
+      "cta": "Play World of Poo",
+      "tags": [
+        "physics",
+        "puzzle"
+      ],
+      "order": 20
+    },
+    {
+      "slug": "math-knitting",
+      "title": "Math Knitting",
+      "description": "Solve arithmetic problems to keep yarn flowing, grow the scarf, and complete the knitting project.",
+      "date": "2025-11-19",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A math practice game where correct answers add yarn and help finish a knitted project.",
+      "href": "./projects/math-knitting/",
+      "entry": "index.html",
+      "cta": "Practice and knit",
+      "tags": [
+        "math",
+        "craft"
+      ],
+      "order": 30
+    },
+    {
+      "slug": "astro-bot-screensaver",
+      "title": "Astro Bot Screensaver",
+      "description": "Watch multiple bot faces drift, blink, glow, and track the pointer with animated LED-style eyes.",
+      "date": "2025-11-30",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A bouncing Astro Bot-inspired screensaver with animated dot-matrix eyes and playful motion.",
+      "href": "./projects/astro-bot-screensaver/astro.html",
+      "entry": "astro.html",
+      "cta": "Start the screensaver",
+      "tags": [
+        "animation",
+        "canvas"
+      ],
+      "order": 40
+    },
+    {
+      "slug": "photo-by-numbers",
+      "title": "Photo by Numbers",
+      "description": "Turn photos into line drawings with selectable edge algorithms, then color and download the result.",
+      "date": "2025-11-30",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A photo-to-coloring-page tool with webcam or upload input, edge detection, and interactive coloring.",
+      "href": "./projects/photo-by-numbers/src/index.html",
+      "entry": "src/index.html",
+      "cta": "Make a coloring page",
+      "tags": [
+        "art",
+        "camera"
+      ],
+      "order": 50
+    },
+    {
+      "slug": "cheeseworld",
+      "title": "Cheeseworld",
+      "description": "Move, jump, collect cheese, grab speed boosts, and survive the hazards in this mousey platformer.",
+      "date": "2026-01-24",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A platform game about collecting cheese, leveling up, and dodging a cat and grumpy old man.",
+      "href": "./projects/cheeseworld/",
+      "entry": "index.html",
+      "cta": "Enter Cheeseworld",
+      "tags": [
+        "platformer",
+        "arcade"
+      ],
+      "order": 60
+    },
+    {
+      "slug": "old-rules",
+      "title": "Old Rules",
+      "description": "Choose a player, dodge the grandparents and Mr. Whiskers, collect keys, and escape the house.",
+      "date": "2026-01-24",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A retro escape game about sneaking through Grandma's house, finding keys, and avoiding trouble.",
+      "href": "./projects/old-rules/old-rules-game.html",
+      "entry": "old-rules-game.html",
+      "cta": "Escape the house",
+      "tags": [
+        "retro",
+        "escape"
+      ],
+      "order": 70
     }
   ]
 }

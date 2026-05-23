@@ -14,30 +14,55 @@ function projectCard(project) {
   const card = document.createElement("article");
   const link = document.createElement("a");
   const top = document.createElement("div");
+  const meta = document.createElement("div");
   const tags = document.createElement("div");
+  const date = document.createElement("time");
   const title = document.createElement("h3");
-  const summary = document.createElement("p");
+  const description = document.createElement("p");
   const cta = document.createElement("span");
 
   card.className = "project-card";
   top.className = "project-card-top";
+  meta.className = "project-meta";
   tags.className = "project-tags";
   cta.className = "project-cta";
 
   link.href = project.href;
   title.textContent = project.title;
-  summary.textContent = project.summary;
+  description.textContent = project.description ?? project.summary;
   cta.textContent = project.cta ?? "Open project";
+
+  if (project.date) {
+    date.dateTime = project.date;
+    date.textContent = formatProjectDate(project.date);
+    date.title = project.dateSource ?? "";
+  }
 
   for (const tag of project.tags ?? []) {
     tags.append(projectTag(tag));
   }
 
-  top.append(tags, title, summary);
+  meta.append(tags);
+
+  if (project.date) {
+    meta.append(date);
+  }
+
+  top.append(meta, title, description);
   link.append(top, cta);
   card.append(link);
 
   return card;
+}
+
+function formatProjectDate(value) {
+  const date = new Date(`${value}T12:00:00`);
+
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  }).format(date);
 }
 
 function showEmpty(message) {

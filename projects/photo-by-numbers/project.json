@@ -1,0 +1,14 @@
+{
+  "title": "Photo by Numbers",
+  "summary": "A photo-to-coloring-page tool with webcam or upload input, edge detection, and interactive coloring.",
+  "description": "Turn photos into line drawings with selectable edge algorithms, then color and download the result.",
+  "date": "2025-11-30",
+  "dateSource": "earliest creation timestamp across project files",
+  "entry": "src/index.html",
+  "cta": "Make a coloring page",
+  "tags": [
+    "art",
+    "camera"
+  ],
+  "order": 50
+}

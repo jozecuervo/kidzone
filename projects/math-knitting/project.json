@@ -1,0 +1,14 @@
+{
+  "title": "Math Knitting",
+  "summary": "A math practice game where correct answers add yarn and help finish a knitted project.",
+  "description": "Solve arithmetic problems to keep yarn flowing, grow the scarf, and complete the knitting project.",
+  "date": "2025-11-19",
+  "dateSource": "earliest creation timestamp across project files",
+  "entry": "index.html",
+  "cta": "Practice and knit",
+  "tags": [
+    "math",
+    "craft"
+  ],
+  "order": 30
+}

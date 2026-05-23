@@ -1,0 +1,14 @@
+{
+  "title": "World of Poo",
+  "summary": "A goo-physics puzzle game with bridges, pipes, level goals, pickup mode, explosions, and extra mischief.",
+  "description": "Build goo structures toward the pipe, manage limited goo balls, switch modes, and solve each physics level.",
+  "date": "2025-11-19",
+  "dateSource": "earliest creation timestamp across project files",
+  "entry": "index.html",
+  "cta": "Play World of Poo",
+  "tags": [
+    "physics",
+    "puzzle"
+  ],
+  "order": 20
+}

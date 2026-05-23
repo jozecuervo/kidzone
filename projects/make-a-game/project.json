@@ -1,6 +1,10 @@
 {
   "title": "Would you like to make a game?",
   "summary": "Start with a tiny playable canvas, change one idea, and send the first Kidzone pull request.",
+  "description": "A tiny canvas game starter with a moving comet, collectible sparks, and obvious first pull request ideas.",
+  "date": "2026-05-22",
+  "dateSource": "earliest creation timestamp across project files",
+  "entry": "index.html",
   "cta": "Open the starter game",
   "tags": [
     "starter",

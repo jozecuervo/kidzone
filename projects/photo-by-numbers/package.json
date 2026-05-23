@@ -1,0 +1,23 @@
+{
+  "name": "photo-by-numbers",
+  "version": "1.0.0",
+  "description": "A web application that transforms photos into line drawings for coloring",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "image-processing",
+    "edge-detection",
+    "coloring-book",
+    "canvas",
+    "computer-vision"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

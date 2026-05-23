@@ -76,6 +76,43 @@ ul {
   gap: 1rem;
 }
 
+.board {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.hud {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.hud p,
+.hud button {
+  min-height: 2.6rem;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 0.25rem 0.25rem 0 var(--lake);
+}
+
+.hud p {
+  display: grid;
+  align-items: center;
+  min-width: 7rem;
+  padding: 0 0.7rem;
+  background: var(--mint);
+  font-weight: 850;
+}
+
+.hud button {
+  padding: 0 0.8rem;
+  color: var(--ink);
+  background: var(--coral);
+  font: inherit;
+  font-weight: 850;
+}
+
 canvas {
   display: block;
   width: 100%;

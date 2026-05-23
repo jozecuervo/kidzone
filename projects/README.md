@@ -23,7 +23,8 @@ node ./scripts/new-project.mjs paper-plane-lab "Paper Plane Lab"
 ```
 
 Edit `project.json` when a card title, summary, tags, or call to action changes,
-then refresh the generated project index:
+then refresh the generated project index. Projects can also set `description`,
+`date`, `dateSource`, and `entry` when the launch file is not `index.html`:
 
 ```sh
 node ./scripts/update-project-index.mjs

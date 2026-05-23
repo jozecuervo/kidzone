@@ -14,21 +14,27 @@
         <div class="copy">
           <h1>Would you like to make a game?</h1>
           <p>
-            Move the comet with the arrow keys, then change the rules and open
-            a pull request.
+            Move the comet with the arrow keys or W A S D, catch sparks, then
+            change the rules and open a pull request.
           </p>
           <ul>
-            <li>Add something to collect.</li>
-            <li>Make a score.</li>
+            <li>Add a new kind of spark.</li>
+            <li>Make a win rule.</li>
             <li>Invent a win screen.</li>
           </ul>
         </div>
-        <canvas
-          id="game"
-          width="720"
-          height="420"
-          aria-label="A starter game canvas with a moving comet."
-        ></canvas>
+        <div class="board">
+          <div class="hud">
+            <p data-score aria-live="polite">0 sparks</p>
+            <button type="button" data-reset>Reset</button>
+          </div>
+          <canvas
+            id="game"
+            width="720"
+            height="420"
+            aria-label="A starter game canvas with a moving comet."
+          ></canvas>
+        </div>
       </section>
     </main>
   </body>

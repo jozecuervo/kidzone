@@ -1,6 +1,9 @@
 const canvas = document.querySelector("#game");
 const context = canvas.getContext("2d");
+const scoreLabel = document.querySelector("[data-score]");
+const resetButton = document.querySelector("[data-reset]");
 const keys = new Set();
+const boardInset = 32;
 
 // Change these values first when you want to make the starter game your own.
 const comet = {
@@ -9,26 +12,42 @@ const comet = {
   radius: 28,
   speed: 5
 };
+const spark = {
+  x: 0,
+  y: 0,
+  radius: 18
+};
+let score = 0;
 
 function keepInsideBoard() {
-  comet.x = Math.max(comet.radius, Math.min(canvas.width - comet.radius, comet.x));
-  comet.y = Math.max(comet.radius, Math.min(canvas.height - comet.radius, comet.y));
+  comet.x = Math.max(
+    boardInset + comet.radius,
+    Math.min(canvas.width - boardInset - comet.radius, comet.x)
+  );
+  comet.y = Math.max(
+    boardInset + comet.radius,
+    Math.min(canvas.height - boardInset - comet.radius, comet.y)
+  );
+}
+
+function activeKeys(...names) {
+  return names.some((name) => keys.has(name));
 }
 
 function moveComet() {
-  if (keys.has("ArrowLeft")) {
+  if (activeKeys("ArrowLeft", "a")) {
     comet.x -= comet.speed;
   }
 
-  if (keys.has("ArrowRight")) {
+  if (activeKeys("ArrowRight", "d")) {
     comet.x += comet.speed;
   }
 
-  if (keys.has("ArrowUp")) {
+  if (activeKeys("ArrowUp", "w")) {
     comet.y -= comet.speed;
   }
 
-  if (keys.has("ArrowDown")) {
+  if (activeKeys("ArrowDown", "s")) {
     comet.y += comet.speed;
   }
 
@@ -61,11 +80,11 @@ function drawBoard() {
   context.fillRect(0, 0, canvas.width, canvas.height);
 
   context.fillStyle = "#fff1bd";
-  context.fillRect(32, 32, canvas.width - 64, canvas.height - 64);
+  context.fillRect(boardInset, boardInset, canvas.width - 64, canvas.height - 64);
 
   context.strokeStyle = "#14263a";
   context.lineWidth = 4;
-  context.strokeRect(32, 32, canvas.width - 64, canvas.height - 64);
+  context.strokeRect(boardInset, boardInset, canvas.width - 64, canvas.height - 64);
 }
 
 function drawComet() {
@@ -85,22 +104,76 @@ function drawComet() {
   context.stroke();
 }
 
+function placeSpark() {
+  const sparkPadding = boardInset + spark.radius + 18;
+
+  do {
+    spark.x = sparkPadding + Math.random() * (canvas.width - sparkPadding * 2);
+    spark.y = sparkPadding + Math.random() * (canvas.height - sparkPadding * 2);
+  } while (touchingSpark());
+}
+
+function drawSpark() {
+  context.fillStyle = "#8fdb9a";
+  context.strokeStyle = "#14263a";
+  context.lineWidth = 4;
+  drawStar(spark.x, spark.y, 6, spark.radius, spark.radius / 2.4);
+  context.fill();
+  context.stroke();
+}
+
+function touchingSpark() {
+  return (
+    Math.hypot(comet.x - spark.x, comet.y - spark.y) <
+    comet.radius + spark.radius
+  );
+}
+
+function updateScore() {
+  scoreLabel.textContent = score === 1 ? "1 spark" : `${score} sparks`;
+}
+
+function collectSpark() {
+  if (!touchingSpark()) {
+    return;
+  }
+
+  score += 1;
+  updateScore();
+  placeSpark();
+}
+
+function resetGame() {
+  comet.x = canvas.width / 2;
+  comet.y = canvas.height / 2;
+  score = 0;
+  placeSpark();
+  updateScore();
+}
+
 function frame() {
   moveComet();
+  collectSpark();
   drawBoard();
+  drawSpark();
   drawComet();
   requestAnimationFrame(frame);
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.key.startsWith("Arrow")) {
+  const key = event.key.toLowerCase();
+
+  if (event.key.startsWith("Arrow") || ["w", "a", "s", "d"].includes(key)) {
     event.preventDefault();
-    keys.add(event.key);
+    keys.add(event.key.startsWith("Arrow") ? event.key : key);
   }
 });
 
 window.addEventListener("keyup", (event) => {
-  keys.delete(event.key);
+  keys.delete(event.key.startsWith("Arrow") ? event.key : event.key.toLowerCase());
 });
 
+resetButton.addEventListener("click", resetGame);
+
+resetGame();
 frame();

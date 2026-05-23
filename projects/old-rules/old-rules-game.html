@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Old Rules - Escape from Grandma's House!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #2c1810 0%, #4a2c2a 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            background: #1a1a2e;
+            border: 8px solid #8b4513;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            font-size: 14px;
+            text-shadow: 2px 2px 0 #000;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .health-bar {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .hearts {
+            display: flex;
+            gap: 2px;
+        }
+
+        #menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #menu h1 {
+            font-size: 48px;
+            color: #ffd700;
+            text-shadow: 4px 4px 0 #8b4513, 6px 6px 0 #000;
+            margin-bottom: 10px;
+            letter-spacing: 4px;
+        }
+
+        #menu .subtitle {
+            color: #ccc;
+            font-size: 16px;
+            margin-bottom: 40px;
+        }
+
+        .menu-btn {
+            background: linear-gradient(180deg, #8b4513 0%, #5c2d0a 100%);
+            border: 4px solid #ffd700;
+            color: white;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            margin: 10px;
+            border-radius: 5px;
+            transition: all 0.2s;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        .menu-btn:hover {
+            background: linear-gradient(180deg, #a0522d 0%, #8b4513 100%);
+            transform: scale(1.05);
+        }
+
+        .player-select {
+            display: flex;
+            gap: 30px;
+            margin: 30px 0;
+        }
+
+        .player-option {
+            text-align: center;
+            cursor: pointer;
+            padding: 20px;
+            border: 4px solid transparent;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .player-option:hover {
+            border-color: #ffd700;
+            background: rgba(255,215,0,0.1);
+        }
+
+        .player-option.selected {
+            border-color: #00ff00;
+            background: rgba(0,255,0,0.2);
+        }
+
+        .player-icon {
+            font-size: 64px;
+            margin-bottom: 10px;
+        }
+
+        .player-label {
+            color: white;
+            font-size: 18px;
+        }
+
+        .controls-info {
+            color: #888;
+            font-size: 12px;
+            margin-top: 20px;
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        #levelAnnounce {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffd700;
+            font-size: 36px;
+            text-shadow: 4px 4px 0 #000;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #gameOver h2 {
+            font-size: 48px;
+            color: #ff4444;
+            text-shadow: 4px 4px 0 #000;
+            margin-bottom: 20px;
+        }
+
+        #gameOver.victory h2 {
+            color: #00ff00;
+        }
+
+        #gameOver p {
+            color: #ccc;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .dialogue-box {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            border: 3px solid #8b4513;
+            padding: 15px 25px;
+            color: white;
+            font-size: 14px;
+            max-width: 80%;
+            text-align: center;
+            z-index: 40;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="ui">
+            <div class="health-bar" id="p1Health">
+                <span id="p1Label"></span>
+                <div class="hearts" id="p1Hearts"></div>
+            </div>
+            <div id="levelDisplay">Level: 1</div>
+            <div class="health-bar" id="p2Health" style="display: none;">
+                <div class="hearts" id="p2Hearts"></div>
+                <span id="p2Label"></span>
+            </div>
+        </div>
+
+        <div id="levelAnnounce"></div>
+        <div class="dialogue-box" id="dialogue"></div>
+
+        <div id="menu">
+            <h1>OLD RULES</h1>
+            <p class="subtitle">Escape from Grandma's House!</p>
+
+            <p style="color: #ffd700; margin-bottom: 20px;">Select Players:</p>
+
+            <div class="player-select">
+                <div class="player-option" id="selectBoy" onclick="togglePlayer('boy')">
+                    <div class="player-icon">👦</div>
+                    <div class="player-label">Tommy</div>
+                    <div style="color: #888; font-size: 11px;">Arrow Keys</div>
+                </div>
+                <div class="player-option" id="selectGirl" onclick="togglePlayer('girl')">
+                    <div class="player-icon">👧</div>
+                    <div class="player-label">Lily</div>
+                    <div style="color: #888; font-size: 11px;">WASD Keys</div>
+                </div>
+            </div>
+
+            <button class="menu-btn" onclick="startGame()">START GAME</button>
+
+            <div class="controls-info">
+                <strong>Goal:</strong> Sneak through Grandma's house and escape!<br>
+                Avoid the mean grandparents and their angry cat Mr. Whiskers!<br>
+                Collect keys to unlock doors. Don't get caught!
+            </div>
+        </div>
+
+        <div id="gameOver">
+            <h2 id="gameOverTitle">GAME OVER</h2>
+            <p id="gameOverText">The grandparents caught you!</p>
+            <button class="menu-btn" onclick="restartGame()">TRY AGAIN</button>
+            <button class="menu-btn" onclick="returnToMenu()">MAIN MENU</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let gameRunning = false;
+        let currentLevel = 0;
+        let selectedPlayers = { boy: true, girl: false };
+        let players = [];
+        let enemies = [];
+        let cat = null;
+        let keys = [];
+        let doors = [];
+        let walls = [];
+        let furniture = [];
+        let exit = null;
+        let collectedKeys = 0;
+        let keysNeeded = 0;
+
+        // Input state
+        const keysPressed = {};
+
+        // Colors
+        const COLORS = {
+            floor: '#3d2817',
+            floorPattern: '#4a3522',
+            wall: '#8b4513',
+            wallDark: '#5c2d0a',
+            door: '#654321',
+            doorLocked: '#444',
+            key: '#ffd700',
+            exit: '#00ff00',
+            furniture: '#2d1b0e'
+        };
+
+        // Level definitions
+        const levels = [
+            {
+                name: "The Living Room",
+                dialogue: "Psst! We need to find the key and sneak past Grandma!",
+                walls: [
+                    { x: 0, y: 0, w: 800, h: 20 },
+                    { x: 0, y: 580, w: 800, h: 20 },
+                    { x: 0, y: 0, w: 20, h: 600 },
+                    { x: 780, y: 0, w: 20, h: 600 },
+                    // Interior walls
+                    { x: 200, y: 0, w: 20, h: 200 },
+                    { x: 400, y: 150, w: 20, h: 250 },
+                    { x: 550, y: 0, w: 20, h: 150 },
+                ],
+                furniture: [
+                    { x: 50, y: 50, w: 100, h: 60, type: 'couch' },
+                    { x: 600, y: 400, w: 80, h: 80, type: 'table' },
+                    { x: 300, y: 480, w: 120, h: 60, type: 'tv' },
+                ],
+                playerStart: [{ x: 60, y: 500 }, { x: 100, y: 500 }],
+                enemies: [
+                    { x: 500, y: 300, patrol: [{ x: 500, y: 300 }, { x: 700, y: 300 }, { x: 700, y: 100 }, { x: 500, y: 100 }], type: 'grandma' }
+                ],
+                cat: { x: 300, y: 200, speed: 2.5 },
+                keys: [{ x: 700, y: 500 }],
+                doors: [{ x: 380, y: 150, w: 20, h: 60, keysNeeded: 1, vertical: true }],
+                exit: { x: 250, y: 50, w: 60, h: 40 }
+            },
+            {
+                name: "The Kitchen",
+                dialogue: "Watch out! Grandpa is guarding the cookie jar... and the exit!",
+                walls: [
+                    { x: 0, y: 0, w: 800, h: 20 },
+                    { x: 0, y: 580, w: 800, h: 20 },
+                    { x: 0, y: 0, w: 20, h: 600 },
+                    { x: 780, y: 0, w: 20, h: 600 },
+                    // Kitchen counters
+                    { x: 0, y: 200, w: 150, h: 30 },
+                    { x: 0, y: 350, w: 150, h: 30 },
+                    { x: 300, y: 0, w: 30, h: 180 },
+                    { x: 500, y: 250, w: 30, h: 200 },
+                    { x: 650, y: 400, w: 130, h: 30 },
+                ],
+                furniture: [
+                    { x: 200, y: 250, w: 100, h: 100, type: 'table' },
+                    { x: 600, y: 50, w: 60, h: 60, type: 'fridge' },
+                    { x: 100, y: 450, w: 80, h: 50, type: 'stove' },
+                ],
+                playerStart: [{ x: 60, y: 100 }, { x: 100, y: 100 }],
+                enemies: [
+                    { x: 600, y: 200, patrol: [{ x: 600, y: 200 }, { x: 600, y: 500 }, { x: 400, y: 500 }, { x: 400, y: 200 }], type: 'grandpa' }
+                ],
+                cat: { x: 350, y: 400, speed: 3 },
+                keys: [{ x: 700, y: 550 }, { x: 50, y: 280 }],
+                doors: [{ x: 500, y: 200, w: 30, h: 50, keysNeeded: 2, vertical: true }],
+                exit: { x: 700, y: 100, w: 60, h: 40 }
+            },
+            {
+                name: "The Hallway",
+                dialogue: "Almost there! But both grandparents are patrolling...",
+                walls: [
+                    { x: 0, y: 0, w: 800, h: 20 },
+                    { x: 0, y: 580, w: 800, h: 20 },
+                    { x: 0, y: 0, w: 20, h: 600 },
+                    { x: 780, y: 0, w: 20, h: 600 },
+                    // Hallway walls
+                    { x: 150, y: 100, w: 20, h: 300 },
+                    { x: 300, y: 200, w: 20, h: 400 },
+                    { x: 450, y: 0, w: 20, h: 300 },
+                    { x: 600, y: 150, w: 20, h: 350 },
+                    { x: 600, y: 500, w: 180, h: 20 },
+                ],
+                furniture: [
+                    { x: 50, y: 450, w: 60, h: 100, type: 'shelf' },
+                    { x: 350, y: 50, w: 60, h: 40, type: 'plant' },
+                    { x: 500, y: 350, w: 60, h: 60, type: 'chair' },
+                ],
+                playerStart: [{ x: 60, y: 200 }, { x: 60, y: 260 }],
+                enemies: [
+                    { x: 200, y: 450, patrol: [{ x: 200, y: 450 }, { x: 200, y: 150 }], type: 'grandma' },
+                    { x: 520, y: 100, patrol: [{ x: 520, y: 100 }, { x: 520, y: 400 }], type: 'grandpa' }
+                ],
+                cat: { x: 400, y: 500, speed: 3.5 },
+                keys: [{ x: 250, y: 550 }, { x: 550, y: 50 }],
+                doors: [{ x: 300, y: 150, w: 20, h: 50, keysNeeded: 1, vertical: true }, { x: 600, y: 100, w: 20, h: 50, keysNeeded: 2, vertical: true }],
+                exit: { x: 700, y: 550, w: 60, h: 30 }
+            },
+            {
+                name: "The Bedroom",
+                dialogue: "The window is our only way out! Find all the keys!",
+                walls: [
+                    { x: 0, y: 0, w: 800, h: 20 },
+                    { x: 0, y: 580, w: 800, h: 20 },
+                    { x: 0, y: 0, w: 20, h: 600 },
+                    { x: 780, y: 0, w: 20, h: 600 },
+                    // Bedroom layout
+                    { x: 200, y: 0, w: 20, h: 200 },
+                    { x: 200, y: 280, w: 20, h: 320 },
+                    { x: 400, y: 200, w: 200, h: 20 },
+                    { x: 600, y: 200, w: 20, h: 250 },
+                ],
+                furniture: [
+                    { x: 50, y: 50, w: 120, h: 80, type: 'bed' },
+                    { x: 50, y: 300, w: 100, h: 60, type: 'dresser' },
+                    { x: 450, y: 50, w: 80, h: 80, type: 'wardrobe' },
+                    { x: 650, y: 300, w: 100, h: 60, type: 'desk' },
+                ],
+                playerStart: [{ x: 60, y: 500 }, { x: 100, y: 500 }],
+                enemies: [
+                    { x: 100, y: 200, patrol: [{ x: 100, y: 200 }, { x: 100, y: 400 }], type: 'grandma' },
+                    { x: 500, y: 400, patrol: [{ x: 500, y: 400 }, { x: 700, y: 400 }, { x: 700, y: 550 }, { x: 500, y: 550 }], type: 'grandpa' }
+                ],
+                cat: { x: 300, y: 100, speed: 4 },
+                keys: [{ x: 150, y: 550 }, { x: 350, y: 100 }, { x: 700, y: 250 }],
+                doors: [{ x: 200, y: 200, w: 20, h: 80, keysNeeded: 2, vertical: true }, { x: 600, y: 450, w: 20, h: 60, keysNeeded: 3, vertical: true }],
+                exit: { x: 700, y: 50, w: 60, h: 40 }
+            },
+            {
+                name: "THE FRONT DOOR",
+                dialogue: "This is it! The front door! FREEDOM awaits!",
+                walls: [
+                    { x: 0, y: 0, w: 800, h: 20 },
+                    { x: 0, y: 580, w: 800, h: 20 },
+                    { x: 0, y: 0, w: 20, h: 600 },
+                    { x: 780, y: 0, w: 20, h: 600 },
+                    // Final gauntlet
+                    { x: 150, y: 100, w: 20, h: 400 },
+                    { x: 300, y: 100, w: 20, h: 300 },
+                    { x: 300, y: 480, w: 20, h: 100 },
+                    { x: 450, y: 200, w: 20, h: 380 },
+                    { x: 600, y: 100, w: 20, h: 300 },
+                ],
+                furniture: [
+                    { x: 50, y: 200, w: 60, h: 60, type: 'plant' },
+                    { x: 200, y: 500, w: 60, h: 40, type: 'shoes' },
+                    { x: 520, y: 450, w: 50, h: 80, type: 'coatrack' },
+                ],
+                playerStart: [{ x: 60, y: 550 }, { x: 60, y: 500 }],
+                enemies: [
+                    { x: 200, y: 200, patrol: [{ x: 200, y: 200 }, { x: 200, y: 450 }], type: 'grandma' },
+                    { x: 370, y: 300, patrol: [{ x: 370, y: 300 }, { x: 370, y: 550 }], type: 'grandpa' },
+                ],
+                cat: { x: 550, y: 500, speed: 4.5 },
+                keys: [{ x: 250, y: 50 }, { x: 400, y: 150 }, { x: 550, y: 550 }],
+                doors: [{ x: 150, y: 500, w: 20, h: 80, keysNeeded: 1, vertical: true }, { x: 300, y: 400, w: 20, h: 80, keysNeeded: 2, vertical: true }, { x: 450, y: 100, w: 20, h: 100, keysNeeded: 3, vertical: true }],
+                exit: { x: 700, y: 30, w: 60, h: 60, isFinalExit: true }
+            }
+        ];
+
+        // Player class
+        class Player {
+            constructor(x, y, type, controls) {
+                this.x = x;
+                this.y = y;
+                this.width = 30;
+                this.height = 30;
+                this.speed = 3;
+                this.type = type;
+                this.controls = controls;
+                this.health = 3;
+                this.invincible = 0;
+                this.animFrame = 0;
+                this.facing = 'down';
+            }
+
+            update() {
+                if (this.health <= 0) return;
+
+                let dx = 0, dy = 0;
+
+                if (keysPressed[this.controls.up]) { dy = -this.speed; this.facing = 'up'; }
+                if (keysPressed[this.controls.down]) { dy = this.speed; this.facing = 'down'; }
+                if (keysPressed[this.controls.left]) { dx = -this.speed; this.facing = 'left'; }
+                if (keysPressed[this.controls.right]) { dx = this.speed; this.facing = 'right'; }
+
+                // Normalize diagonal movement
+                if (dx !== 0 && dy !== 0) {
+                    dx *= 0.707;
+                    dy *= 0.707;
+                }
+
+                // Check collisions
+                const newX = this.x + dx;
+                const newY = this.y + dy;
+
+                if (!this.checkCollision(newX, this.y)) this.x = newX;
+                if (!this.checkCollision(this.x, newY)) this.y = newY;
+
+                // Animation
+                if (dx !== 0 || dy !== 0) {
+                    this.animFrame = (this.animFrame + 0.2) % 4;
+                }
+
+                // Invincibility timer
+                if (this.invincible > 0) this.invincible--;
+
+                // Check key collection
+                this.checkKeys();
+
+                // Check exit
+                this.checkExit();
+            }
+
+            checkCollision(x, y) {
+                const rect = { x, y, w: this.width, h: this.height };
+
+                // Walls
+                for (const wall of walls) {
+                    if (this.rectCollision(rect, wall)) return true;
+                }
+
+                // Furniture
+                for (const f of furniture) {
+                    if (this.rectCollision(rect, { x: f.x, y: f.y, w: f.w, h: f.h })) return true;
+                }
+
+                // Locked doors
+                for (const door of doors) {
+                    if (!door.open && this.rectCollision(rect, { x: door.x, y: door.y, w: door.w, h: door.h })) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            rectCollision(r1, r2) {
+                return r1.x < r2.x + r2.w &&
+                       r1.x + r1.w > r2.x &&
+                       r1.y < r2.y + r2.h &&
+                       r1.h + r1.y > r2.y;
+            }
+
+            checkKeys() {
+                for (let i = keys.length - 1; i >= 0; i--) {
+                    const key = keys[i];
+                    const dist = Math.hypot(this.x + this.width/2 - key.x, this.y + this.height/2 - key.y);
+                    if (dist < 25) {
+                        keys.splice(i, 1);
+                        collectedKeys++;
+                        // Open doors that can now be unlocked
+                        for (const door of doors) {
+                            if (!door.open && collectedKeys >= door.keysNeeded) {
+                                door.open = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            checkExit() {
+                if (!exit) return;
+                const rect = { x: this.x, y: this.y, w: this.width, h: this.height };
+                const exitRect = { x: exit.x, y: exit.y, w: exit.w, h: exit.h };
+
+                if (this.rectCollision(rect, exitRect)) {
+                    if (exit.isFinalExit) {
+                        victory();
+                    } else {
+                        nextLevel();
+                    }
+                }
+            }
+
+            takeDamage() {
+                if (this.invincible > 0) return;
+                this.health--;
+                this.invincible = 90;
+
+                if (this.health <= 0) {
+                    checkGameOver();
+                }
+
+                updateHealthUI();
+            }
+
+            draw() {
+                if (this.health <= 0) return;
+
+                const flash = this.invincible > 0 && Math.floor(this.invincible / 5) % 2;
+                if (flash) return;
+
+                ctx.save();
+                ctx.translate(this.x + this.width/2, this.y + this.height/2);
+
+                // Body
+                ctx.fillStyle = this.type === 'boy' ? '#4a90d9' : '#e75480';
+                ctx.fillRect(-12, -5, 24, 20);
+
+                // Head
+                ctx.fillStyle = '#ffdbac';
+                ctx.beginPath();
+                ctx.arc(0, -8, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Hair
+                ctx.fillStyle = this.type === 'boy' ? '#4a3728' : '#8b4513';
+                if (this.type === 'boy') {
+                    ctx.fillRect(-8, -18, 16, 8);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(0, -10, 10, Math.PI, 0);
+                    ctx.fill();
+                    // Pigtails
+                    ctx.beginPath();
+                    ctx.arc(-12, -5, 5, 0, Math.PI * 2);
+                    ctx.arc(12, -5, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Eyes
+                ctx.fillStyle = '#000';
+                ctx.fillRect(-4, -10, 3, 3);
+                ctx.fillRect(2, -10, 3, 3);
+
+                // Legs (animated)
+                const legOffset = Math.sin(this.animFrame * Math.PI) * 3;
+                ctx.fillStyle = this.type === 'boy' ? '#2d5a87' : '#b8446b';
+                ctx.fillRect(-8, 15, 6, 10 + legOffset);
+                ctx.fillRect(2, 15, 6, 10 - legOffset);
+
+                ctx.restore();
+            }
+        }
+
+        // Enemy class
+        class Enemy {
+            constructor(x, y, patrol, type) {
+                this.x = x;
+                this.y = y;
+                this.width = 40;
+                this.height = 40;
+                this.patrol = patrol;
+                this.patrolIndex = 0;
+                this.speed = 1.5;
+                this.type = type;
+                this.animFrame = 0;
+                this.alertTime = 0;
+                this.visionRange = 150;
+            }
+
+            update() {
+                // Patrol movement
+                const target = this.patrol[this.patrolIndex];
+                const dx = target.x - this.x;
+                const dy = target.y - this.y;
+                const dist = Math.hypot(dx, dy);
+
+                if (dist < 5) {
+                    this.patrolIndex = (this.patrolIndex + 1) % this.patrol.length;
+                } else {
+                    this.x += (dx / dist) * this.speed;
+                    this.y += (dy / dist) * this.speed;
+                }
+
+                this.animFrame = (this.animFrame + 0.1) % 4;
+
+                // Check for player collision
+                for (const player of players) {
+                    if (player.health <= 0) continue;
+                    const playerDist = Math.hypot(
+                        this.x + this.width/2 - (player.x + player.width/2),
+                        this.y + this.height/2 - (player.y + player.height/2)
+                    );
+                    if (playerDist < 35) {
+                        player.takeDamage();
+                    }
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width/2, this.y + this.height/2);
+
+                // Body
+                ctx.fillStyle = this.type === 'grandma' ? '#8b668b' : '#556b2f';
+                ctx.fillRect(-15, -5, 30, 25);
+
+                // Head
+                ctx.fillStyle = '#ffdbac';
+                ctx.beginPath();
+                ctx.arc(0, -12, 14, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Hair
+                ctx.fillStyle = '#c0c0c0';
+                if (this.type === 'grandma') {
+                    // Bun
+                    ctx.beginPath();
+                    ctx.arc(0, -20, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Bald with sides
+                    ctx.fillRect(-12, -15, 6, 8);
+                    ctx.fillRect(6, -15, 6, 8);
+                }
+
+                // Glasses
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(-6, -12, 5, 0, Math.PI * 2);
+                ctx.arc(6, -12, 5, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-1, -12);
+                ctx.lineTo(1, -12);
+                ctx.stroke();
+
+                // Angry eyebrows
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(-10, -18);
+                ctx.lineTo(-3, -15);
+                ctx.moveTo(10, -18);
+                ctx.lineTo(3, -15);
+                ctx.stroke();
+
+                // Mouth (frown)
+                ctx.beginPath();
+                ctx.arc(0, -5, 4, 0.2 * Math.PI, 0.8 * Math.PI);
+                ctx.stroke();
+
+                // Walking cane for grandpa
+                if (this.type === 'grandpa') {
+                    ctx.strokeStyle = '#4a3728';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(18, -5);
+                    ctx.lineTo(22, 25);
+                    ctx.stroke();
+                }
+
+                // Speech bubble when near player
+                let nearPlayer = false;
+                for (const player of players) {
+                    const dist = Math.hypot(this.x - player.x, this.y - player.y);
+                    if (dist < 100) nearPlayer = true;
+                }
+                if (nearPlayer) {
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.ellipse(20, -35, 20, 12, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#ff0000';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.fillText('!', 17, -31);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // Cat class
+        class Cat {
+            constructor(x, y, speed) {
+                this.x = x;
+                this.y = y;
+                this.width = 25;
+                this.height = 25;
+                this.speed = speed;
+                this.animFrame = 0;
+                this.targetPlayer = null;
+                this.attackCooldown = 0;
+            }
+
+            update() {
+                // Find nearest player
+                let nearestDist = Infinity;
+                this.targetPlayer = null;
+
+                for (const player of players) {
+                    if (player.health <= 0) continue;
+                    const dist = Math.hypot(this.x - player.x, this.y - player.y);
+                    if (dist < nearestDist && dist < 200) {
+                        nearestDist = dist;
+                        this.targetPlayer = player;
+                    }
+                }
+
+                // Chase player
+                if (this.targetPlayer) {
+                    const dx = this.targetPlayer.x - this.x;
+                    const dy = this.targetPlayer.y - this.y;
+                    const dist = Math.hypot(dx, dy);
+
+                    if (dist > 5) {
+                        this.x += (dx / dist) * this.speed;
+                        this.y += (dy / dist) * this.speed;
+                    }
+
+                    // Attack
+                    if (dist < 25 && this.attackCooldown <= 0) {
+                        this.targetPlayer.takeDamage();
+                        this.attackCooldown = 60;
+                    }
+                } else {
+                    // Wander
+                    this.x += Math.sin(Date.now() / 500) * 0.5;
+                    this.y += Math.cos(Date.now() / 700) * 0.5;
+                }
+
+                if (this.attackCooldown > 0) this.attackCooldown--;
+                this.animFrame = (this.animFrame + 0.15) % 4;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width/2, this.y + this.height/2);
+
+                // Body
+                ctx.fillStyle = '#ff6b35';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 15, 10, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Head
+                ctx.beginPath();
+                ctx.arc(-12, -5, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Ears
+                ctx.beginPath();
+                ctx.moveTo(-18, -12);
+                ctx.lineTo(-22, -22);
+                ctx.lineTo(-14, -14);
+                ctx.closePath();
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(-6, -12);
+                ctx.lineTo(-2, -22);
+                ctx.lineTo(-10, -14);
+                ctx.closePath();
+                ctx.fill();
+
+                // Eyes (angry)
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.ellipse(-15, -6, 3, 4, 0, 0, Math.PI * 2);
+                ctx.ellipse(-9, -6, 3, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.ellipse(-15, -6, 1, 3, 0, 0, Math.PI * 2);
+                ctx.ellipse(-9, -6, 1, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Angry eyebrows
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(-18, -10);
+                ctx.lineTo(-14, -8);
+                ctx.moveTo(-6, -10);
+                ctx.lineTo(-10, -8);
+                ctx.stroke();
+
+                // Tail
+                const tailWag = Math.sin(this.animFrame * Math.PI) * 10;
+                ctx.strokeStyle = '#ff6b35';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(12, 0);
+                ctx.quadraticCurveTo(20, -10 + tailWag, 25, -15 + tailWag);
+                ctx.stroke();
+
+                // Claws when attacking
+                if (this.attackCooldown > 40) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    for (let i = 0; i < 3; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(-20, 5);
+                        ctx.lineTo(-30 - i * 3, 10 + i * 5);
+                        ctx.stroke();
+                    }
+                }
+
+                // Hiss text
+                if (this.targetPlayer && Math.hypot(this.x - this.targetPlayer.x, this.y - this.targetPlayer.y) < 60) {
+                    ctx.fillStyle = '#ff0000';
+                    ctx.font = 'bold 10px Arial';
+                    ctx.fillText('HISS!', -25, -25);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // Toggle player selection
+        function togglePlayer(type) {
+            selectedPlayers[type] = !selectedPlayers[type];
+
+            // Ensure at least one player is selected
+            if (!selectedPlayers.boy && !selectedPlayers.girl) {
+                selectedPlayers[type] = true;
+            }
+
+            document.getElementById('selectBoy').classList.toggle('selected', selectedPlayers.boy);
+            document.getElementById('selectGirl').classList.toggle('selected', selectedPlayers.girl);
+        }
+
+        // Initialize player selection UI
+        togglePlayer('boy');
+
+        // Start game
+        function startGame() {
+            if (!selectedPlayers.boy && !selectedPlayers.girl) {
+                alert('Please select at least one player!');
+                return;
+            }
+
+            document.getElementById('menu').style.display = 'none';
+            currentLevel = 0;
+            loadLevel(currentLevel);
+            gameRunning = true;
+            gameLoop();
+        }
+
+        // Load level
+        function loadLevel(levelIndex) {
+            const level = levels[levelIndex];
+
+            // Reset collections
+            walls = [...level.walls];
+            furniture = [...level.furniture];
+            keys = level.keys.map(k => ({ ...k }));
+            doors = level.doors.map(d => ({ ...d, open: false }));
+            exit = { ...level.exit };
+            enemies = level.enemies.map(e => new Enemy(e.x, e.y, e.patrol, e.type));
+            cat = new Cat(level.cat.x, level.cat.y, level.cat.speed);
+            collectedKeys = 0;
+            keysNeeded = Math.max(...level.doors.map(d => d.keysNeeded));
+
+            // Create players
+            players = [];
+            let startIndex = 0;
+
+            if (selectedPlayers.boy) {
+                const start = level.playerStart[startIndex++];
+                players.push(new Player(start.x, start.y, 'boy', {
+                    up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight'
+                }));
+            }
+
+            if (selectedPlayers.girl) {
+                const start = level.playerStart[startIndex];
+                players.push(new Player(start.x, start.y, 'girl', {
+                    up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD'
+                }));
+            }
+
+            // Update UI
+            document.getElementById('levelDisplay').textContent = `Level: ${levelIndex + 1} - ${level.name}`;
+            updateHealthUI();
+
+            // Show level announcement
+            const announce = document.getElementById('levelAnnounce');
+            announce.textContent = level.name;
+            announce.style.opacity = 1;
+            setTimeout(() => { announce.style.opacity = 0; }, 2000);
+
+            // Show dialogue
+            showDialogue(level.dialogue);
+        }
+
+        // Update health UI
+        function updateHealthUI() {
+            const p1Hearts = document.getElementById('p1Hearts');
+            const p2Hearts = document.getElementById('p2Hearts');
+            const p1Label = document.getElementById('p1Label');
+            const p2Label = document.getElementById('p2Label');
+            const p2Health = document.getElementById('p2Health');
+
+            if (players.length > 0) {
+                p1Label.textContent = players[0].type === 'boy' ? 'Tommy: ' : 'Lily: ';
+                p1Hearts.innerHTML = '';
+                for (let i = 0; i < 3; i++) {
+                    const heart = document.createElement('span');
+                    heart.textContent = i < players[0].health ? '❤️' : '🖤';
+                    p1Hearts.appendChild(heart);
+                }
+            }
+
+            if (players.length > 1) {
+                p2Health.style.display = 'flex';
+                p2Label.textContent = players[1].type === 'boy' ? 'Tommy: ' : 'Lily: ';
+                p2Hearts.innerHTML = '';
+                for (let i = 0; i < 3; i++) {
+                    const heart = document.createElement('span');
+                    heart.textContent = i < players[1].health ? '❤️' : '🖤';
+                    p2Hearts.appendChild(heart);
+                }
+            } else {
+                p2Health.style.display = 'none';
+            }
+        }
+
+        // Show dialogue
+        function showDialogue(text) {
+            const dialogue = document.getElementById('dialogue');
+            dialogue.textContent = text;
+            dialogue.style.display = 'block';
+            setTimeout(() => { dialogue.style.display = 'none'; }, 4000);
+        }
+
+        // Next level
+        function nextLevel() {
+            currentLevel++;
+            if (currentLevel >= levels.length) {
+                victory();
+            } else {
+                loadLevel(currentLevel);
+            }
+        }
+
+        // Check game over
+        function checkGameOver() {
+            const allDead = players.every(p => p.health <= 0);
+            if (allDead) {
+                gameOver();
+            }
+        }
+
+        // Game over
+        function gameOver() {
+            gameRunning = false;
+            const gameOverDiv = document.getElementById('gameOver');
+            gameOverDiv.classList.remove('victory');
+            document.getElementById('gameOverTitle').textContent = 'CAUGHT!';
+            document.getElementById('gameOverText').textContent = 'The grandparents caught you! No dessert for a week!';
+            gameOverDiv.style.display = 'flex';
+        }
+
+        // Victory
+        function victory() {
+            gameRunning = false;
+            const gameOverDiv = document.getElementById('gameOver');
+            gameOverDiv.classList.add('victory');
+            document.getElementById('gameOverTitle').textContent = 'FREEDOM!';
+            document.getElementById('gameOverText').textContent = 'You escaped Grandma\'s house! Mom and Dad are here to pick you up!';
+            gameOverDiv.style.display = 'flex';
+        }
+
+        // Restart game
+        function restartGame() {
+            document.getElementById('gameOver').style.display = 'none';
+            loadLevel(currentLevel);
+            gameRunning = true;
+            gameLoop();
+        }
+
+        // Return to menu
+        function returnToMenu() {
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('menu').style.display = 'flex';
+        }
+
+        // Draw floor
+        function drawFloor() {
+            ctx.fillStyle = COLORS.floor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Floor pattern
+            ctx.fillStyle = COLORS.floorPattern;
+            for (let x = 0; x < canvas.width; x += 40) {
+                for (let y = 0; y < canvas.height; y += 40) {
+                    if ((x + y) % 80 === 0) {
+                        ctx.fillRect(x, y, 40, 40);
+                    }
+                }
+            }
+        }
+
+        // Draw walls
+        function drawWalls() {
+            for (const wall of walls) {
+                // Wall shadow
+                ctx.fillStyle = COLORS.wallDark;
+                ctx.fillRect(wall.x + 3, wall.y + 3, wall.w, wall.h);
+
+                // Wall
+                ctx.fillStyle = COLORS.wall;
+                ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+
+                // Wall highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.fillRect(wall.x, wall.y, wall.w, 3);
+                ctx.fillRect(wall.x, wall.y, 3, wall.h);
+            }
+        }
+
+        // Draw furniture
+        function drawFurniture() {
+            for (const f of furniture) {
+                ctx.fillStyle = COLORS.furniture;
+                ctx.fillRect(f.x, f.y, f.w, f.h);
+
+                // Furniture details based on type
+                ctx.fillStyle = '#1a0f08';
+                ctx.fillRect(f.x + 3, f.y + 3, f.w - 6, f.h - 6);
+
+                // Label
+                ctx.fillStyle = '#666';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                const labels = {
+                    couch: '🛋️', table: '🪑', tv: '📺', fridge: '🧊',
+                    stove: '🔥', shelf: '📚', plant: '🪴', chair: '💺',
+                    bed: '🛏️', dresser: '🗄️', wardrobe: '🚪', desk: '🖥️',
+                    shoes: '👟', coatrack: '🧥'
+                };
+                ctx.font = '20px Arial';
+                ctx.fillText(labels[f.type] || '📦', f.x + f.w/2, f.y + f.h/2 + 7);
+            }
+        }
+
+        // Draw doors
+        function drawDoors() {
+            for (const door of doors) {
+                if (door.open) {
+                    // Open door
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.fillRect(door.x, door.y, door.w, door.h);
+                } else {
+                    // Locked door
+                    ctx.fillStyle = COLORS.doorLocked;
+                    ctx.fillRect(door.x, door.y, door.w, door.h);
+
+                    // Lock icon
+                    ctx.fillStyle = '#ffd700';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('🔒', door.x + door.w/2, door.y + door.h/2 + 5);
+
+                    // Keys needed
+                    ctx.fillStyle = 'white';
+                    ctx.font = '10px Arial';
+                    ctx.fillText(door.keysNeeded, door.x + door.w/2, door.y + door.h/2 + 20);
+                }
+            }
+        }
+
+        // Draw keys
+        function drawKeys() {
+            for (const key of keys) {
+                ctx.save();
+                ctx.translate(key.x, key.y);
+                ctx.rotate(Math.sin(Date.now() / 200) * 0.2);
+
+                // Key glow
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(0, 0, 15, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Key
+                ctx.fillStyle = COLORS.key;
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('🔑', 0, 8);
+
+                ctx.restore();
+            }
+        }
+
+        // Draw exit
+        function drawExit() {
+            if (!exit) return;
+
+            // Exit glow
+            const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+            ctx.fillStyle = `rgba(0, 255, 0, ${pulse * 0.3})`;
+            ctx.fillRect(exit.x - 5, exit.y - 5, exit.w + 10, exit.h + 10);
+
+            // Exit door
+            ctx.fillStyle = exit.isFinalExit ? '#00aa00' : '#006600';
+            ctx.fillRect(exit.x, exit.y, exit.w, exit.h);
+
+            // Exit text
+            ctx.fillStyle = '#fff';
+            ctx.font = exit.isFinalExit ? 'bold 14px Arial' : '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(exit.isFinalExit ? 'EXIT!' : 'NEXT', exit.x + exit.w/2, exit.y + exit.h/2 + 4);
+
+            // Arrow
+            ctx.fillText('→', exit.x + exit.w/2, exit.y + exit.h/2 + 18);
+        }
+
+        // Draw key counter
+        function drawKeyCounter() {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(canvas.width/2 - 50, 5, 100, 25);
+            ctx.fillStyle = '#ffd700';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`🔑 ${collectedKeys}`, canvas.width/2, 23);
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            // Clear
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw
+            drawFloor();
+            drawWalls();
+            drawFurniture();
+            drawDoors();
+            drawKeys();
+            drawExit();
+
+            // Update and draw enemies
+            for (const enemy of enemies) {
+                enemy.update();
+                enemy.draw();
+            }
+
+            // Update and draw cat
+            if (cat) {
+                cat.update();
+                cat.draw();
+            }
+
+            // Update and draw players
+            for (const player of players) {
+                player.update();
+                player.draw();
+            }
+
+            // Draw UI
+            drawKeyCounter();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Input handling
+        document.addEventListener('keydown', (e) => {
+            keysPressed[e.code] = true;
+
+            // Prevent scrolling
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keysPressed[e.code] = false;
+        });
+
+        // Prevent context menu on right click
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    </script>
+</body>
+</html>

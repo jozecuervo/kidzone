@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Astro Bot Screensaver</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a1a 100%);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .astro-bot {
+    position: absolute;
+    display: inline-block;
+    transition: filter 0.3s ease;
+  }
+
+  .astro-bot-head {
+    position: relative;
+  }
+
+  .screen-container {
+    position: absolute;
+    overflow: hidden;
+    border-radius: 50%;
+  }
+
+  .screen-container canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+</style>
+</head>
+<body>
+
+<!-- Bot containers - will be populated by JavaScript -->
+<div class="astro-bot" id="astroBot1"></div>
+<div class="astro-bot" id="astroBot2"></div>
+<div class="astro-bot" id="astroBot3"></div>
+<div class="astro-bot" id="astroBot4"></div>
+<div class="astro-bot" id="astroBot5"></div>
+<div class="astro-bot" id="astroBot6"></div>
+<div class="astro-bot" id="astroBot7"></div>
+
+<script>
+/**
+ * @fileoverview Astro Bot Screensaver - A modular dot-matrix eye display component
+ * inspired by the Astro Bot character. Features animated eyes with blinking,
+ * mouse tracking, and expression changes.
+ * 
+ * @author Astro Bot Screensaver
+ * @version 1.0.0
+ */
+
+// ===========================================
+// AstroBotScreen Class - Modular Eye Display
+// ===========================================
+
+/**
+ * @typedef {Object} AstroBotScreenOptions
+ * @property {number} [dotSize=6] - Diameter of each dot in pixels
+ * @property {number} [dotGap=6] - Gap between dots in pixels
+ */
+
+/**
+ * @typedef {Object} EyeBrightnessResult
+ * @property {number} brightness - Base brightness value (0-1)
+ * @property {number} highlightIntensity - Intensity of the highlight/pupil effect (0-1)
+ */
+
+/**
+ * Renders an animated dot-matrix eye display on a canvas element.
+ * Features include:
+ * - Dot-matrix LED-style rendering
+ * - Mouse-following pupils
+ * - Blinking animations with scan-line effect
+ * - Happy expression mode (crescent-shaped eyes)
+ * - Double-blink variation (25% chance)
+ * 
+ * @class
+ * @example
+ * const canvas = document.querySelector('canvas');
+ * const screen = new AstroBotScreen(canvas, { dotSize: 8, dotGap: 8 });
+ * screen.init();
+ */
+class AstroBotScreen {
+  /**
+   * Creates a new AstroBotScreen instance.
+   * @param {HTMLCanvasElement} canvas - The canvas element to render on
+   * @param {AstroBotScreenOptions} [options={}] - Configuration options
+   */
+  constructor(canvas, options = {}) {
+    /** @type {HTMLCanvasElement} */
+    this.canvas = canvas;
+    
+    /** @type {CanvasRenderingContext2D} */
+    this.ctx = canvas.getContext('2d');
+    
+    // Configuration
+    /** @type {number} Diameter of each dot in pixels */
+    this.dotSize = options.dotSize || 6;
+    
+    /** @type {number} Gap between dots in pixels */
+    this.dotGap = options.dotGap || 6;
+    
+    /** @type {number} Total spacing between dot centers */
+    this.dotSpacing = this.dotSize + this.dotGap;
+    
+    // Dimensions
+    /** @type {number} Canvas width in CSS pixels */
+    this.width = 0;
+    
+    /** @type {number} Canvas height in CSS pixels */
+    this.height = 0;
+    
+    /** @type {number} Number of dot columns */
+    this.cols = 0;
+    
+    /** @type {number} Number of dot rows */
+    this.rows = 0;
+    
+    // Mouse tracking (normalized 0-1)
+    /** @type {number} Normalized mouse X position (0-1) */
+    this.mouseX = 0.5;
+    
+    /** @type {number} Normalized mouse Y position (0-1) */
+    this.mouseY = 0.5;
+    
+    // Eye position offsets (for subtle movement)
+    /** @type {number} Current eye X offset in pixels */
+    this.eyeOffsetX = 0;
+    
+    /** @type {number} Current eye Y offset in pixels */
+    this.eyeOffsetY = 0;
+    
+    // Pupil/highlight position (normalized -1 to 1)
+    /** @type {number} Smoothed pupil X offset */
+    this.pupilOffsetX = 0;
+    
+    /** @type {number} Smoothed pupil Y offset */
+    this.pupilOffsetY = 0;
+    
+    // Animation state
+    /** @type {number} Blink progress (0=open, 1=closed) */
+    this.blinkProgress = 0;
+    
+    /** @type {number} Scan line expansion progress (0-1) */
+    this.scanLineProgress = 0;
+    
+    /** @type {boolean} Whether a blink animation is in progress */
+    this.isBlinking = false;
+    
+    /** @type {boolean} Whether the scan line effect is visible */
+    this.isShowingScanLine = false;
+    
+    /** @type {boolean} Whether showing happy expression (crescent eyes) */
+    this.isHappy = false;
+    
+    /** @type {boolean} Whether the animation loop is running */
+    this.isRunning = false;
+    
+    // Bound event handlers for cleanup
+    /** @private */
+    this.boundResize = this.resize.bind(this);
+    /** @private */
+    this.boundMouseMove = this.handleMouseMove.bind(this);
+  }
+
+  /**
+   * Initializes the screen, sets up event listeners, and starts animation loops.
+   * Must be called after construction to begin rendering.
+   * @returns {void}
+   */
+  init() {
+    this.resize();
+    window.addEventListener('resize', this.boundResize);
+    document.addEventListener('mousemove', this.boundMouseMove);
+    this.isRunning = true;
+    this.updateEyePosition();
+    this.scheduleBlink();
+    this.draw();
+  }
+
+  /**
+   * Stops all animations and removes event listeners.
+   * Call this before removing the screen from the DOM.
+   * @returns {void}
+   */
+  destroy() {
+    this.isRunning = false;
+    window.removeEventListener('resize', this.boundResize);
+    document.removeEventListener('mousemove', this.boundMouseMove);
+  }
+
+  /**
+   * Handles canvas resize, adjusting for device pixel ratio.
+   * Called automatically on window resize.
+   * @private
+   * @returns {void}
+   */
+  resize() {
+    const rect = this.canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    this.width = rect.width;
+    this.height = rect.height;
+    this.canvas.width = this.width * dpr;
+    this.canvas.height = this.height * dpr;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.scale(dpr, dpr);
+    this.cols = Math.ceil(this.width / this.dotSpacing) + 1;
+    this.rows = Math.ceil(this.height / this.dotSpacing) + 1;
+  }
+
+  /**
+   * Handles mouse movement, updating normalized mouse position.
+   * @private
+   * @param {MouseEvent} e - The mouse event
+   * @returns {void}
+   */
+  handleMouseMove(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouseX = (e.clientX - rect.left) / this.width;
+    this.mouseY = (e.clientY - rect.top) / this.height;
+    // Clamp to 0-1 range
+    this.mouseX = Math.max(0, Math.min(1, this.mouseX));
+    this.mouseY = Math.max(0, Math.min(1, this.mouseY));
+  }
+
+  /**
+   * Tests if a point is inside an elliptical eye shape.
+   * @param {number} x - X coordinate to test
+   * @param {number} y - Y coordinate to test
+   * @param {number} eyeCenterX - Eye center X position
+   * @param {number} eyeCenterY - Eye center Y position
+   * @param {number} radiusX - Eye horizontal radius
+   * @param {number} radiusY - Eye vertical radius
+   * @returns {boolean} True if the point is inside the eye
+   */
+  isInsideEye(x, y, eyeCenterX, eyeCenterY, radiusX, radiusY) {
+    const dx = (x - eyeCenterX) / radiusX;
+    const dy = (y - eyeCenterY) / radiusY;
+    return dx * dx + dy * dy <= 1;
+  }
+
+  /**
+   * Tests if a point is inside the happy expression crescent shape.
+   * Creates an upward-curving arc (^_^) by subtracting a vertically
+   * offset inner ellipse from the outer ellipse.
+   * @param {number} x - X coordinate to test
+   * @param {number} y - Y coordinate to test
+   * @param {number} eyeCenterX - Eye center X position
+   * @param {number} eyeCenterY - Eye center Y position
+   * @param {number} radiusX - Eye horizontal radius
+   * @param {number} radiusY - Eye vertical radius
+   * @returns {boolean} True if the point is inside the crescent
+   */
+  isInsideHappyEye(x, y, eyeCenterX, eyeCenterY, radiusX, radiusY) {
+    const dxOuter = (x - eyeCenterX) / radiusX;
+    const dyOuter = (y - eyeCenterY) / radiusY;
+    const isInOuter = dxOuter * dxOuter + dyOuter * dyOuter <= 1;
+    
+    const innerOffsetY = radiusY * 0.85;
+    const innerScale = 0.95;
+    const dxInner = (x - eyeCenterX) / (radiusX * innerScale);
+    const dyInner = (y - (eyeCenterY + innerOffsetY)) / (radiusY * innerScale);
+    const isOutsideInner = dxInner * dxInner + dyInner * dyInner >= 1;
+    
+    return isInOuter && isOutsideInner;
+  }
+
+  /**
+   * Calculates brightness and highlight intensity for a point in the eye.
+   * Used to create the glowing pupil/highlight effect that follows the mouse.
+   * @param {number} x - X coordinate
+   * @param {number} y - Y coordinate
+   * @param {number} eyeCenterX - Eye center X position
+   * @param {number} eyeCenterY - Eye center Y position
+   * @param {number} radiusX - Eye horizontal radius
+   * @param {number} radiusY - Eye vertical radius
+   * @param {number} highlightX - Highlight/pupil center X
+   * @param {number} highlightY - Highlight/pupil center Y
+   * @returns {EyeBrightnessResult} Brightness and highlight intensity values
+   */
+  getEyeBrightness(x, y, eyeCenterX, eyeCenterY, radiusX, radiusY, highlightX, highlightY) {
+    const dx = (x - eyeCenterX) / radiusX;
+    const dy = (y - eyeCenterY) / radiusY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > 1) return { brightness: 0, highlightIntensity: 0 };
+
+    const brightness = 1.0;
+    const hx = (x - highlightX) / (radiusX * 0.45);
+    const hy = (y - highlightY) / (radiusY * 0.45);
+    const highlightDist = Math.sqrt(hx * hx + hy * hy);
+    const highlightIntensity = Math.pow(Math.max(0, 1 - highlightDist), 1.8);
+
+    return { brightness, highlightIntensity };
+  }
+
+  /**
+   * Main render loop. Draws the dot-matrix grid with eyes, handles
+   * expression states, blink animations, and glow effects.
+   * Called automatically via requestAnimationFrame.
+   * @private
+   * @returns {void}
+   */
+  draw() {
+    if (!this.isRunning) return;
+
+    const ctx = this.ctx;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+
+    const eyeRadiusX = Math.min(this.width, this.height) * 0.22;
+    const eyeRadiusY = eyeRadiusX * 0.85;
+    const eyeSpacing = eyeRadiusX * 1.3;
+
+    const leftEyeX = centerX - eyeSpacing + this.eyeOffsetX;
+    const leftEyeY = centerY + this.eyeOffsetY;
+    const rightEyeX = centerX + eyeSpacing + this.eyeOffsetX;
+    const rightEyeY = centerY + this.eyeOffsetY;
+
+    const maxHighlightOffsetX = eyeRadiusX * 0.4;
+    const maxHighlightOffsetY = eyeRadiusY * 0.4;
+    const highlightOffsetX = this.pupilOffsetX * maxHighlightOffsetX;
+    const highlightOffsetY = this.pupilOffsetY * maxHighlightOffsetY;
+    const leftHighlightX = leftEyeX + highlightOffsetX;
+    const leftHighlightY = leftEyeY + highlightOffsetY;
+    const rightHighlightX = rightEyeX + highlightOffsetX;
+    const rightHighlightY = rightEyeY + highlightOffsetY;
+
+    const eyelidCloseAmount = this.blinkProgress * eyeRadiusY;
+    const scanLineY = centerY + this.eyeOffsetY;
+    const scanLineRightEdge = this.width * this.scanLineProgress;
+
+    // Draw dot matrix
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        const x = col * this.dotSpacing + this.dotSpacing / 2;
+        const y = row * this.dotSpacing + this.dotSpacing / 2;
+
+        let dotColor = null;
+        let dotAlpha = 0.08;
+
+        const onScanLine = this.isShowingScanLine && 
+                          Math.abs(y - scanLineY) < this.dotSpacing * 0.6 && 
+                          x <= scanLineRightEdge;
+
+        if (onScanLine) {
+          dotColor = 'rgb(150, 220, 255)';
+          dotAlpha = 1;
+        } else if (this.isHappy && !this.isBlinking) {
+          const inLeftCrescent = this.isInsideHappyEye(x, y, leftEyeX, leftEyeY, eyeRadiusX, eyeRadiusY);
+          const inRightCrescent = this.isInsideHappyEye(x, y, rightEyeX, rightEyeY, eyeRadiusX, eyeRadiusY);
+
+          if (inLeftCrescent || inRightCrescent) {
+            dotColor = 'rgb(80, 180, 255)';
+            dotAlpha = 1;
+          } else {
+            dotColor = '#1a3565';
+            dotAlpha = 0.35;
+          }
+        } else {
+          const inLeftEye = this.isInsideEye(x, y, leftEyeX, leftEyeY, eyeRadiusX, eyeRadiusY);
+          const inRightEye = this.isInsideEye(x, y, rightEyeX, rightEyeY, eyeRadiusX, eyeRadiusY);
+
+          if (inLeftEye || inRightEye) {
+            const eyeX = inLeftEye ? leftEyeX : rightEyeX;
+            const eyeY = inLeftEye ? leftEyeY : rightEyeY;
+            const hlX = inLeftEye ? leftHighlightX : rightHighlightX;
+            const hlY = inLeftEye ? leftHighlightY : rightHighlightY;
+
+            const result = this.getEyeBrightness(x, y, eyeX, eyeY, eyeRadiusX, eyeRadiusY, hlX, hlY);
+
+            const eyeTop = eyeY - eyeRadiusY;
+            const eyeBottom = eyeY + eyeRadiusY;
+            const topLidY = eyeTop + eyelidCloseAmount;
+            const bottomLidY = eyeBottom - eyelidCloseAmount;
+
+            if (y >= topLidY && y <= bottomLidY) {
+              const highlight = result.highlightIntensity;
+              const baseR = 50, baseG = 150, baseB = 255;
+              const h = Math.pow(highlight, 0.5);
+              const r = Math.round(h * 255 + (1 - h) * baseR);
+              const g = Math.round(h * 255 + (1 - h) * baseG);
+              dotColor = `rgb(${r}, ${g}, 255)`;
+              dotAlpha = 1;
+            } else {
+              dotColor = '#0a1525';
+              dotAlpha = 0.7;
+            }
+          } else {
+            dotColor = '#1a3565';
+            dotAlpha = 0.35;
+          }
+        }
+
+        ctx.beginPath();
+        ctx.arc(x, y, this.dotSize / 2, 0, Math.PI * 2);
+        ctx.fillStyle = dotColor;
+        ctx.globalAlpha = dotAlpha;
+        ctx.fill();
+      }
+    }
+
+    ctx.globalAlpha = 1;
+
+    // Glow effects
+    ctx.globalCompositeOperation = 'lighter';
+    [{ x: leftEyeX, y: leftEyeY }, { x: rightEyeX, y: rightEyeY }].forEach(eye => {
+      const glow = ctx.createRadialGradient(eye.x, eye.y, eyeRadiusX * 0.5, eye.x, eye.y, eyeRadiusX * 1.8);
+      glow.addColorStop(0, 'rgba(40, 120, 220, 0.15)');
+      glow.addColorStop(0.5, 'rgba(30, 80, 180, 0.06)');
+      glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, this.width, this.height);
+    });
+    ctx.globalCompositeOperation = 'source-over';
+
+    requestAnimationFrame(() => this.draw());
+  }
+
+  /**
+   * Smoothly updates eye and pupil positions based on mouse position.
+   * Eyes have subtle movement, while pupils track more responsively.
+   * Called automatically via requestAnimationFrame.
+   * @private
+   * @returns {void}
+   */
+  updateEyePosition() {
+    if (!this.isRunning) return;
+
+    // Subtle whole-eye movement (slower, smaller range)
+    const targetX = (this.mouseX - 0.5) * 20;
+    const targetY = (this.mouseY - 0.5) * 15;
+    this.eyeOffsetX += (targetX - this.eyeOffsetX) * 0.08;
+    this.eyeOffsetY += (targetY - this.eyeOffsetY) * 0.08;
+
+    // Faster pupil/highlight tracking
+    const pupilTargetX = (this.mouseX - 0.5) * 2;
+    const pupilTargetY = (this.mouseY - 0.5) * 2;
+    this.pupilOffsetX += (pupilTargetX - this.pupilOffsetX) * 0.15;
+    this.pupilOffsetY += (pupilTargetY - this.pupilOffsetY) * 0.15;
+
+    requestAnimationFrame(() => this.updateEyePosition());
+  }
+
+  /**
+   * Triggers a blink animation sequence.
+   * Animation phases:
+   * 1. Eyelids close from top and bottom toward center
+   * 2. Scan line expands horizontally across the screen
+   * 3. Eyelids open back up
+   * 
+   * Has a 25% chance of being a double-blink.
+   * After blinking, has a 40% chance to switch to happy expression.
+   * 
+   * @returns {void}
+   */
+  blink() {
+    if (this.isBlinking) return;
+    this.isBlinking = true;
+    this.blinkProgress = 0;
+    this.scanLineProgress = 0;
+
+    const closeSpeed = 0.08;
+    const openSpeed = 0.07;
+    const scanLineSpeed = 0.12;
+    const betweenBlinks = 100;
+
+    // 25% chance of double blink
+    const isDoubleBlink = Math.random() < 0.25;
+    const maxBlinks = isDoubleBlink ? 2 : 1;
+    let blinkCount = 0;
+
+    const blinkClose = () => {
+      if (!this.isRunning) return;
+      this.blinkProgress += closeSpeed;
+      if (this.blinkProgress >= 1) {
+        this.blinkProgress = 1;
+        this.isShowingScanLine = true;
+        this.scanLineProgress = 0;
+        expandScanLine();
+      } else {
+        requestAnimationFrame(blinkClose);
+      }
+    };
+
+    const expandScanLine = () => {
+      if (!this.isRunning) return;
+      this.scanLineProgress += scanLineSpeed;
+      if (this.scanLineProgress >= 1) {
+        this.scanLineProgress = 1;
+        setTimeout(() => {
+          this.isShowingScanLine = false;
+          this.scanLineProgress = 0;
+          blinkOpen();
+        }, 30);
+      } else {
+        requestAnimationFrame(expandScanLine);
+      }
+    };
+
+    const blinkOpen = () => {
+      if (!this.isRunning) return;
+      this.blinkProgress -= openSpeed;
+      if (this.blinkProgress <= 0) {
+        this.blinkProgress = 0;
+        blinkCount++;
+        if (blinkCount < maxBlinks) {
+          setTimeout(blinkClose, betweenBlinks);
+        } else {
+          this.isBlinking = false;
+          // 40% chance to switch to happy expression
+          this.isHappy = Math.random() < 0.4;
+        }
+      } else {
+        requestAnimationFrame(blinkOpen);
+      }
+    };
+
+    blinkClose();
+  }
+
+  /**
+   * Schedules the next blink at a random interval (2.5-6.5 seconds).
+   * Automatically reschedules after each blink.
+   * @private
+   * @returns {void}
+   */
+  scheduleBlink() {
+    if (!this.isRunning) return;
+    const delay = 2500 + Math.random() * 4000;
+    setTimeout(() => {
+      this.blink();
+      this.scheduleBlink();
+    }, delay);
+  }
+}
+
+// ===========================================
+// AstroBot Class - Full Robot Head Component
+// ===========================================
+
+/**
+ * @typedef {Object} AstroBotOptions
+ * @property {number} [size=400] - Overall size of the robot head in pixels
+ */
+
+/**
+ * Creates a complete Astro Bot head with SVG shell and animated eye display.
+ * The robot head includes:
+ * - Rounded helmet/head shape
+ * - Glowing antenna with ball
+ * - Side ear pieces with cyan accents
+ * - Visor containing the dot-matrix eye display
+ * 
+ * @class
+ * @example
+ * const container = document.getElementById('bot-container');
+ * const bot = new AstroBot(container, { size: 500 });
+ * 
+ * // Later, to clean up:
+ * bot.destroy();
+ */
+class AstroBot {
+  /**
+   * Creates a new AstroBot instance and renders it to the container.
+   * @param {HTMLElement} container - The DOM element to render the bot into
+   * @param {AstroBotOptions} [options={}] - Configuration options
+   */
+  constructor(container, options = {}) {
+    /** @type {HTMLElement} The container element */
+    this.container = container;
+    
+    /** @type {number} Size of the robot head in pixels */
+    this.size = options.size || 400;
+    
+    /** @type {AstroBotScreen|null} The eye display screen instance */
+    this.screen = null;
+    
+    this.render();
+  }
+
+  /**
+   * Renders the SVG robot head and initializes the eye display.
+   * Called automatically by the constructor.
+   * @private
+   * @returns {void}
+   */
+  render() {
+    const size = this.size;
+    const visorWidth = size * 0.75;
+    const visorHeight = size * 0.45;
+    const visorY = size * 0.32;
+
+    this.container.innerHTML = `
+      <div class="astro-bot-head" style="width: ${size}px; height: ${size}px;">
+        <svg viewBox="0 0 400 400" width="${size}" height="${size}" style="display: block;">
+          <!-- Head base -->
+          <ellipse cx="200" cy="210" rx="160" ry="150" fill="#e8e8ec"/>
+          
+          <!-- Head top curve -->
+          <ellipse cx="200" cy="140" rx="140" ry="100" fill="#f0f0f4"/>
+          
+          <!-- Visor cutout background -->
+          <ellipse cx="200" cy="185" rx="120" ry="72" fill="#0a0a1a"/>
+          
+          <!-- Antenna base -->
+          <ellipse cx="200" cy="55" rx="20" ry="10" fill="#c0c0c8"/>
+          
+          <!-- Antenna stem -->
+          <rect x="195" y="25" width="10" height="35" rx="5" fill="#d0d0d8"/>
+          
+          <!-- Antenna ball -->
+          <circle cx="200" cy="20" r="12" fill="#4af"/>
+          <circle cx="196" cy="16" r="4" fill="#fff" opacity="0.6"/>
+          
+          <!-- Head shine -->
+          <ellipse cx="160" cy="120" rx="40" ry="25" fill="#fff" opacity="0.3"/>
+          
+          <!-- Ear pieces -->
+          <ellipse cx="52" cy="200" rx="22" ry="35" fill="#d8d8dc"/>
+          <ellipse cx="52" cy="200" rx="14" ry="25" fill="#4af"/>
+          <ellipse cx="348" cy="200" rx="22" ry="35" fill="#d8d8dc"/>
+          <ellipse cx="348" cy="200" rx="14" ry="25" fill="#4af"/>
+          
+          <!-- Chin detail -->
+          <ellipse cx="200" cy="330" rx="60" ry="25" fill="#d8d8dc"/>
+        </svg>
+        
+        <!-- Screen container positioned over visor -->
+        <div class="screen-container" style="
+          top: ${visorY}px;
+          left: ${(size - visorWidth) / 2}px;
+          width: ${visorWidth}px;
+          height: ${visorHeight}px;
+        ">
+          <canvas></canvas>
+        </div>
+      </div>
+    `;
+
+    // Initialize the screen with size-appropriate dot dimensions
+    // Scale dots proportionally - smaller bots get smaller dots
+    const canvas = this.container.querySelector('canvas');
+    const dotScale = size / 400;  // Base scale factor
+    const dotSize = Math.max(2, Math.round(6 * dotScale));
+    const dotGap = Math.max(2, Math.round(6 * dotScale));
+    
+    this.screen = new AstroBotScreen(canvas, {
+      dotSize: dotSize,
+      dotGap: dotGap
+    });
+    this.screen.init();
+  }
+
+  /**
+   * Destroys the AstroBot instance, stopping animations and clearing the DOM.
+   * Call this before removing the bot from the page to prevent memory leaks.
+   * @returns {void}
+   */
+  destroy() {
+    if (this.screen) {
+      this.screen.destroy();
+    }
+    this.container.innerHTML = '';
+  }
+}
+
+// ===========================================
+// Initialize Multiple Bots
+// ===========================================
+
+/**
+ * Configuration for each bot instance.
+ * Smaller bots appear further away with depth shading.
+ * @type {Array<{id: string, size: number, x: number, y: number, depth: number}>}
+ */
+const botConfigs = [
+  // Main bot (front and center)
+  { id: 'astroBot1', size: 420, x: 50, y: 50, depth: 0 },
+  
+  // Medium bots (mid-distance)
+  { id: 'astroBot2', size: 220, x: 5, y: 15, depth: 0.3 },
+  { id: 'astroBot3', size: 200, x: 78, y: 8, depth: 0.35 },
+  
+  // Smaller bots (further back)
+  { id: 'astroBot4', size: 140, x: 15, y: 65, depth: 0.5 },
+  { id: 'astroBot5', size: 120, x: 85, y: 70, depth: 0.55 },
+  
+  // Tiny bots (far background)
+  { id: 'astroBot6', size: 80, x: 25, y: 5, depth: 0.7 },
+  { id: 'astroBot7', size: 70, x: 70, y: 85, depth: 0.75 },
+];
+
+/**
+ * Applies depth-based styling to a bot container.
+ * Smaller/further bots are darker and slightly blurred.
+ * @param {HTMLElement} container - The bot container element
+ * @param {number} depth - Depth value from 0 (front) to 1 (far back)
+ * @param {number} zIndex - Z-index for layering
+ */
+function applyDepthEffect(container, depth, zIndex) {
+  const brightness = 1 - (depth * 0.6);  // 100% to 40% brightness
+  const blur = depth * 1.5;               // 0px to 1.5px blur
+  const opacity = 1 - (depth * 0.3);      // 100% to 70% opacity
+  
+  container.style.filter = `brightness(${brightness}) blur(${blur}px)`;
+  container.style.opacity = opacity;
+  container.style.zIndex = zIndex;
+}
+
+/** @type {AstroBot[]} Array of all bot instances */
+const bots = [];
+
+// Create and position all bots
+botConfigs.forEach((config, index) => {
+  const container = document.getElementById(config.id);
+  if (!container) return;
+  
+  // Position as percentage of viewport
+  container.style.left = `calc(${config.x}% - ${config.size / 2}px)`;
+  container.style.top = `calc(${config.y}% - ${config.size / 2}px)`;
+  
+  // Apply depth effect (higher depth = further back = lower z-index)
+  const zIndex = Math.floor((1 - config.depth) * 100);
+  applyDepthEffect(container, config.depth, zIndex);
+  
+  // Create the bot
+  const bot = new AstroBot(container, { size: config.size });
+  bots.push(bot);
+});
+</script>
+
+</body>
+</html>

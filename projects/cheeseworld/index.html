@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cheeseworld</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #1a2a3a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #gameContainer {
+            text-align: center;
+        }
+        #gameCanvas {
+            border: 6px solid #a0a0a0;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(150, 180, 200, 0.4);
+        }
+        #ui {
+            color: #ffd700;
+            padding: 10px;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        #instructions {
+            color: #cca030;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        h1 {
+            color: #ffd700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <h1>🧀 Cheeseworld 🐭</h1>
+        <div id="ui">
+            <span>Cheese: <span id="score">0</span></span>
+            <span id="powerUpDisplay" style="color: #ffff00; display: none;">SPEED BOOST!</span>
+            <span>Level: <span id="level">1</span></span>
+        </div>
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <div id="instructions">
+            Arrow keys or WASD to move | Space or Up to jump | Avoid the cat and grumpy old man!
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
