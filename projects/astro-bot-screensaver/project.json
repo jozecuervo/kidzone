@@ -10,5 +10,22 @@
     "animation",
     "canvas"
   ],
-  "order": 40
+  "order": 40,
+  "ageRange": "6-10",
+  "interaction": [
+    "pointer",
+    "passive"
+  ],
+  "safety": {
+    "privacy": "Local-only animation with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "None required for ordinary viewing.",
+    "notes": "Screensaver-style motion; keep animation calm and avoid flashing effects."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "none",
+    "storesData": false,
+    "externalDependencies": []
+  }
 }

@@ -10,5 +10,23 @@
     "starter",
     "game"
   ],
-  "order": 1
+  "order": 1,
+  "ageRange": "7-12",
+  "interaction": [
+    "keyboard",
+    "pointer",
+    "touch"
+  ],
+  "safety": {
+    "privacy": "Local-only canvas play with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "Adult help is useful for the first pull request or code edit.",
+    "notes": "Starter game encourages small, visible changes instead of passive scrolling."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "none",
+    "storesData": false,
+    "externalDependencies": []
+  }
 }

@@ -14,7 +14,25 @@
         "starter",
         "game"
       ],
-      "order": 1
+      "order": 1,
+      "ageRange": "7-12",
+      "interaction": [
+        "keyboard",
+        "pointer",
+        "touch"
+      ],
+      "safety": {
+        "privacy": "Local-only canvas play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult help is useful for the first pull request or code edit.",
+        "notes": "Starter game encourages small, visible changes instead of passive scrolling."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
     },
     {
       "slug": "world-of-poo",
@@ -30,7 +48,30 @@
         "physics",
         "puzzle"
       ],
-      "order": 20
+      "order": 20,
+      "ageRange": "8-12",
+      "interaction": [
+        "pointer",
+        "touch"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview is useful because of silly bathroom humor and physics controls.",
+        "notes": "Contains cartoon bathroom humor and mild explosion effects."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "declared-external-dependency",
+        "storesData": false,
+        "externalDependencies": [
+          {
+            "name": "Matter.js",
+            "url": "https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js",
+            "reason": "Physics engine for the goo-building puzzle prototype."
+          }
+        ]
+      }
     },
     {
       "slug": "math-knitting",
@@ -46,7 +87,24 @@
         "math",
         "craft"
       ],
-      "order": 30
+      "order": 30,
+      "ageRange": "7-10",
+      "interaction": [
+        "keyboard",
+        "pointer"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult help may be useful for younger players practicing arithmetic.",
+        "notes": "Wrong answers reduce yarn, so a gentler mode may be a future improvement."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
     },
     {
       "slug": "astro-bot-screensaver",
@@ -62,7 +120,24 @@
         "animation",
         "canvas"
       ],
-      "order": 40
+      "order": 40,
+      "ageRange": "6-10",
+      "interaction": [
+        "pointer",
+        "passive"
+      ],
+      "safety": {
+        "privacy": "Local-only animation with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "None required for ordinary viewing.",
+        "notes": "Screensaver-style motion; keep animation calm and avoid flashing effects."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
     },
     {
       "slug": "photo-by-numbers",
@@ -78,7 +153,26 @@
         "art",
         "camera"
       ],
-      "order": 50
+      "order": 50,
+      "ageRange": "8-12 with adult help",
+      "interaction": [
+        "camera",
+        "file-upload",
+        "pointer",
+        "touch"
+      ],
+      "safety": {
+        "privacy": "Photos are processed locally in the browser; no upload, account, chat, or public sharing is built in.",
+        "adultHelp": "Adult help is recommended for camera permission, photo choices, and downloads.",
+        "notes": "Uses camera or local image files and can download finished artwork."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
     },
     {
       "slug": "cheeseworld",
@@ -94,7 +188,23 @@
         "platformer",
         "arcade"
       ],
-      "order": 60
+      "order": 60,
+      "ageRange": "8-12",
+      "interaction": [
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview may be useful for younger players because of cartoon hazards.",
+        "notes": "Includes chasing and survival-style platformer hazards."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
     },
     {
       "slug": "old-rules",
@@ -110,7 +220,24 @@
         "retro",
         "escape"
       ],
-      "order": 70
+      "order": 70,
+      "ageRange": "8-12",
+      "interaction": [
+        "keyboard",
+        "pointer"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview may be useful because the theme includes sneaking and being chased.",
+        "notes": "Retro escape game with cartoon household trouble and mild chase tension."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
     },
     {
       "slug": "color-mixer-lab",
@@ -127,7 +254,25 @@
         "color",
         "game"
       ],
-      "order": 80
+      "order": 80,
+      "ageRange": "6-10",
+      "interaction": [
+        "pointer",
+        "touch",
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "None required for ordinary play.",
+        "notes": "No timers or score pressure; wrong mixes simply retry the same level."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
     }
   ]
 }

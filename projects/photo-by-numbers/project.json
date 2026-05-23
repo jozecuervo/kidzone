@@ -10,5 +10,24 @@
     "art",
     "camera"
   ],
-  "order": 50
+  "order": 50,
+  "ageRange": "8-12 with adult help",
+  "interaction": [
+    "camera",
+    "file-upload",
+    "pointer",
+    "touch"
+  ],
+  "safety": {
+    "privacy": "Photos are processed locally in the browser; no upload, account, chat, or public sharing is built in.",
+    "adultHelp": "Adult help is recommended for camera permission, photo choices, and downloads.",
+    "notes": "Uses camera or local image files and can download finished artwork."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "none",
+    "storesData": false,
+    "externalDependencies": []
+  }
 }

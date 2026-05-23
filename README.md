@@ -25,6 +25,11 @@ Each mini-project gets its own folder under `projects/`. The `project.json`
 metadata feeds the landing page project index. Keep project files and assets
 inside that folder unless there is a strong reason to share code.
 
+Project metadata also carries the safety and runtime contract for each project:
+age fit, interaction style, privacy notes, adult-help notes, storage, network
+access, and any external dependencies. See
+[Kidzone project contract](./projects/PROJECT_CONTRACT.md).
+
 ## GitHub Pages Bias
 
 - Publish the repository root as a static GitHub Pages site.
