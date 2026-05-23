@@ -111,6 +111,23 @@
         "escape"
       ],
       "order": 70
+    },
+    {
+      "slug": "color-mixer-lab",
+      "title": "Color Mixer Lab",
+      "description": "A color mixing game where each level asks players to create a target shade using only five paint colors.",
+      "date": "2026-05-23",
+      "dateSource": "project metadata",
+      "summary": "Mix red, yellow, blue, white, and brown to match five mystery target colors.",
+      "href": "./projects/color-mixer-lab/",
+      "entry": "index.html",
+      "cta": "Mix colors",
+      "tags": [
+        "art",
+        "color",
+        "game"
+      ],
+      "order": 80
     }
   ]
 }

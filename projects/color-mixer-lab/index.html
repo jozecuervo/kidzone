@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Color Mixer Lab</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="lab-shell">
+      <a class="back-link" href="../../">Back to Kidzone</a>
+
+      <header class="lab-header">
+        <div>
+          <p class="eyebrow">Kidzone Paint Lab</p>
+          <h1>Color Mixer Lab</h1>
+        </div>
+        <div class="level-badge" aria-live="polite">
+          <span>Level</span>
+          <strong><span id="level-number">1</span>/5</strong>
+        </div>
+      </header>
+
+      <section class="swatch-stage" aria-label="Color matching area">
+        <article class="swatch-card target-card">
+          <div class="card-heading">
+            <span>Target</span>
+            <h2 id="target-name">Light Gold</h2>
+          </div>
+          <div id="target-swatch" class="paint-swatch" aria-label="Target color"></div>
+        </article>
+
+        <article class="swatch-card mix-card">
+          <div class="card-heading">
+            <span>Your mix</span>
+            <h2 id="mix-name">Empty cup</h2>
+          </div>
+          <div id="mix-swatch" class="paint-swatch empty" aria-label="Your mixed color"></div>
+        </article>
+      </section>
+
+      <section class="mixer-panel" aria-label="Paint mixer">
+        <div class="palette" id="palette"></div>
+
+        <div class="mix-readout">
+          <div>
+            <span class="readout-label">Drops</span>
+            <strong id="drop-total">0</strong>
+          </div>
+          <div class="drop-row" id="drop-row" aria-label="Paint drops in the cup"></div>
+        </div>
+
+        <div class="action-row">
+          <button id="undo-button" class="tool-button" type="button">Undo</button>
+          <button id="reset-button" class="tool-button" type="button">Reset</button>
+          <button id="check-button" class="check-button" type="button">Check mix</button>
+        </div>
+
+        <p id="feedback" class="feedback" aria-live="polite">Level 1 is ready.</p>
+      </section>
+
+      <section id="complete-panel" class="complete-panel" hidden>
+        <div class="paint-medal" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <h2>All 5 colors matched.</h2>
+        <p>You finished the lab with red, yellow, blue, white, and brown.</p>
+        <button id="play-again-button" class="check-button" type="button">Play again</button>
+      </section>
+    </main>
+    <script src="./game.js"></script>
+  </body>
+</html>
