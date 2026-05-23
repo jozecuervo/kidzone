@@ -12,3 +12,7 @@ Then rename the page title and heading and build the project inside that folder.
 
 The links in this starter stay relative so the copied project can run on
 GitHub Pages even when Kidzone is published below a repository path.
+
+Before publishing, update `project.json` to follow
+`projects/PROJECT_CONTRACT.md`: age fit, interactions, safety/privacy notes,
+storage, network access, and dependencies should all be explicit.

@@ -47,7 +47,7 @@ async function personalizeTemplate(projectRoot) {
   );
   await writeFile(
     join(projectRoot, "README.md"),
-    `# ${title}\n\nStart with one small playable idea and keep this project folder self-contained.\n`,
+    `# ${title}\n\nStart with one small playable idea and keep this project folder self-contained.\n\nUpdate project.json before publishing so age fit, safety, privacy, and runtime notes match the project.\n`,
     "utf8"
   );
 }
@@ -81,7 +81,21 @@ if (!slug) {
           entry: "index.html",
           cta: "Open project",
           tags: ["new"],
-          order: 999
+          order: 999,
+          ageRange: "TBD",
+          interaction: ["pointer", "touch", "keyboard"],
+          safety: {
+            privacy: "Local-only play with no accounts, chat, sharing, or saved data.",
+            adultHelp: "TBD before publishing.",
+            notes: "TBD before publishing."
+          },
+          runtime: {
+            type: "static",
+            requiresServer: false,
+            networkAccess: "none",
+            storesData: false,
+            externalDependencies: []
+          }
         },
         null,
         2
