@@ -21,9 +21,18 @@ function projectBadge(label) {
 
 function projectSafetyBadges(project) {
   const badges = [];
+  const interactions = new Set(project.interaction ?? []);
 
   if (project.ageRange) {
     badges.push(`Ages ${project.ageRange}`);
+  }
+
+  if (interactions.has("touch")) {
+    badges.push("Touch friendly");
+  } else if (interactions.has("keyboard")) {
+    badges.push("Keyboard needed");
+  } else if (interactions.has("pointer")) {
+    badges.push("Pointer friendly");
   }
 
   if (project.interaction?.includes("camera")) {

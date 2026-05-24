@@ -13,7 +13,8 @@
   "order": 60,
   "ageRange": "8-12",
   "interaction": [
-    "keyboard"
+    "keyboard",
+    "touch"
   ],
   "safety": {
     "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
