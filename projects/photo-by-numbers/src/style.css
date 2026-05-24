@@ -6,7 +6,8 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #f6fbff 0%, #fff7e0 52%, #eefbf2 100%);
+    color: #243042;
     min-height: 100vh;
     padding: 20px;
 }
@@ -15,9 +16,9 @@ body {
     max-width: 1400px;
     margin: 0 auto;
     background: white;
-    border-radius: 20px;
+    border-radius: 8px;
     padding: 40px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 18px 48px rgba(36, 48, 66, 0.16);
 }
 
 header {
@@ -26,13 +27,13 @@ header {
 }
 
 header h1 {
-    color: #333;
+    color: #243042;
     font-size: 2.5em;
     margin-bottom: 10px;
 }
 
 header p {
-    color: #666;
+    color: #5d6b7f;
     font-size: 1.1em;
     margin-bottom: 30px;
 }
@@ -50,16 +51,16 @@ header p {
     align-items: center;
     gap: 10px;
     padding: 15px 30px;
-    border-radius: 10px;
-    background: #f0f0f0;
-    color: #999;
+    border-radius: 8px;
+    background: #edf2f7;
+    color: #718096;
     transition: all 0.3s ease;
 }
 
 .phase-step.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #2563eb;
     color: white;
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 5px 15px rgba(37, 99, 235, 0.24);
 }
 
 .step-number {
@@ -75,7 +76,7 @@ header p {
 
 .phase-step.active .step-number {
     background: white;
-    color: #667eea;
+    color: #2563eb;
 }
 
 .step-label {
@@ -107,14 +108,14 @@ header p {
 
 /* Step Sections */
 .step-section h2 {
-    color: #333;
+    color: #243042;
     font-size: 1.8em;
     margin-bottom: 30px;
     text-align: center;
 }
 
 .step-section h3 {
-    color: #555;
+    color: #4a5568;
     font-size: 1.3em;
     margin-bottom: 20px;
 }
@@ -136,40 +137,40 @@ header p {
     font-size: 1em;
     font-weight: 600;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
     text-decoration: none;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #2563eb;
     color: white;
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
 }
 
 .btn-secondary {
-    background: #f0f0f0;
-    color: #333;
+    background: #edf2f7;
+    color: #243042;
 }
 
 .btn-secondary:hover {
-    background: #e0e0e0;
+    background: #dfe7f1;
     transform: translateY(-2px);
 }
 
 .btn-success {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    background: #0f9f6e;
     color: white;
 }
 
 .btn-success:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(17, 153, 142, 0.4);
+    box-shadow: 0 10px 20px rgba(15, 159, 110, 0.24);
 }
 
 /* Webcam Section */
@@ -185,7 +186,7 @@ header p {
 #webcam {
     width: 100%;
     max-width: 640px;
-    border-radius: 10px;
+    border-radius: 8px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
     margin-bottom: 20px;
 }
@@ -203,7 +204,7 @@ header p {
 }
 
 .preview-box h3 {
-    color: #555;
+    color: #4a5568;
     font-size: 1.2em;
     margin-bottom: 15px;
 }
@@ -211,16 +212,16 @@ header p {
 .preview-box canvas {
     width: 100%;
     max-width: 500px;
-    border-radius: 10px;
+    border-radius: 8px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    border: 2px solid #e0e0e0;
+    border: 2px solid #dfe7f1;
 }
 
 /* Controls Panel */
 .controls-panel {
-    background: #f9f9f9;
+    background: #f8fafc;
     padding: 30px;
-    border-radius: 15px;
+    border-radius: 8px;
 }
 
 .control-group {
@@ -230,7 +231,7 @@ header p {
 .control-group label {
     display: block;
     font-weight: 600;
-    color: #333;
+    color: #243042;
     margin-bottom: 10px;
 }
 
@@ -255,7 +256,7 @@ header p {
 
 .control-group select:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #2563eb;
 }
 
 .control-group input[type="range"] {
@@ -268,7 +269,7 @@ header p {
     display: inline-block;
     min-width: 40px;
     font-weight: 600;
-    color: #667eea;
+    color: #2563eb;
 }
 
 /* Coloring Phase */
@@ -281,7 +282,7 @@ header p {
 }
 
 .coloring-header h2 {
-    color: #333;
+    color: #243042;
     text-align: center;
     margin-bottom: 20px;
 }
@@ -295,16 +296,16 @@ header p {
 
 /* Coloring Tools Sidebar */
 .coloring-tools {
-    background: #f9f9f9;
+    background: #f8fafc;
     padding: 25px;
-    border-radius: 15px;
+    border-radius: 8px;
     height: fit-content;
     position: sticky;
     top: 20px;
 }
 
 .coloring-tools h3 {
-    color: #333;
+    color: #243042;
     font-size: 1.5em;
     margin-bottom: 25px;
     text-align: center;
@@ -315,7 +316,7 @@ header p {
 }
 
 .tool-section h4 {
-    color: #555;
+    color: #4a5568;
     font-size: 1.1em;
     margin-bottom: 15px;
 }
@@ -329,19 +330,19 @@ header p {
 
 .btn-mode {
     background: #fff;
-    color: #666;
-    border: 2px solid #e0e0e0;
+    color: #5d6b7f;
+    border: 2px solid #dfe7f1;
     padding: 12px;
     justify-content: flex-start;
 }
 
 .btn-mode:hover {
-    background: #f5f5f5;
+    background: #f8fafc;
     transform: none;
 }
 
 .btn-mode.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #2563eb;
     color: white;
     border-color: transparent;
 }
@@ -350,8 +351,8 @@ header p {
 #colorPicker {
     width: 100%;
     height: 60px;
-    border: 3px solid #667eea;
-    border-radius: 10px;
+    border: 3px solid #2563eb;
+    border-radius: 8px;
     cursor: pointer;
 }
 
@@ -377,9 +378,9 @@ header p {
 }
 
 .color-btn.active {
-    border-color: #667eea;
+    border-color: #2563eb;
     transform: scale(1.15);
-    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.24);
 }
 
 /* Coloring Canvas Area */
@@ -387,8 +388,8 @@ header p {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f0f0f0;
-    border-radius: 15px;
+    background: #edf2f7;
+    border-radius: 8px;
     padding: 20px;
     min-height: 600px;
 }
@@ -396,8 +397,8 @@ header p {
 #coloringCanvas {
     max-width: 100%;
     max-height: 80vh;
-    border-radius: 10px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(36, 48, 66, 0.16);
     cursor: crosshair;
     background: white;
 }

@@ -10,11 +10,12 @@ class PhotoByNumbers {
         // State
         this.stream = null;
         this.currentImage = null;
-        this.currentColor = '#000000';
+        this.currentColor = '#2F80ED';
         this.isDrawing = false;
         this.fillMode = true;
         this.currentPhase = 'processing';
         this.currentStep = 'input';
+        this.lineArtData = null;
 
         // Initialize algorithm registry
         this.algorithmRegistry = new AlgorithmRegistry();
@@ -36,6 +37,7 @@ class PhotoByNumbers {
         // Webcam controls
         this.webcamBtn = document.getElementById('webcamBtn');
         this.fileUpload = document.getElementById('fileUpload');
+        this.sampleBtn = document.getElementById('sampleBtn');
         this.webcamSection = document.getElementById('webcamSection');
         this.webcam = document.getElementById('webcam');
         this.captureBtn = document.getElementById('captureBtn');
@@ -94,6 +96,7 @@ class PhotoByNumbers {
         // Webcam events
         this.webcamBtn.addEventListener('click', () => this.startWebcam());
         this.fileUpload.addEventListener('change', (e) => this.handleFileUpload(e));
+        this.sampleBtn.addEventListener('click', () => this.loadSampleImage());
         this.captureBtn.addEventListener('click', () => this.capturePhoto());
         this.closeWebcamBtn.addEventListener('click', () => this.stopWebcam());
 
@@ -104,7 +107,7 @@ class PhotoByNumbers {
         this.startOverBtn.addEventListener('click', () => this.reset());
 
         // Algorithm selection
-        this.algorithm.addEventListener('click', (e) => {
+        this.algorithm.addEventListener('change', () => {
             this.updateControlsVisibility();
             if (this.processedCanvas.width > 0) {
                 this.processImage();
@@ -174,11 +177,18 @@ class PhotoByNumbers {
     // ==================== PHASE & STEP NAVIGATION ====================
 
     goToPhase(phase) {
+        if (phase === 'coloring' && (!this.processedCanvas.width || !this.processedCanvas.height)) {
+            this.goToStep('input');
+            phase = 'processing';
+        }
+
         this.currentPhase = phase;
 
         // Update phase containers
         this.phaseProcessing.classList.toggle('active', phase === 'processing');
         this.phaseColoring.classList.toggle('active', phase === 'coloring');
+        this.phaseProcessing.classList.toggle('hidden', phase !== 'processing');
+        this.phaseColoring.classList.toggle('hidden', phase !== 'coloring');
 
         // Update phase indicators
         this.phaseIndicators.forEach(indicator => {
@@ -204,6 +214,8 @@ class PhotoByNumbers {
         // Update step visibility
         this.stepInput.classList.toggle('active', step === 'input');
         this.stepConfigure.classList.toggle('active', step === 'configure');
+        this.stepInput.classList.toggle('hidden', step !== 'input');
+        this.stepConfigure.classList.toggle('hidden', step !== 'configure');
     }
 
     // ==================== WEBCAM ====================
@@ -256,6 +268,65 @@ class PhotoByNumbers {
             };
             reader.readAsDataURL(file);
         }
+    }
+
+    loadSampleImage() {
+        const sampleCanvas = document.createElement('canvas');
+        sampleCanvas.width = 640;
+        sampleCanvas.height = 420;
+        const ctx = sampleCanvas.getContext('2d');
+
+        ctx.fillStyle = '#dff6ff';
+        ctx.fillRect(0, 0, sampleCanvas.width, sampleCanvas.height);
+
+        ctx.fillStyle = '#f7d794';
+        ctx.beginPath();
+        ctx.arc(520, 90, 52, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#78c850';
+        ctx.beginPath();
+        ctx.moveTo(0, 330);
+        ctx.bezierCurveTo(130, 280, 230, 380, 360, 320);
+        ctx.bezierCurveTo(470, 270, 560, 320, 640, 290);
+        ctx.lineTo(640, 420);
+        ctx.lineTo(0, 420);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#f5f1df';
+        ctx.fillRect(190, 170, 220, 150);
+        ctx.fillStyle = '#de6b48';
+        ctx.beginPath();
+        ctx.moveTo(170, 175);
+        ctx.lineTo(300, 80);
+        ctx.lineTo(430, 175);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#8cc5e7';
+        ctx.fillRect(225, 210, 55, 55);
+        ctx.fillRect(325, 210, 55, 55);
+        ctx.fillStyle = '#8a5a44';
+        ctx.fillRect(280, 245, 50, 75);
+
+        ctx.strokeStyle = '#384152';
+        ctx.lineWidth = 8;
+        ctx.lineJoin = 'round';
+        ctx.strokeRect(190, 170, 220, 150);
+        ctx.beginPath();
+        ctx.moveTo(170, 175);
+        ctx.lineTo(300, 80);
+        ctx.lineTo(430, 175);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.strokeRect(225, 210, 55, 55);
+        ctx.strokeRect(325, 210, 55, 55);
+        ctx.strokeRect(280, 245, 50, 75);
+
+        const img = new Image();
+        img.onload = () => this.loadImage(img);
+        img.src = sampleCanvas.toDataURL('image/png');
     }
 
     loadImage(img) {
@@ -364,6 +435,10 @@ class PhotoByNumbers {
         const width = this.originalCanvas.width;
         const height = this.originalCanvas.height;
 
+        if (!width || !height) {
+            return;
+        }
+
         const imageData = this.originalCtx.getImageData(0, 0, width, height);
 
         const algoId = this.algorithm.value;
@@ -393,6 +468,7 @@ class PhotoByNumbers {
 
         this.coloringCanvas.width = width;
         this.coloringCanvas.height = height;
+        this.lineArtData = this.processedCtx.getImageData(0, 0, width, height);
         this.coloringCtx.fillStyle = 'white';
         this.coloringCtx.fillRect(0, 0, width, height);
         this.coloringCtx.drawImage(this.processedCanvas, 0, 0);
@@ -408,11 +484,7 @@ class PhotoByNumbers {
     }
 
     handleCanvasInteraction(e) {
-        const rect = this.coloringCanvas.getBoundingClientRect();
-        const scaleX = this.coloringCanvas.width / rect.width;
-        const scaleY = this.coloringCanvas.height / rect.height;
-        const x = Math.floor((e.clientX - rect.left) * scaleX);
-        const y = Math.floor((e.clientY - rect.top) * scaleY);
+        const { x, y } = this.canvasPoint(e);
 
         if (this.fillMode) {
             this.floodFill(x, y);
@@ -421,41 +493,60 @@ class PhotoByNumbers {
         }
     }
 
+    canvasPoint(e) {
+        const rect = this.coloringCanvas.getBoundingClientRect();
+        const scaleX = this.coloringCanvas.width / rect.width;
+        const scaleY = this.coloringCanvas.height / rect.height;
+
+        return {
+            x: Math.floor((e.clientX - rect.left) * scaleX),
+            y: Math.floor((e.clientY - rect.top) * scaleY)
+        };
+    }
+
     floodFill(startX, startY) {
-        const imageData = this.coloringCtx.getImageData(0, 0, this.coloringCanvas.width, this.coloringCanvas.height);
-        const data = imageData.data;
         const width = this.coloringCanvas.width;
         const height = this.coloringCanvas.height;
 
-        const startPos = (startY * width + startX) * 4;
+        if (startX < 0 || startX >= width || startY < 0 || startY >= height) {
+            return;
+        }
+
+        const imageData = this.coloringCtx.getImageData(0, 0, this.coloringCanvas.width, this.coloringCanvas.height);
+        const data = imageData.data;
+        const fillColor = this.hexToRgb(this.currentColor);
+        const tolerance = 18;
+
+        const startIndex = startY * width + startX;
+        const startPos = startIndex * 4;
         const startR = data[startPos];
         const startG = data[startPos + 1];
         const startB = data[startPos + 2];
 
-        const fillColor = this.hexToRgb(this.currentColor);
-
-        if (startR === fillColor.r && startG === fillColor.g && startB === fillColor.b) {
+        if (
+            this.isLinePixel(startIndex) ||
+            this.colorDistance(startR, startG, startB, fillColor.r, fillColor.g, fillColor.b) <= tolerance
+        ) {
             return;
         }
 
-        const stack = [[startX, startY]];
-        const visited = new Set();
+        const stack = [startIndex];
+        const visited = new Uint8Array(width * height);
 
         while (stack.length > 0) {
-            const [x, y] = stack.pop();
+            const index = stack.pop();
+            if (visited[index]) continue;
+            visited[index] = 1;
 
-            if (x < 0 || x >= width || y < 0 || y >= height) continue;
-
-            const key = `${x},${y}`;
-            if (visited.has(key)) continue;
-            visited.add(key);
-
-            const pos = (y * width + x) * 4;
+            const pos = index * 4;
             const r = data[pos];
             const g = data[pos + 1];
             const b = data[pos + 2];
 
-            if (Math.abs(r - startR) > 10 || Math.abs(g - startG) > 10 || Math.abs(b - startB) > 10) {
+            if (
+                this.isLinePixel(index) ||
+                this.colorDistance(r, g, b, startR, startG, startB) > tolerance
+            ) {
                 continue;
             }
 
@@ -464,13 +555,30 @@ class PhotoByNumbers {
             data[pos + 2] = fillColor.b;
             data[pos + 3] = 255;
 
-            stack.push([x + 1, y]);
-            stack.push([x - 1, y]);
-            stack.push([x, y + 1]);
-            stack.push([x, y - 1]);
+            const x = index % width;
+            const y = Math.floor(index / width);
+            if (x + 1 < width) stack.push(index + 1);
+            if (x > 0) stack.push(index - 1);
+            if (y + 1 < height) stack.push(index + width);
+            if (y > 0) stack.push(index - width);
         }
 
         this.coloringCtx.putImageData(imageData, 0, 0);
+    }
+
+    colorDistance(r1, g1, b1, r2, g2, b2) {
+        return Math.max(Math.abs(r1 - r2), Math.abs(g1 - g2), Math.abs(b1 - b2));
+    }
+
+    isLinePixel(index) {
+        if (!this.lineArtData) return false;
+
+        const pos = index * 4;
+        return (
+            this.lineArtData.data[pos] < 64 &&
+            this.lineArtData.data[pos + 1] < 64 &&
+            this.lineArtData.data[pos + 2] < 64
+        );
     }
 
     hexToRgb(hex) {
@@ -484,7 +592,9 @@ class PhotoByNumbers {
 
     startDrawing(e) {
         this.isDrawing = true;
-        this.draw(e);
+        const { x, y } = this.canvasPoint(e);
+        this.coloringCtx.beginPath();
+        this.coloringCtx.moveTo(x, y);
     }
 
     stopDrawing() {
@@ -495,11 +605,7 @@ class PhotoByNumbers {
     draw(e) {
         if (!this.isDrawing) return;
 
-        const rect = this.coloringCanvas.getBoundingClientRect();
-        const scaleX = this.coloringCanvas.width / rect.width;
-        const scaleY = this.coloringCanvas.height / rect.height;
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
+        const { x, y } = this.canvasPoint(e);
 
         this.coloringCtx.lineWidth = 3;
         this.coloringCtx.lineCap = 'round';
@@ -522,6 +628,7 @@ class PhotoByNumbers {
         this.goToPhase('processing');
         this.goToStep('input');
         this.currentImage = null;
+        this.lineArtData = null;
         this.fileUpload.value = '';
         this.stopWebcam();
 

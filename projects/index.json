@@ -146,8 +146,8 @@
       "date": "2025-11-30",
       "dateSource": "earliest creation timestamp across project files",
       "summary": "A photo-to-coloring-page tool with webcam or upload input, edge detection, and interactive coloring.",
-      "href": "./projects/photo-by-numbers/src/index.html",
-      "entry": "src/index.html",
+      "href": "./projects/photo-by-numbers/",
+      "entry": "index.html",
       "cta": "Make a coloring page",
       "tags": [
         "art",
