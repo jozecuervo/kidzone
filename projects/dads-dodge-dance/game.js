@@ -10,6 +10,8 @@ const resetButton = document.querySelector("#reset-button");
 const srStatus = document.querySelector("#sr-status");
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const TOSS_DURATION = reduceMotion ? 90 : 280;
+const MAX_BALLOONS = 4;
 
 const dances = [
   {
@@ -21,20 +23,20 @@ const dances = [
   {
     id: "sprinkler",
     label: "Sprinkler step",
-    unlockAt: 2,
-    line: "Dad found the sprinkler step."
+    unlockAt: 1,
+    line: "Dad found the sprinkler step!"
   },
   {
     id: "moon",
     label: "Moon slide",
-    unlockAt: 4,
-    line: "The moon slide is ready."
+    unlockAt: 3,
+    line: "The moon slide is ready!"
   },
   {
     id: "spin",
     label: "Star spin",
-    unlockAt: 6,
-    line: "Star spin time."
+    unlockAt: 5,
+    line: "Star spin time!"
   }
 ];
 
@@ -68,7 +70,7 @@ const state = {
   score: 0,
   tosses: 0,
   danceIndex: 0,
-  locked: false,
+  inFlight: 0,
   lastMove: 0,
   moveEvery: 1700
 };
@@ -117,6 +119,25 @@ function setDance(index, announce = false) {
   renderDanceList();
 }
 
+function pulseDanceUnlock(index) {
+  const item = danceList.querySelector(`[data-dance-id="${dances[index].id}"]`);
+  if (!item) {
+    return;
+  }
+
+  item.classList.add("is-unlocked-flash");
+  window.setTimeout(() => item.classList.remove("is-unlocked-flash"), 1400);
+}
+
+function nextUnlockedDanceIndex() {
+  const readyCount = unlockedDanceCount();
+  if (readyCount <= 1) {
+    return 0;
+  }
+
+  return (state.danceIndex + 1) % readyCount;
+}
+
 function renderDanceList() {
   const readyCount = unlockedDanceCount();
   danceList.innerHTML = dances
@@ -127,9 +148,14 @@ function renderDanceList() {
         isReady ? "is-ready" : "",
         isCurrent ? "is-current" : ""
       ].filter(Boolean).join(" ");
-      const status = isReady ? "ready" : `${dance.unlockAt} splashes`;
+      let status = `${dance.unlockAt} splashes`;
+      if (isReady && isCurrent) {
+        status = "dancing";
+      } else if (isReady) {
+        status = "unlocked";
+      }
 
-      return `<li class="${classes}"><span>${dance.label}</span><span class="status">${status}</span></li>`;
+      return `<li class="${classes}" data-dance-id="${dance.id}"><span>${dance.label}</span><span class="status">${status}</span></li>`;
     })
     .join("");
 }
@@ -196,7 +222,7 @@ function isSplash(point) {
     y: (point.y / 100) * stageRect.height
   };
   const distance = Math.hypot(target.x - dadCenter.x, target.y - dadCenter.y);
-  const radius = Math.max(64, Math.min(stageRect.width, stageRect.height) * 0.16);
+  const radius = Math.max(72, Math.min(stageRect.width, stageRect.height) * 0.21);
 
   return distance <= radius;
 }
@@ -212,13 +238,15 @@ function handleSplash(point) {
 
   if (newDance > previousDance) {
     setDance(newDance, true);
+    pulseDanceUnlock(newDance);
+    showFloat("New dance!", state.dad.x, Math.max(16, state.dad.y - 28));
   } else {
-    setDance(Math.floor(Math.random() * unlockedDanceCount()));
+    setDance(nextUnlockedDanceIndex());
     dadLine.textContent = splashLines[state.score % splashLines.length];
+    showFloat("+1 splash", state.dad.x, Math.max(18, state.dad.y - 24));
   }
 
   makeSplash(point.x, point.y);
-  showFloat("+1 splash", state.dad.x, Math.max(18, state.dad.y - 24));
   announce(`${state.score} splashes. ${dadLine.textContent}`);
 }
 
@@ -230,13 +258,12 @@ function handleDodge(point) {
 }
 
 function tossBalloon(point = state.aim) {
-  if (state.locked) {
+  if (state.inFlight >= MAX_BALLOONS) {
     return;
   }
 
-  state.locked = true;
+  state.inFlight += 1;
   state.tosses += 1;
-  tossButton.disabled = true;
   setAim(point);
 
   const balloon = document.createElement("div");
@@ -259,7 +286,7 @@ function tossBalloon(point = state.aim) {
       }
     ],
     {
-      duration: reduceMotion ? 120 : 520,
+      duration: TOSS_DURATION,
       easing: "cubic-bezier(0.18, 0.75, 0.2, 1)"
     }
   );
@@ -276,8 +303,7 @@ function tossBalloon(point = state.aim) {
       }
 
       pickDadTarget();
-      state.locked = false;
-      tossButton.disabled = false;
+      state.inFlight -= 1;
     });
 }
 
@@ -287,10 +313,9 @@ function resetGame() {
   state.target = { x: 50, y: 52 };
   state.score = 0;
   state.tosses = 0;
-  state.locked = false;
+  state.inFlight = 0;
   scoreNode.textContent = "0";
   dadLine.textContent = "I'm ready for splash practice!";
-  tossButton.disabled = false;
   setDance(0);
   renderAim();
   renderDad();
@@ -343,7 +368,7 @@ function loop(time) {
     state.lastMove = time;
   }
 
-  if (time - state.lastMove > state.moveEvery && !state.locked) {
+  if (time - state.lastMove > state.moveEvery) {
     pickDadTarget();
     state.lastMove = time;
   }
