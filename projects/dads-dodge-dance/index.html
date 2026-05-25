@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dad's Dodge Dance</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="game-shell">
+      <header class="topbar">
+        <a class="home-link" href="../../">Kidzone</a>
+        <div class="title-block">
+          <p class="eyebrow">Backyard splash game</p>
+          <h1>Dad's Dodge Dance</h1>
+        </div>
+        <div class="score-box" aria-label="Splash count">
+          <span>Splashes</span>
+          <strong id="score">0</strong>
+        </div>
+      </header>
+
+      <section class="play-layout" aria-label="Dad's Dodge Dance game">
+        <div class="stage-card">
+          <div class="stage-topline">
+            <div>
+              <p class="stage-label">Dad says</p>
+              <p id="dad-line" class="dad-line">I'm ready for splash practice!</p>
+            </div>
+            <div class="dance-pill">
+              <span id="dance-name">Side shuffle</span>
+            </div>
+          </div>
+
+          <div
+            id="stage"
+            class="stage"
+            tabindex="0"
+            role="application"
+            aria-label="Backyard splash zone"
+            aria-describedby="stage-help"
+          >
+            <p id="stage-help" class="sr-only">
+              Move the aim spot with touch, pointer, or arrow keys. Press Space or Enter to toss a water balloon.
+            </p>
+            <div class="sun" aria-hidden="true"></div>
+            <div class="cloud cloud-one" aria-hidden="true"></div>
+            <div class="cloud cloud-two" aria-hidden="true"></div>
+            <div class="fence" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="sprinkler" aria-hidden="true">
+              <span></span>
+            </div>
+            <div class="splash-zone" aria-hidden="true"></div>
+
+            <div id="reticle" class="reticle" aria-hidden="true">
+              <span></span>
+            </div>
+
+            <div id="dad" class="dad" data-dance="shuffle" aria-hidden="true">
+              <div class="dad-figure">
+                <div class="dad-shadow"></div>
+                <div class="dad-arm dad-arm-left"></div>
+                <div class="dad-arm dad-arm-right"></div>
+                <div class="dad-leg dad-leg-left"></div>
+                <div class="dad-leg dad-leg-right"></div>
+                <div class="dad-body">
+                  <span class="shirt-stripe"></span>
+                  <span class="shirt-pocket"></span>
+                </div>
+                <div class="dad-head">
+                  <span class="hair hair-left"></span>
+                  <span class="hair hair-right"></span>
+                  <span class="eye eye-left"></span>
+                  <span class="eye eye-right"></span>
+                  <span class="nose"></span>
+                  <span class="smile"></span>
+                  <span class="beard"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="launcher" aria-hidden="true">
+              <div class="bucket">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+
+            <p id="sr-status" class="sr-only" aria-live="polite"></p>
+          </div>
+
+          <div class="controls" aria-label="Game controls">
+            <button id="toss-button" class="primary-button" type="button">Toss balloon</button>
+            <button id="reset-button" class="quiet-button" type="button">Reset</button>
+          </div>
+        </div>
+
+        <aside class="side-panel" aria-label="Game status">
+          <section class="panel-section">
+            <h2>Dance moves</h2>
+            <ul id="dance-list" class="dance-list"></ul>
+          </section>
+          <section class="panel-section kindness-note">
+            <h2>Splash rules</h2>
+            <p>Dad is playing in the splash zone. Every toss is practice, and every splash gets a cheer.</p>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <script src="./game.js"></script>
+  </body>
+</html>
