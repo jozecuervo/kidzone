@@ -20,9 +20,11 @@ const meterSteps = document.querySelector("#meter-steps");
 const meterCaption = document.querySelector("#meter-caption");
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const TOSS_DURATION = reduceMotion ? 90 : 280;
+const TOSS_DURATION = reduceMotion ? 120 : 420;
 const MAX_BALLOONS = 4;
-const BUCKET_SIZE = 35;
+const BUCKET_SIZE = 10;
+const MAX_FORWARD_STEP = 5;
+const CROSS_PULL = 0.02;
 const METER_STEPS = 6;
 const RELOAD_MS = 1200;
 
@@ -227,7 +229,7 @@ function renderLevelPanel() {
 
 function renderAmmo() {
   ammoCount.textContent = String(state.ammo);
-  bucket.dataset.level = String(Math.ceil(state.ammo / 12));
+  bucket.dataset.level = String(Math.ceil(state.ammo / 4));
   launcher.classList.toggle("is-low", state.ammo > 0 && state.ammo <= 8);
   launcher.classList.toggle("is-empty", state.ammo <= 0);
 }
@@ -327,29 +329,29 @@ function randomSpot() {
   return dodgeSpots[Math.floor(Math.random() * dodgeSpots.length)];
 }
 
-function pickEvasiveTarget() {
-  const retreat = 10 + Math.random() * 14;
-  const lateral = dodgeSpots[Math.floor(Math.random() * dodgeSpots.length)];
+function pickWanderTarget() {
+  const spot = randomSpot();
+  const wiggle = (Math.random() - 0.5) * 3;
+
   state.target = {
-    x: clamp(state.dad.x - state.goalSide * retreat, YARD_LEFT, YARD_RIGHT),
-    y: lateral.y
+    x: clamp(state.dad.x + wiggle, YARD_LEFT, YARD_RIGHT),
+    y: spot.y * 0.45 + YARD_Y * 0.55
   };
-  state.moveEvery = 780 + Math.random() * 520;
-  state.aiBias = Math.max(0.35, state.aiBias - 0.08);
+  state.moveEvery = 950 + Math.random() * 650;
 }
 
-function pickForwardTarget() {
-  const spot = randomSpot();
-  const forwardPush = 5 + Math.random() * 16 + state.yardLeg * 8;
-  const forwardX = state.dad.x + state.goalSide * forwardPush;
-  const blendedX = forwardX * 0.72 + spot.x * 0.28;
+function pickEvasiveTarget() {
+  const retreat = 3 + Math.random() * 5;
+  const lateral = dodgeSpots[Math.floor(Math.random() * dodgeSpots.length)];
+  const backX = state.dad.x - state.goalSide * retreat;
+  const minX = Math.min(startX(), goalX());
+  const maxX = Math.max(startX(), goalX());
 
   state.target = {
-    x: clamp(blendedX, YARD_LEFT, YARD_RIGHT),
-    y: spot.y * 0.35 + YARD_Y * 0.65
+    x: clamp(backX, minX, maxX),
+    y: lateral.y
   };
-  state.moveEvery = 1200 + Math.random() * 900;
-  state.aiBias = Math.min(0.85, state.aiBias + 0.04);
+  state.moveEvery = 650 + Math.random() * 400;
 }
 
 function pickDadTarget(options = {}) {
@@ -358,26 +360,16 @@ function pickDadTarget(options = {}) {
   }
 
   const forceEvade = options.evasive || performance.now() < state.evadeUntil;
-  const forceForward = options.towardGoal;
 
   if (forceEvade) {
     pickEvasiveTarget();
     return;
   }
 
-  const forwardChance = forceForward
-    ? 0.92
-    : 0.42 + state.yardLeg * 0.35 + state.aiBias * 0.2;
-
-  if (Math.random() < forwardChance) {
-    pickForwardTarget();
-  } else {
-    pickEvasiveTarget();
-    state.evadeUntil = performance.now() + 500;
-  }
+  pickWanderTarget();
 }
 
-function triggerEvade(duration = 1100) {
+function triggerEvade(duration = 480) {
   state.evadeUntil = performance.now() + duration;
   pickDadTarget({ evasive: true });
 }
@@ -430,7 +422,7 @@ function completeCrossing() {
   showFloat("+1 across", state.dad.x, state.dad.y - 18);
   announce(`Dad made it across. He has ${state.dadPoints} crossing point${state.dadPoints === 1 ? "" : "s"}.`);
 
-  pickDadTarget({ towardGoal: true });
+  pickDadTarget();
 }
 
 function isSplash(point) {
@@ -456,7 +448,7 @@ function handleSplash(point) {
   dad.classList.add("is-splashed");
   window.setTimeout(() => dad.classList.remove("is-splashed"), 520);
 
-  triggerEvade(850);
+  triggerEvade(480);
   dadLine.textContent = level.splashLine || splashLines[state.tosses % splashLines.length];
   makeSplash(point.x, point.y);
   showFloat("+1 splash", state.dad.x, Math.max(16, state.dad.y - 26));
@@ -467,7 +459,7 @@ function handleDodge(point) {
   dadLine.textContent = dodgeLines[state.tosses % dodgeLines.length];
   makeSplash(point.x, point.y);
   showFloat("dodge", point.x, point.y);
-  triggerEvade(1300);
+  triggerEvade(620);
   announce(dadLine.textContent);
 }
 
@@ -513,7 +505,7 @@ function advanceLevel() {
   updateControls();
   applyLevel(true);
   renderDad();
-  pickDadTarget({ towardGoal: true });
+  pickDadTarget();
   announce(`Level ${state.levelIndex + 1}: ${currentLevel().label}.`);
 }
 
@@ -521,7 +513,7 @@ function tossBalloon(point = state.aim) {
   if (state.inFlight >= MAX_BALLOONS || state.phase !== "playing" || state.ammo <= 0) {
     if (state.ammo <= 0 && state.phase === "playing") {
       updateControls();
-      announce("Bucket empty. Reload to get 35 more balloons.");
+      announce(`Bucket empty. Reload to get ${BUCKET_SIZE} more balloons.`);
     }
     return;
   }
@@ -540,12 +532,23 @@ function tossBalloon(point = state.aim) {
   balloon.style.top = "86%";
   stage.append(balloon);
 
+  const startX = 50;
+  const startY = 86;
+  const midX = (startX + point.x) * 0.5;
+  const arcLift = 24 + Math.abs(point.x - startX) * 0.18;
+  const midY = clamp(Math.min(startY, point.y) - arcLift, 12, 78);
+
   const animation = balloon.animate(
     [
       {
-        left: "50%",
-        top: "86%",
-        transform: "translate(-50%, -50%) scale(0.82)"
+        left: `${startX}%`,
+        top: `${startY}%`,
+        transform: "translate(-50%, -50%) scale(0.78)"
+      },
+      {
+        left: `${midX}%`,
+        top: `${midY}%`,
+        transform: "translate(-50%, -50%) scale(1.06)"
       },
       {
         left: `${point.x}%`,
@@ -555,7 +558,7 @@ function tossBalloon(point = state.aim) {
     ],
     {
       duration: TOSS_DURATION,
-      easing: "cubic-bezier(0.18, 0.75, 0.2, 1)"
+      easing: "cubic-bezier(0.22, 0.05, 0.22, 1)"
     }
   );
 
@@ -610,7 +613,7 @@ function resetGame() {
   applyLevel(true);
   renderAim();
   renderDad();
-  pickDadTarget({ towardGoal: true });
+  pickDadTarget();
   announce("Game reset. Dad is crossing the yard again.");
 }
 
@@ -684,26 +687,42 @@ function loop(time) {
     state.lastMove = time;
   }
 
-  if (state.phase === "playing" && time - state.lastMove > state.moveEvery) {
-    pickDadTarget();
-    state.lastMove = time;
-  }
-
   if (state.phase === "reloading") {
     window.requestAnimationFrame(loop);
     return;
   }
 
-  const ease = state.phase === "celebrate"
-    ? 0.05
-    : reduceMotion
-      ? 0.04
-      : performance.now() < state.evadeUntil
-        ? 0.038
-        : 0.024;
+  if (state.phase === "playing") {
+    if (time - state.lastMove > state.moveEvery) {
+      pickDadTarget();
+      state.lastMove = time;
+    }
 
-  state.dad.x += (state.target.x - state.dad.x) * ease;
-  state.dad.y += (state.target.y - state.dad.y) * ease;
+    const evading = performance.now() < state.evadeUntil;
+    const goal = goalX();
+    const wanderEase = reduceMotion ? 0.03 : 0.026;
+
+    if (evading) {
+      state.dad.x += (state.target.x - state.dad.x) * 0.032;
+      state.dad.y += (state.target.y - state.dad.y) * wanderEase;
+    } else {
+      const crossEase = state.ammo <= 0 ? CROSS_PULL : CROSS_PULL + 0.004;
+      const stepTowardGoal = clamp(
+        (goal - state.dad.x) * crossEase,
+        -MAX_FORWARD_STEP,
+        MAX_FORWARD_STEP
+      );
+
+      state.dad.x += stepTowardGoal;
+      state.dad.x += (state.target.x - state.dad.x) * 0.01;
+      state.dad.y += (state.target.y - state.dad.y) * wanderEase;
+    }
+  } else {
+    const ease = state.phase === "celebrate" ? 0.05 : 0.04;
+    state.dad.x += (state.target.x - state.dad.x) * ease;
+    state.dad.y += (state.target.y - state.dad.y) * ease;
+  }
+
   renderDad();
   checkCrossing();
 
@@ -718,5 +737,5 @@ updateControls();
 applyLevel(false);
 renderAim();
 renderDad();
-pickDadTarget({ towardGoal: true });
+pickDadTarget();
 window.requestAnimationFrame(loop);
