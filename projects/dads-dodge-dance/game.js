@@ -119,6 +119,45 @@ const dodgeLines = [
   "He dodged back, but he's still heading out!"
 ];
 
+/** Simple inline SVG props (Tabler-inspired lawn icons, embedded for static deploy). */
+const choreSvg = {
+  mower: `<svg class="chore-svg" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="5" y="15" width="32" height="12" rx="2.5" fill="#7a8c96" stroke="#3f525c" stroke-width="1.4"/>
+    <circle cx="13" cy="29" r="5.5" fill="#4a5c66" stroke="#2f3f48" stroke-width="1.3"/>
+    <circle cx="33" cy="29" r="5.5" fill="#4a5c66" stroke="#2f3f48" stroke-width="1.3"/>
+    <path d="M37 15h5v-2" stroke="#3f525c" stroke-width="1.4" fill="none"/>
+    <path d="M40 4v13" stroke="#5b3a2d" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M40 4h8" stroke="#5b3a2d" stroke-width="2.6" stroke-linecap="round"/>
+  </svg>`,
+  cooler: `<svg class="chore-svg" viewBox="0 0 48 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="6" y="12" width="32" height="22" rx="3" fill="#4eb8f0" stroke="#1a7ab8" stroke-width="1.4"/>
+    <rect x="6" y="8" width="32" height="6" rx="2" fill="#2f9fd4" stroke="#1a7ab8" stroke-width="1.4"/>
+    <path d="M18 8V5a6 6 0 0 1 12 0v3" fill="none" stroke="#1a7ab8" stroke-width="2" stroke-linecap="round"/>
+    <rect x="14" y="18" width="16" height="2" rx="1" fill="rgba(255,255,255,0.55)"/>
+  </svg>`,
+  poop: `<svg class="chore-svg" viewBox="0 0 52 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="28" y="12" width="16" height="22" rx="4" fill="#d4a82f" stroke="#9a7618" stroke-width="1.3"/>
+    <path d="M30 18h12M30 22h12" stroke="#9a7618" stroke-width="1.1" stroke-linecap="round"/>
+    <path d="M6 30h16" stroke="#6d4a38" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M8 30V14" stroke="#6d4a38" stroke-width="2" stroke-linecap="round"/>
+    <path d="M8 14l10 8-10 8z" fill="#8d5d43" stroke="#6d4a38" stroke-width="1.2" stroke-linejoin="round"/>
+  </svg>`,
+  grill: `<svg class="chore-svg" viewBox="0 0 52 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <ellipse cx="26" cy="16" rx="18" ry="9" fill="#3a3a42" stroke="#222228" stroke-width="1.4"/>
+    <ellipse cx="26" cy="14" rx="14" ry="6" fill="#4a4a54" stroke="#222228" stroke-width="1.2"/>
+    <path d="M14 24v8M26 24v8M38 24v8" stroke="#222228" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M12 32h28" stroke="#222228" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="26" cy="13" r="2" fill="#f26d50"/>
+  </svg>`,
+  hose: `<svg class="chore-svg" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M6 26c10-8 18-8 28 0s18 8 28 0" fill="none" stroke="#2f9fd4" stroke-width="4" stroke-linecap="round"/>
+    <path d="M6 26c10-6 18-6 28 0" fill="none" stroke="#59c6ff" stroke-width="2.5" stroke-linecap="round"/>
+    <rect x="2" y="22" width="10" height="8" rx="2" fill="#1a7ab8" stroke="#0e5a82" stroke-width="1.2"/>
+    <path d="M48 22c4-6 8-10 8-16" fill="none" stroke="#2f9fd4" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M52 4c0 4-2 8-6 10" fill="none" stroke="#59c6ff" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="2 3"/>
+  </svg>`
+};
+
 const state = {
   aim: { x: 50, y: 55 },
   dad: { x: YARD_LEFT, y: YARD_Y },
@@ -262,7 +301,8 @@ function applyLevel(announce = true) {
   levelNumber.textContent = String(state.levelIndex + 1);
   taskName.textContent = level.label;
   dad.dataset.chore = level.id;
-  dadChore.className = `dad-chore chore-${level.id}`;
+  dadChore.className = "dad-chore";
+  dadChore.innerHTML = choreSvg[level.id] || "";
   stage.dataset.time = level.timeOfDay || "bright";
 
   if (announce) {
