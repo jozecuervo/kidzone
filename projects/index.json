@@ -208,6 +208,41 @@
       }
     },
     {
+      "slug": "dads-dodge-dance",
+      "title": "Dad's Dodge Dance",
+      "description": "A local-only backyard game where Dad joins the joke, dances across the splash zone, and cheers for gentle water-balloon tosses.",
+      "date": "2026-05-25",
+      "dateSource": "project metadata",
+      "summary": "Toss soft water balloons while Dad dances through a cheerful backyard splash zone.",
+      "href": "./projects/dads-dodge-dance/",
+      "entry": "index.html",
+      "cta": "Start splashing",
+      "tags": [
+        "game",
+        "backyard",
+        "arcade"
+      ],
+      "order": 70,
+      "ageRange": "5-9",
+      "interaction": [
+        "pointer",
+        "touch",
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview is useful for framing the cartoon splash play as pretend backyard play with consent.",
+        "notes": "Dad is a smiling participant in the splash zone. There is no losing, timer pressure, public posting, or open-ended communication."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
       "slug": "old-rules",
       "title": "Old Rules",
       "description": "Choose a player, dodge the grandparents and Mr. Whiskers, collect keys, and escape the house.",
