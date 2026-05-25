@@ -5,6 +5,7 @@ const ctx = canvas.getContext('2d');
 const scoreDisplay = document.getElementById('score');
 const levelDisplay = document.getElementById('level');
 const powerUpDisplay = document.getElementById('powerUpDisplay');
+const touchControls = document.querySelectorAll('[data-control]');
 
 // Game state
 const game = {
@@ -891,48 +892,98 @@ function gameLoop() {
 }
 
 // Event listeners
-document.addEventListener('keydown', (e) => {
-    switch(e.key) {
+function setControl(control, isPressed) {
+    switch(control) {
+        case 'left':
+            keys.left = isPressed;
+            break;
+        case 'right':
+            keys.right = isPressed;
+            break;
+        case 'jump':
+            keys.jump = isPressed;
+            break;
+    }
+}
+
+function controlFromKey(key) {
+    switch(key) {
         case 'ArrowLeft':
         case 'a':
         case 'A':
-            keys.left = true;
-            break;
+            return 'left';
         case 'ArrowRight':
         case 'd':
         case 'D':
-            keys.right = true;
-            break;
+            return 'right';
         case 'ArrowUp':
         case 'w':
         case 'W':
         case ' ':
-            keys.jump = true;
-            e.preventDefault();
-            break;
+            return 'jump';
+        default:
+            return null;
+    }
+}
+
+function releaseAllControls() {
+    keys.left = false;
+    keys.right = false;
+    keys.jump = false;
+
+    touchControls.forEach(button => {
+        button.classList.remove('is-pressed');
+    });
+}
+
+document.addEventListener('keydown', (e) => {
+    const control = controlFromKey(e.key);
+
+    if (!control) {
+        return;
+    }
+
+    setControl(control, true);
+
+    if (control === 'jump') {
+        e.preventDefault();
     }
 });
 
 document.addEventListener('keyup', (e) => {
-    switch(e.key) {
-        case 'ArrowLeft':
-        case 'a':
-        case 'A':
-            keys.left = false;
-            break;
-        case 'ArrowRight':
-        case 'd':
-        case 'D':
-            keys.right = false;
-            break;
-        case 'ArrowUp':
-        case 'w':
-        case 'W':
-        case ' ':
-            keys.jump = false;
-            break;
+    const control = controlFromKey(e.key);
+
+    if (!control) {
+        return;
+    }
+
+    setControl(control, false);
+
+    if (control === 'jump') {
+        e.preventDefault();
     }
 });
+
+touchControls.forEach(button => {
+    const control = button.dataset.control;
+
+    button.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        button.setPointerCapture(e.pointerId);
+        button.classList.add('is-pressed');
+        setControl(control, true);
+    });
+
+    for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+        button.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            button.classList.remove('is-pressed');
+            setControl(control, false);
+        });
+    }
+});
+
+window.addEventListener('blur', releaseAllControls);
 
 // Start game
 initLevel(1);
