@@ -14,9 +14,15 @@
           <p class="eyebrow">Backyard splash game</p>
           <h1>Dad's Dodge Dance</h1>
         </div>
-        <div class="score-box" aria-label="Splash count">
-          <span>Splashes</span>
-          <strong id="score">0</strong>
+        <div class="topbar-stats">
+          <div class="level-box" aria-label="Current level">
+            <span>Level</span>
+            <strong id="level-number">1</strong>
+          </div>
+          <div class="dad-points-box" aria-label="Dad crossing points">
+            <span>Dad crossed</span>
+            <strong id="dad-points">0</strong>
+          </div>
         </div>
       </header>
 
@@ -25,10 +31,29 @@
           <div class="stage-topline">
             <div>
               <p class="stage-label">Dad says</p>
-              <p id="dad-line" class="dad-line">I'm ready for splash practice!</p>
+              <p id="dad-line" class="dad-line">I just need to mow this strip real quick!</p>
             </div>
-            <div class="dance-pill">
-              <span id="dance-name">Side shuffle</span>
+            <div class="task-pill">
+              <span id="task-name">Mow the lawn</span>
+            </div>
+          </div>
+
+          <div
+            class="meter-wrap"
+            role="meter"
+            aria-label="Splash meter"
+            aria-valuemin="0"
+            aria-valuemax="6"
+            aria-valuenow="0"
+            id="splash-meter"
+          >
+            <div class="meter-labels">
+              <span>Splash meter</span>
+              <span id="meter-caption">Soak Dad before he finishes the chore!</span>
+            </div>
+            <div class="meter-track">
+              <div id="meter-fill" class="meter-fill"></div>
+              <div id="meter-steps" class="meter-steps" aria-hidden="true"></div>
             </div>
           </div>
 
@@ -42,7 +67,12 @@
           >
             <p id="stage-help" class="sr-only">
               Move the aim spot with touch, pointer, or arrow keys. Press Space or Enter to toss a water balloon.
+              Splash Dad to fill the blue meter. Dad dodges around but keeps working across the yard.
             </p>
+            <div class="yard-lane yard-lane-left" aria-hidden="true"></div>
+            <div class="yard-lane yard-lane-right" aria-hidden="true"></div>
+            <div class="yard-goal yard-goal-left" id="goal-left" aria-hidden="true"></div>
+            <div class="yard-goal yard-goal-right" id="goal-right" aria-hidden="true"></div>
             <div class="sun" aria-hidden="true"></div>
             <div class="cloud cloud-one" aria-hidden="true"></div>
             <div class="cloud cloud-two" aria-hidden="true"></div>
@@ -63,9 +93,10 @@
               <span></span>
             </div>
 
-            <div id="dad" class="dad" data-dance="shuffle" aria-hidden="true">
+            <div id="dad" class="dad" data-facing="right" aria-hidden="true">
               <div class="dad-figure">
                 <div class="dad-shadow"></div>
+                <div id="dad-chore" class="dad-chore" aria-hidden="true"></div>
                 <div class="dad-arm dad-arm-left"></div>
                 <div class="dad-arm dad-arm-right"></div>
                 <div class="dad-leg dad-leg-left"></div>
@@ -86,8 +117,14 @@
               </div>
             </div>
 
-            <div class="launcher" aria-hidden="true">
-              <div class="bucket">
+            <div class="ammo-hud" aria-label="Water balloon ammo">
+              <span class="ammo-label">Balloons</span>
+              <strong id="ammo-count">35</strong>
+              <span class="ammo-cap">/ 35</span>
+            </div>
+
+            <div id="launcher" class="launcher" aria-hidden="true">
+              <div id="bucket" class="bucket">
                 <span></span>
                 <span></span>
                 <span></span>
@@ -99,19 +136,20 @@
 
           <div class="controls" aria-label="Game controls">
             <button id="toss-button" class="primary-button" type="button">Toss balloon</button>
+            <button id="reload-button" class="primary-button reload-button" type="button" hidden>Reload bucket</button>
             <button id="reset-button" class="quiet-button" type="button">Reset</button>
           </div>
         </div>
 
         <aside class="side-panel" aria-label="Game status">
           <section class="panel-section">
-            <h2>Unlock dances</h2>
-            <p class="panel-hint">Splash Dad to unlock the next dance. Dad switches moves after each hit.</p>
-            <ul id="dance-list" class="dance-list"></ul>
+            <h2>Chore levels</h2>
+            <p class="panel-hint">Fill the splash meter to send Dad inside. Dad earns a point each time he reaches the far edge.</p>
+            <ul id="level-list" class="level-list"></ul>
           </section>
           <section class="panel-section kindness-note">
             <h2>Splash rules</h2>
-            <p>Dad is playing in the splash zone. Every toss is practice, and every splash gets a cheer.</p>
+            <p>Each bucket holds 35 balloons. Reload when you run out. Splashes fill your meter; each edge crossing gives Dad a point.</p>
           </section>
         </aside>
       </section>
