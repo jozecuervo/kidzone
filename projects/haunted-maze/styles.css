@@ -1,0 +1,1141 @@
+:root {
+  color-scheme: dark;
+  --ink: #f5ead8;
+  --muted: #c9b8a0;
+  --night: #0f1220;
+  --night-mid: #1a1f35;
+  --night-light: #2a3150;
+  --pumpkin: #ff8a3d;
+  --pumpkin-deep: #c85a12;
+  --clue: #ffd166;
+  --dirt: #17100c;
+  --dirt-mid: #241914;
+  --dirt-light: #3a2a20;
+  --monster-accent: #ff5f7a;
+  --monster-glow: rgba(255, 95, 122, 0.44);
+  --mist: rgba(196, 181, 214, 0.18);
+  --accent: #9b6dff;
+  --danger: #ff5f7a;
+  --card: rgba(22, 27, 46, 0.92);
+  --shadow: rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  position: relative;
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 9% 16%, rgba(255, 95, 122, 0.16), transparent 12rem),
+    radial-gradient(circle at 82% 9%, rgba(100, 240, 190, 0.12), transparent 10rem),
+    linear-gradient(135deg, rgba(255, 138, 61, 0.12), transparent 28%),
+    repeating-linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.025) 0 1px,
+      transparent 1px 5rem
+    ),
+    linear-gradient(180deg, #120f1d 0%, var(--night) 45%, #090b14 100%);
+  font-family:
+    ui-rounded, "Trebuchet MS", ui-sans-serif, system-ui, sans-serif;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+body::before {
+  z-index: 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.025), transparent),
+    radial-gradient(circle at 18% 72%, rgba(255, 209, 102, 0.12), transparent 7rem),
+    radial-gradient(circle at 74% 74%, rgba(155, 109, 255, 0.16), transparent 9rem);
+  opacity: 0.9;
+}
+
+body::after {
+  z-index: 0;
+  background:
+    repeating-linear-gradient(
+      100deg,
+      transparent 0 5rem,
+      rgba(255, 255, 255, 0.03) 5rem 5.15rem,
+      transparent 5.15rem 9rem
+    );
+  opacity: 0.5;
+}
+
+button {
+  font: inherit;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.game-shell {
+  position: relative;
+  z-index: 1;
+  width: min(56rem, calc(100% - 1.5rem));
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.home-link {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration-color: var(--pumpkin);
+  text-decoration-thickness: 0.15rem;
+  text-underline-offset: 0.2rem;
+}
+
+.title-block h1,
+.title-block p {
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.title-block h1 {
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+}
+
+.level-box {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: center;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 24px var(--shadow);
+}
+
+.level-box span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.level-box strong {
+  font-size: 1.35rem;
+  color: var(--clue);
+}
+
+.play-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.scene-card {
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  box-shadow: 0 16px 40px var(--shadow);
+}
+
+.scene-card {
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.level-theme {
+  margin: 0;
+  color: var(--pumpkin);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.status-line,
+.hint-line,
+.key-status,
+.gold-status,
+.maze-help {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.key-status,
+.gold-status {
+  color: var(--clue);
+  font-weight: 700;
+}
+
+.key-status[data-has-key="true"] {
+  color: #64f0be;
+}
+
+.gold-status {
+  color: #ffd166;
+}
+
+.hint-line {
+  color: var(--clue);
+  font-weight: 700;
+}
+
+.maze-view {
+  position: relative;
+  overflow: hidden;
+  min-height: clamp(20rem, 52vw, 30rem);
+  --light-x: 50%;
+  --light-y: 64%;
+  --footprints-x: 50%;
+  --footprints-y: 50%;
+  --footprints-rotate: 0deg;
+  border-radius: 0.5rem;
+  background:
+    radial-gradient(circle at 12% 16%, rgba(255, 138, 61, 0.16), transparent 8rem),
+    radial-gradient(circle at 86% 12%, rgba(255, 246, 214, 0.14), transparent 7rem),
+    linear-gradient(180deg, #181127 0%, #080a10 100%);
+  border: 0.35rem solid #24180f;
+  box-shadow:
+    0 0 0 1px rgba(255, 209, 102, 0.14),
+    0 1.2rem 3rem rgba(0, 0, 0, 0.42),
+    inset 0 0 3rem rgba(0, 0, 0, 0.52),
+    inset 0 -2.4rem 3rem rgba(0, 0, 0, 0.35);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.maze-view:focus-visible {
+  outline: 2px solid rgba(255, 209, 102, 0.58);
+  outline-offset: 0.2rem;
+}
+
+.maze-view::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background:
+    radial-gradient(
+      circle at var(--light-x) var(--light-y),
+      transparent 0 5.6rem,
+      rgba(5, 7, 12, 0.12) 7rem,
+      rgba(5, 7, 12, 0.58) 100%
+  );
+  pointer-events: none;
+}
+
+.maze-view::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  border-radius: 0.25rem;
+  box-shadow:
+    inset 0 0 0 0.45rem rgba(49, 32, 19, 0.82),
+    inset 0 0 0 0.62rem rgba(255, 209, 102, 0.08),
+    inset 0 0 2.4rem rgba(0, 0, 0, 0.68);
+  pointer-events: none;
+}
+
+.maze-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.06), transparent 15rem),
+    linear-gradient(180deg, #251444 0%, #12182b 100%);
+}
+
+.maze-backdrop::before {
+  content: "";
+  position: absolute;
+  top: -0.4rem;
+  left: 47%;
+  width: 0.22rem;
+  height: 5.4rem;
+  background: linear-gradient(180deg, rgba(255, 246, 214, 0.85), transparent);
+  clip-path: polygon(38% 0, 86% 0, 58% 36%, 88% 36%, 28% 100%, 48% 51%, 20% 51%);
+  opacity: 0.35;
+  filter: drop-shadow(0 0 1rem rgba(255, 246, 214, 0.45));
+  animation: lightning 5.8s steps(1) infinite;
+}
+
+.maze-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(32deg, transparent 0 65%, rgba(0, 0, 0, 0.3) 65% 67%, transparent 67%),
+    linear-gradient(148deg, transparent 0 70%, rgba(0, 0, 0, 0.28) 70% 72%, transparent 72%);
+  opacity: 0.75;
+}
+
+.maze-grid {
+  position: absolute;
+  z-index: 2;
+  inset: clamp(0.85rem, 2vw, 1.25rem);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  gap: clamp(0.08rem, 0.25vw, 0.16rem);
+  padding: clamp(0.2rem, 0.8vw, 0.35rem);
+  border-radius: 0.4rem;
+  background:
+    linear-gradient(180deg, rgba(38, 22, 13, 0.78), rgba(11, 7, 5, 0.86)),
+    #120c08;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 209, 102, 0.08),
+    inset 0 0 2rem rgba(0, 0, 0, 0.58);
+}
+
+.maze-cell {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.18rem;
+  min-width: 0;
+}
+
+.maze-path {
+  background:
+    radial-gradient(circle at 24% 28%, rgba(111, 80, 51, 0.32) 0 0.12rem, transparent 0.14rem),
+    radial-gradient(circle at 72% 64%, rgba(77, 51, 33, 0.38) 0 0.16rem, transparent 0.18rem),
+    linear-gradient(180deg, var(--dirt-light), var(--dirt-mid) 46%, var(--dirt) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(134, 94, 59, 0.14),
+    inset 0 -0.5rem 1rem rgba(0, 0, 0, 0.3);
+}
+
+.maze-wall {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 18%, transparent 18% 100%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.035) 0 0.36rem,
+      transparent 0.36rem 0.78rem
+    ),
+    linear-gradient(180deg, #283044, #151a27 58%, #0a0d14);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -0.8rem 1.1rem rgba(0, 0, 0, 0.36),
+    0 0.22rem 0.25rem rgba(0, 0, 0, 0.25);
+}
+
+.maze-exit {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 209, 102, 0.48), transparent 54%),
+    linear-gradient(180deg, #4b321f, #21130d);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 209, 102, 0.32),
+    0 0 1.1rem rgba(255, 209, 102, 0.2);
+}
+
+.maze-exit::before {
+  content: "";
+  position: absolute;
+  inset: 20% 25% 10%;
+  border-radius: 0.2rem 0.2rem 0 0;
+  background:
+    linear-gradient(90deg, transparent 0 42%, rgba(0, 0, 0, 0.32) 42% 58%, transparent 58%),
+    linear-gradient(180deg, #d79b38, #7b4d1f);
+}
+
+.maze-player-cell {
+  background:
+    radial-gradient(circle, rgba(255, 209, 102, 0.24), transparent 68%),
+    linear-gradient(180deg, var(--dirt-light), var(--dirt-mid));
+}
+
+.maze-player-cell span {
+  position: absolute;
+  inset: 22% 27% 18%;
+  display: grid;
+  place-items: center;
+  border-radius: 48% 48% 44% 44%;
+  background:
+    radial-gradient(circle at 50% 24%, #ffd89b 0 18%, transparent 19%),
+    linear-gradient(180deg, #7b3324 0 42%, #2c1a1a 43% 100%);
+  box-shadow:
+    0 0 1.1rem rgba(255, 209, 102, 0.32),
+    0 0.25rem 0.45rem rgba(0, 0, 0, 0.38);
+}
+
+.maze-player-cell span::before {
+  content: "";
+  position: absolute;
+  top: -38%;
+  left: 50%;
+  width: 52%;
+  height: 58%;
+  transform: translateX(-50%);
+  clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%);
+  background: rgba(255, 239, 180, 0.8);
+  filter: drop-shadow(0 0 0.55rem rgba(255, 246, 214, 0.72));
+}
+
+.maze-player-cell span::after {
+  content: "";
+  position: absolute;
+  top: 42%;
+  left: 66%;
+  width: 32%;
+  height: 12%;
+  border-radius: 999px;
+  background: #f2c16a;
+  box-shadow: 0 0 0.45rem rgba(255, 209, 102, 0.35);
+}
+
+.maze-player-cell[data-facing="north"] span {
+  transform: rotate(0deg);
+}
+
+.maze-player-cell[data-facing="east"] span {
+  transform: rotate(90deg);
+}
+
+.maze-player-cell[data-facing="south"] span {
+  transform: rotate(180deg);
+}
+
+.maze-player-cell[data-facing="west"] span {
+  transform: rotate(-90deg);
+}
+
+.maze-cell[data-decor]::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(0.9rem, 3vw, 1.25rem);
+  line-height: 1;
+  filter: drop-shadow(0 0.25rem 0.35rem rgba(0, 0, 0, 0.42));
+  opacity: 0.88;
+}
+
+.maze-cell[data-decor="pumpkin"]::after {
+  content: "🎃";
+}
+
+.maze-cell[data-decor="stone"]::after {
+  content: "🪦";
+}
+
+.maze-cell[data-decor="bone"]::after {
+  content: "☠";
+  color: #cfc7b2;
+}
+
+.maze-cell[data-decor="leaf"]::after {
+  content: "🍂";
+}
+
+.maze-cell[data-decor="web"]::after {
+  content: "✧";
+  color: rgba(224, 216, 232, 0.72);
+}
+
+.maze-cell[data-decor="eyes"]::after {
+  content: "••";
+  color: #ffd166;
+  letter-spacing: 0.08rem;
+  text-shadow: 0 0 0.5rem rgba(255, 209, 102, 0.8);
+}
+
+.maze-cell[data-decor="crack"]::after {
+  content: "";
+  width: 60%;
+  height: 60%;
+  background:
+    linear-gradient(128deg, transparent 0 42%, rgba(0, 0, 0, 0.46) 42% 47%, transparent 47%),
+    linear-gradient(82deg, transparent 0 58%, rgba(0, 0, 0, 0.36) 58% 63%, transparent 63%);
+}
+
+.maze-view[data-theme="graveyard"] .maze-wall {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 0.4rem, transparent 0.4rem 0.9rem),
+    linear-gradient(180deg, #34384a, #191d2a);
+}
+
+.maze-view[data-theme="garden"] .maze-wall,
+.maze-view[data-theme="forest"] .maze-wall {
+  background:
+    radial-gradient(circle at 24% 26%, rgba(51, 96, 56, 0.55), transparent 28%),
+    radial-gradient(circle at 78% 68%, rgba(38, 78, 48, 0.5), transparent 32%),
+    linear-gradient(180deg, #243827, #101a14);
+}
+
+.maze-view[data-theme="castle"] .maze-wall {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 0.75rem, transparent 0.75rem 1.5rem),
+    linear-gradient(180deg, #30354a, #121620);
+}
+
+.moon {
+  position: absolute;
+  top: 1.2rem;
+  right: 1.5rem;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff6d6, #d7c38d 70%);
+  box-shadow: 0 0 30px rgba(255, 246, 214, 0.35);
+}
+
+.moon::after {
+  content: "";
+  position: absolute;
+  inset: 28% 18% 20% 32%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(120, 100, 70, 0.24), transparent 32%),
+    radial-gradient(circle at 76% 60%, rgba(120, 100, 70, 0.2), transparent 24%);
+}
+
+.bat {
+  position: absolute;
+  width: 1.4rem;
+  height: 0.5rem;
+  background:
+    radial-gradient(circle at 20% 50%, #2d2540 0 45%, transparent 46%),
+    radial-gradient(circle at 80% 50%, #2d2540 0 45%, transparent 46%),
+    #1f1830;
+  border-radius: 50%;
+  opacity: 0.75;
+  animation: bat-drift 3.6s ease-in-out infinite;
+}
+
+.bat-one {
+  top: 2.2rem;
+  left: 18%;
+  transform: rotate(-8deg);
+}
+
+.bat-two {
+  top: 3.4rem;
+  left: 62%;
+  transform: rotate(12deg) scale(0.85);
+  animation-delay: -1.7s;
+}
+
+.spooky-eyes {
+  position: absolute;
+  z-index: 1;
+  width: 2.5rem;
+  height: 0.7rem;
+  opacity: 0.72;
+  filter: drop-shadow(0 0 0.55rem rgba(255, 209, 102, 0.52));
+  animation: eye-blink 4.2s steps(1) infinite;
+}
+
+.spooky-eyes::before,
+.spooky-eyes::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: #ffd166;
+}
+
+.spooky-eyes::before {
+  left: 0;
+}
+
+.spooky-eyes::after {
+  right: 0;
+}
+
+.spooky-eyes-left {
+  top: 39%;
+  left: 9%;
+}
+
+.spooky-eyes-right {
+  top: 33%;
+  right: 12%;
+  transform: scale(0.78);
+  animation-delay: -2.1s;
+}
+
+.footprints {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(2, 0.55rem);
+  grid-auto-rows: 0.9rem;
+  gap: 0.12rem 0.28rem;
+  left: var(--footprints-x);
+  top: var(--footprints-y);
+  width: 1.4rem;
+  transform: translate(-50%, -50%) rotate(var(--footprints-rotate));
+  opacity: 0;
+  filter:
+    drop-shadow(0 0 0.4rem rgba(255, 226, 146, 0.55))
+    drop-shadow(0 0 0.9rem rgba(255, 138, 61, 0.34));
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  pointer-events: none;
+}
+
+.footprints span {
+  width: 0.42rem;
+  height: 0.72rem;
+  border-radius: 50% 50% 44% 44%;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 250, 218, 0.95), rgba(255, 209, 102, 0.78) 48%, rgba(255, 138, 61, 0.28));
+  transform: rotate(10deg);
+}
+
+.footprints span:nth-child(odd) {
+  justify-self: end;
+  transform: translateY(0.14rem) rotate(-14deg);
+}
+
+.footprints span:nth-child(even) {
+  justify-self: start;
+  transform: translateY(-0.14rem) rotate(14deg);
+}
+
+.maze-view[data-footprints-found="true"] .footprints {
+  opacity: 1;
+}
+
+.maze-dark-cell {
+  background:
+    radial-gradient(circle at 50% 46%, rgba(0, 0, 0, 0.86), rgba(18, 10, 22, 0.72) 52%, rgba(58, 31, 42, 0.34) 100%),
+    linear-gradient(180deg, var(--dirt-mid), var(--dirt));
+  box-shadow:
+    inset 0 0 0 2px rgba(155, 109, 255, 0.2),
+    inset 0 0 1rem rgba(0, 0, 0, 0.72),
+    0 0 0.9rem rgba(155, 109, 255, 0.16);
+}
+
+.maze-dark-cell::before {
+  content: "?";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 209, 102, 0.72);
+  font-weight: 900;
+  font-size: clamp(1.1rem, 3vw, 1.7rem);
+  text-shadow: 0 0 0.7rem rgba(255, 209, 102, 0.55);
+}
+
+.maze-dark-cell::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(155, 109, 255, 0.28), transparent 68%);
+  filter: blur(0.18rem);
+}
+
+.maze-gold-cell {
+  cursor: pointer;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(255, 246, 214, 0.58), rgba(255, 209, 102, 0.34) 36%, rgba(110, 70, 23, 0.36) 68%),
+    linear-gradient(180deg, var(--dirt-light), var(--dirt-mid));
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 209, 102, 0.5),
+    inset 0 -0.45rem 0.9rem rgba(80, 43, 11, 0.34),
+    0 0 1.2rem rgba(255, 209, 102, 0.5),
+    0 0 2rem rgba(255, 138, 61, 0.2);
+}
+
+.maze-gold-cell::before,
+.maze-gold-cell::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.maze-gold-cell::before {
+  z-index: 1;
+  width: 0.78rem;
+  height: 0.78rem;
+  background: radial-gradient(circle at 34% 28%, #fff6d6 0 16%, #ffd166 18% 58%, #c06a1c 60% 100%);
+  box-shadow:
+    -0.64rem 0.2rem 0 -0.06rem #ffb63b,
+    0.64rem 0.18rem 0 -0.08rem #f2a62c,
+    -0.24rem -0.32rem 0 -0.08rem #ffe08a,
+    0.26rem -0.28rem 0 -0.1rem #ffd166,
+    0 0 0.5rem rgba(255, 246, 214, 0.6);
+}
+
+.maze-gold-cell::after {
+  inset: 12%;
+  background: radial-gradient(circle, rgba(255, 209, 102, 0.46), transparent 64%);
+  filter: blur(0.18rem);
+}
+
+.search-light {
+  position: absolute;
+  z-index: 5;
+  left: var(--light-x);
+  top: var(--light-y);
+  width: clamp(7.5rem, 24vw, 11.5rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle, rgba(255, 246, 214, 0.34) 0 18%, rgba(255, 209, 102, 0.2) 36%, transparent 70%);
+  border: 1px solid rgba(255, 246, 214, 0.16);
+  box-shadow:
+    0 0 1.8rem rgba(255, 209, 102, 0.18),
+    inset 0 0 1.4rem rgba(255, 246, 214, 0.16);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.search-light::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 246, 214, 0.72);
+}
+
+.maze-view.light-hint .search-light {
+  animation: searchlight-pulse 1.1s ease-in-out infinite;
+}
+
+.fog {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 3;
+  height: 42%;
+  background:
+    radial-gradient(ellipse at 18% 74%, rgba(196, 181, 214, 0.24), transparent 34%),
+    radial-gradient(ellipse at 74% 84%, rgba(100, 240, 190, 0.12), transparent 38%),
+    linear-gradient(180deg, transparent, var(--mist));
+  pointer-events: none;
+  animation: fog-drift 7s ease-in-out infinite;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(5, 7, 12, 0.72);
+  z-index: 20;
+}
+
+.scare-overlay {
+  --monster-accent: #ff5f7a;
+  --monster-glow: rgba(255, 95, 122, 0.44);
+  background:
+    radial-gradient(circle at 50% 36%, var(--monster-glow), transparent 18rem),
+    rgba(5, 7, 12, 0.82);
+  backdrop-filter: blur(0.12rem);
+}
+
+.reward-overlay {
+  --reward-accent: #ffd166;
+  --reward-glow: rgba(255, 209, 102, 0.48);
+  background:
+    radial-gradient(circle at 50% 38%, var(--reward-glow), transparent 18rem),
+    rgba(5, 7, 12, 0.78);
+  backdrop-filter: blur(0.12rem);
+}
+
+.reward-overlay[data-reward="key"] {
+  --reward-accent: #64f0be;
+  --reward-glow: rgba(100, 240, 190, 0.38);
+}
+
+.overlay-card {
+  width: min(24rem, 100%);
+  padding: 1.4rem;
+  border-radius: 0.5rem;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+.scare-card {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 4%, var(--monster-glow), transparent 9rem),
+    linear-gradient(180deg, #2a1838, #140f22);
+  border: 2px solid var(--monster-accent);
+  animation: scare-card-pop 0.42s cubic-bezier(0.2, 1.45, 0.34, 1) both;
+}
+
+.scare-card::before,
+.scare-card::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.scare-card::before {
+  inset: -28% -18% 36%;
+  background:
+    repeating-conic-gradient(
+      from 0deg,
+      transparent 0 12deg,
+      var(--monster-glow) 12deg 16deg,
+      transparent 16deg 28deg
+    );
+  opacity: 0.24;
+  animation: scare-rays 1.1s ease-out both;
+}
+
+.scare-card::after {
+  inset: 0;
+  background:
+    linear-gradient(118deg, transparent 0 64%, rgba(255, 255, 255, 0.08) 64% 65%, transparent 65%),
+    linear-gradient(72deg, transparent 0 48%, rgba(255, 255, 255, 0.08) 48% 49%, transparent 49%);
+  opacity: 0.5;
+}
+
+.scare-overlay[data-monster="vampire"] {
+  --monster-accent: #ff5f7a;
+  --monster-glow: rgba(255, 95, 122, 0.48);
+}
+
+.scare-overlay[data-monster="witch"] {
+  --monster-accent: #64f0be;
+  --monster-glow: rgba(100, 240, 190, 0.4);
+}
+
+.scare-overlay[data-monster="werewolf"] {
+  --monster-accent: #ffd166;
+  --monster-glow: rgba(255, 209, 102, 0.42);
+}
+
+.scare-overlay[data-monster="zombie"] {
+  --monster-accent: #a7f070;
+  --monster-glow: rgba(167, 240, 112, 0.36);
+}
+
+.win-card,
+.complete-card,
+.reward-card {
+  background: linear-gradient(180deg, #2d2240, #151827);
+  border: 2px solid rgba(255, 209, 102, 0.35);
+}
+
+.reward-card {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--reward-accent);
+  background:
+    radial-gradient(circle at 50% 6%, var(--reward-glow), transparent 9rem),
+    linear-gradient(180deg, #2f2538, #151827);
+}
+
+.reward-card::before {
+  content: "";
+  position: absolute;
+  inset: -20% -12% 38%;
+  background: radial-gradient(circle, var(--reward-glow), transparent 62%);
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.reward-picture {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(15rem, 86%);
+  height: auto;
+  margin: 0 auto 0.7rem;
+  filter:
+    drop-shadow(0 0 1rem var(--reward-glow))
+    drop-shadow(0 1rem 1.4rem rgba(0, 0, 0, 0.35));
+  animation: reward-pop 0.44s cubic-bezier(0.16, 1.22, 0.36, 1) both;
+}
+
+.win-banner {
+  margin: 0 0 0.5rem;
+  font-size: 3rem;
+}
+
+.scare-burst {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 8.2rem;
+  margin-bottom: 0.25rem;
+}
+
+.scare-burst::before {
+  content: "";
+  position: absolute;
+  width: min(12rem, 72%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--monster-accent), transparent 68%);
+  opacity: 0.34;
+  filter: blur(0.2rem);
+  animation: scare-flash 0.42s ease-out both;
+}
+
+.scare-spark {
+  position: absolute;
+  width: 4.4rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  background: var(--monster-accent);
+  opacity: 0.22;
+  filter: blur(0.12rem);
+}
+
+.scare-spark-one {
+  transform: rotate(28deg) translate(-2.6rem, -2.2rem);
+}
+
+.scare-spark-two {
+  transform: rotate(-24deg) translate(2.6rem, 2rem);
+}
+
+.scare-emoji {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: clamp(5rem, 18vw, 8rem);
+  line-height: 1;
+  text-shadow:
+    0 0 1rem var(--monster-glow),
+    0 1rem 2rem rgba(0, 0, 0, 0.45);
+  animation: monster-jump 0.56s cubic-bezier(0.14, 1.32, 0.36, 1) both;
+}
+
+.overlay-card h2 {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 0.5rem;
+  font-size: 1.8rem;
+}
+
+.scare-message,
+.win-message,
+.complete-message,
+.reward-message {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 1rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.primary-btn {
+  position: relative;
+  z-index: 1;
+  border: none;
+  border-radius: 999px;
+  padding: 0.75rem 1.2rem;
+  background: linear-gradient(180deg, var(--pumpkin), var(--pumpkin-deep));
+  color: #fff8ef;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-btn:hover,
+.primary-btn:focus-visible {
+  filter: brightness(1.05);
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 2px;
+}
+
+@keyframes lightning {
+  0%,
+  88%,
+  92%,
+  100% {
+    opacity: 0;
+  }
+
+  89%,
+  91% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes bat-drift {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: 0.4rem -0.16rem;
+  }
+}
+
+@keyframes eye-blink {
+  0%,
+  46%,
+  50%,
+  100% {
+    opacity: 0.72;
+  }
+
+  48% {
+    opacity: 0;
+  }
+}
+
+@keyframes fog-drift {
+  0%,
+  100% {
+    transform: translateX(-1.5%);
+  }
+
+  50% {
+    transform: translateX(1.5%);
+  }
+}
+
+@keyframes searchlight-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 1.8rem rgba(255, 209, 102, 0.18),
+      inset 0 0 1.4rem rgba(255, 246, 214, 0.16);
+  }
+
+  50% {
+    box-shadow:
+      0 0 2.8rem rgba(255, 209, 102, 0.34),
+      inset 0 0 2rem rgba(255, 246, 214, 0.24);
+  }
+}
+
+@keyframes scare-card-pop {
+  0% {
+    transform: scale(0.86) rotate(-1deg);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(1.03) rotate(0.5deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes scare-rays {
+  0% {
+    transform: scale(0.5) rotate(-16deg);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.24;
+  }
+}
+
+@keyframes scare-flash {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+
+  45% {
+    transform: scale(1.08);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0.34;
+  }
+}
+
+@keyframes monster-jump {
+  0% {
+    transform: translateY(5rem) scale(0.28) rotate(-8deg);
+    opacity: 0;
+  }
+
+  55% {
+    transform: translateY(-0.55rem) scale(1.26) rotate(4deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes reward-pop {
+  0% {
+    transform: translateY(1.8rem) scale(0.78);
+    opacity: 0;
+  }
+
+  62% {
+    transform: translateY(-0.18rem) scale(1.05);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bat,
+  .fog,
+  .scare-burst::before,
+  .scare-card,
+  .scare-card::before,
+  .scare-emoji,
+  .reward-picture,
+  .search-light,
+  .maze-backdrop::before,
+  .spooky-eyes {
+    animation: none;
+  }
+}
+
+@media (max-width: 40rem) {
+  .topbar {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .level-box {
+    justify-self: start;
+    grid-auto-flow: column;
+    display: inline-grid;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}

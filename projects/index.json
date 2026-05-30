@@ -276,6 +276,42 @@
       }
     },
     {
+      "slug": "haunted-maze",
+      "title": "Haunted Maze Walk",
+      "description": "A local-only maze walk with a framed maze view, free click-to-move exploration, footprint clues to the locked door, dark areas that hide keys or cartoon monster jump-outs, glowing pirate gold on the path, and picture popups for treasure and hidden-key discoveries. No timers, no losing, and hints when you get lost.",
+      "date": "2026-05-29",
+      "dateSource": "project metadata",
+      "summary": "Click open paths, follow footprints to the door, search dark areas for keys, and collect glowing pirate gold.",
+      "href": "./projects/haunted-maze/",
+      "entry": "index.html",
+      "cta": "Enter the maze",
+      "tags": [
+        "game",
+        "halloween",
+        "maze",
+        "puzzle"
+      ],
+      "order": 75,
+      "ageRange": "6-10",
+      "interaction": [
+        "pointer",
+        "touch",
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview is useful if a kid is sensitive to spooky Halloween decorations or cartoon jump-outs.",
+        "notes": "Dark areas may reveal a hidden key or a cartoon vampire, witch, werewolf, or zombie jump-out, but they never block long-term progress. Glowing pirate gold is a separate bonus find. No timer pressure, losing, public posting, or open-ended communication."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
       "slug": "color-mixer-lab",
       "title": "Color Mixer Lab",
       "description": "A color mixing game where each level asks players to create a target shade using only five paint colors.",

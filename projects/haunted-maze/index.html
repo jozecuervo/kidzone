@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Haunted Maze Walk</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="game-shell">
+      <header class="topbar">
+        <a class="home-link" href="../../">Kidzone</a>
+        <div class="title-block">
+          <p class="eyebrow">Halloween maze walk</p>
+          <h1>Haunted Maze Walk</h1>
+        </div>
+        <div class="level-box" aria-label="Current level">
+          <span>Level</span>
+          <strong id="level-number">1</strong>
+        </div>
+      </header>
+
+      <section class="play-layout" aria-label="Haunted maze game">
+        <div class="scene-card">
+          <p id="level-theme" class="level-theme">Pumpkin Gate Path</p>
+          <p id="status-line" class="status-line">Search this part of the maze for footprints.</p>
+          <p id="key-status" class="key-status" aria-live="polite">Key: hidden</p>
+          <p id="gold-status" class="gold-status" aria-live="polite">Pirate gold: 0</p>
+
+          <div
+            id="maze-view"
+            class="maze-view"
+            role="img"
+            aria-label="First-person view of the haunted maze path"
+            tabindex="0"
+          >
+            <div class="maze-backdrop" aria-hidden="true">
+              <div class="moon"></div>
+              <div class="bat bat-one"></div>
+              <div class="bat bat-two"></div>
+            </div>
+            <div id="maze-grid" class="maze-grid" aria-hidden="true"></div>
+            <div id="footprints" class="footprints" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div id="search-light" class="search-light" aria-hidden="true"></div>
+            <div id="fog" class="fog" aria-hidden="true"></div>
+          </div>
+
+          <p id="hint-line" class="hint-line hidden" role="status"></p>
+          <p class="maze-help">Click open paths to walk. Dark areas may hide the key or a spooky surprise. Glowing gold coins can be collected.</p>
+        </div>
+      </section>
+    </main>
+
+    <div id="scare-overlay" class="overlay scare-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="scare-title">
+      <div class="overlay-card scare-card">
+        <div class="scare-burst" aria-hidden="true">
+          <span class="scare-spark scare-spark-one"></span>
+          <span class="scare-spark scare-spark-two"></span>
+          <p id="scare-emoji" class="scare-emoji"></p>
+        </div>
+        <h2 id="scare-title">Boo!</h2>
+        <p id="scare-message" class="scare-message">A spooky friend jumped out!</p>
+        <button type="button" id="scare-dismiss" class="primary-btn">Keep walking</button>
+      </div>
+    </div>
+
+    <div id="win-overlay" class="overlay win-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="win-title">
+      <div class="overlay-card win-card">
+        <p class="win-banner" aria-hidden="true">🎃✨🦇</p>
+        <h2 id="win-title">You finished!</h2>
+        <p id="win-message" class="win-message">You made it through the maze!</p>
+        <button type="button" id="next-level-btn" class="primary-btn">Next maze</button>
+      </div>
+    </div>
+
+    <div id="complete-overlay" class="overlay complete-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="complete-title">
+      <div class="overlay-card complete-card">
+        <p class="win-banner" aria-hidden="true">🕯️🎉👻</p>
+        <h2 id="complete-title">You finished!</h2>
+        <p class="complete-message">You walked every haunted maze. Brave explorer!</p>
+        <button type="button" id="play-again-btn" class="primary-btn">Walk again</button>
+      </div>
+    </div>
+
+    <div id="reward-overlay" class="overlay reward-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reward-title">
+      <div class="overlay-card reward-card">
+        <img id="reward-picture" class="reward-picture" src="./assets/pirate-booty.svg" alt="" width="260" height="190">
+        <h2 id="reward-title">Treasure found!</h2>
+        <p id="reward-message" class="reward-message">You found something!</p>
+        <button type="button" id="reward-dismiss" class="primary-btn">Keep exploring</button>
+      </div>
+    </div>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
