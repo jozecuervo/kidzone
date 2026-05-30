@@ -1,6 +1,8 @@
 const stage = document.querySelector("#stage");
 const dad = document.querySelector("#dad");
 const dadChore = document.querySelector("#dad-chore");
+const foreground = document.querySelector("#foreground");
+const gopher = document.querySelector("#gopher");
 const reticle = document.querySelector("#reticle");
 const levelNumber = document.querySelector("#level-number");
 const dadPointsNode = document.querySelector("#dad-points");
@@ -27,6 +29,8 @@ const MAX_FORWARD_STEP = 5;
 const CROSS_PULL = 0.02;
 const METER_STEPS = 6;
 const RELOAD_MS = 1200;
+const NORMAL_SPLASH_POINTS = 1;
+const HEADSHOT_SPLASH_POINTS = 2;
 
 const balloonColors = [
   { fill: "#1f9ee8", deep: "#0a6fb0", border: "rgba(10, 111, 176, 0.4)" },
@@ -41,6 +45,19 @@ const YARD_LEFT = 8;
 const YARD_RIGHT = 92;
 const YARD_Y = 52;
 const CROSS_THRESHOLD = 2.8;
+
+const foregroundScenes = {
+  cooler: [
+    { type: "bush", x: 24, y: 68, scale: 1.05, dadY: 54 },
+    { type: "rock", x: 51, y: 71, scale: 1.1, dadY: 55 },
+    { type: "bush", x: 78, y: 67, scale: 0.95, dadY: 53 }
+  ],
+  grill: [
+    { type: "tree", x: 20, y: 65, scale: 0.92, dadY: 54 },
+    { type: "bush", x: 48, y: 69, scale: 1.08, dadY: 55 },
+    { type: "rock", x: 76, y: 70, scale: 1.05, dadY: 55 }
+  ]
+};
 
 const levels = [
   {
@@ -61,7 +78,9 @@ const levels = [
     crossLine: "Cooler run in progress...",
     splashLine: "That's chilly for a cooler trip!",
     winLine: "Alright, drinks can wait!",
-    fleeLine: "I'm going inside before I melt!"
+    fleeLine: "I'm going inside before I melt!",
+    peekaboo: true,
+    foreground: foregroundScenes.cooler
   },
   {
     id: "poop",
@@ -81,7 +100,9 @@ const levels = [
     crossLine: "Grill patrol continues...",
     splashLine: "Splashes are not grill tongs!",
     winLine: "Grill's safe, I'm heading in!",
-    fleeLine: "Too wet to grill anyway!"
+    fleeLine: "Too wet to grill anyway!",
+    peekaboo: true,
+    foreground: foregroundScenes.grill
   },
   {
     id: "hose",
@@ -166,6 +187,7 @@ const state = {
   meter: 0,
   dadPoints: 0,
   ammo: BUCKET_SIZE,
+  splashHits: 0,
   tosses: 0,
   inFlight: 0,
   goalSide: 1,
@@ -175,8 +197,13 @@ const state = {
   lastMove: 0,
   moveEvery: 1500,
   crossingCooldown: false,
-  aiBias: 0.5
+  aiBias: 0.5,
+  hideoutIndex: -1,
+  peekUntil: 0
 };
+
+let ouchTimer = 0;
+let gopherTimer = 0;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -194,12 +221,32 @@ function startX() {
   return state.goalSide > 0 ? YARD_LEFT : YARD_RIGHT;
 }
 
+function currentHideouts() {
+  const level = currentLevel();
+  return Array.isArray(level.foreground) ? level.foreground : [];
+}
+
+function isPeekabooLevel() {
+  const level = currentLevel();
+  return Boolean(level.peekaboo && currentHideouts().length);
+}
+
 function percentFromEvent(event) {
   const rect = stage.getBoundingClientRect();
+  const target = event.target instanceof Element ? event.target : null;
+  const body = target?.closest(".dad-body");
+  const bodyRect = body?.getBoundingClientRect();
+  const headHint = Boolean(target?.closest(".dad-head"));
+  const lowHint = Boolean(
+    target?.closest(".dad-leg") ||
+    (bodyRect && event.clientY > bodyRect.top + bodyRect.height * 0.52)
+  );
 
   return {
     x: clamp(((event.clientX - rect.left) / rect.width) * 100, 6, 94),
-    y: clamp(((event.clientY - rect.top) / rect.height) * 100, 13, 84)
+    y: clamp(((event.clientY - rect.top) / rect.height) * 100, 13, 84),
+    headHint,
+    lowHint
   };
 }
 
@@ -212,6 +259,9 @@ function renderDad() {
   dad.style.setProperty("--dad-x", `${state.dad.x}%`);
   dad.style.setProperty("--dad-y", `${state.dad.y}%`);
   dad.dataset.facing = state.goalSide > 0 ? "right" : "left";
+  const peeking = isPeekabooLevel() && state.phase === "playing" && performance.now() < state.peekUntil;
+  dad.classList.toggle("is-hiding", isPeekabooLevel() && state.phase === "playing");
+  dad.classList.toggle("is-peeking", peeking);
   updateYardLeg();
 }
 
@@ -266,6 +316,19 @@ function renderLevelPanel() {
     .join("");
 }
 
+function renderForegroundObjects(objects = []) {
+  foreground.innerHTML = objects
+    .map((object, index) => {
+      const type = ["bush", "tree", "rock"].includes(object.type) ? object.type : "bush";
+      const x = clamp(object.x ?? 50, 5, 95);
+      const y = clamp(object.y ?? 68, 45, 84);
+      const scale = clamp(object.scale ?? 1, 0.7, 1.35);
+
+      return `<div class="foreground-object foreground-${type}" data-hideout="${index}" style="--fg-x: ${x}%; --fg-y: ${y}%; --fg-scale: ${scale};"><span></span></div>`;
+    })
+    .join("");
+}
+
 function renderAmmo() {
   ammoCount.textContent = String(state.ammo);
   bucket.dataset.level = String(Math.ceil(state.ammo / 4));
@@ -304,10 +367,14 @@ function applyLevel(announce = true) {
   dadChore.className = "dad-chore";
   dadChore.innerHTML = choreSvg[level.id] || "";
   stage.dataset.time = level.timeOfDay || "bright";
+  stage.classList.toggle("has-hideouts", isPeekabooLevel());
+  renderForegroundObjects(level.foreground || []);
 
   if (announce) {
     dadLine.textContent = level.startLine;
-    meterCaption.textContent = `Soak Dad before he crosses the yard too many times.`;
+    meterCaption.textContent = level.peekaboo
+      ? "Catch Dad when he pops out from the yard hideouts."
+      : "Soak Dad before he crosses the yard too many times.";
   }
 
   renderLevelPanel();
@@ -341,14 +408,31 @@ function announce(message) {
   srStatus.textContent = message;
 }
 
-function showFloat(text, x, y) {
+function showFloat(text, x, y, tone = "") {
   const note = document.createElement("div");
   note.className = "float-note";
+  if (tone) {
+    note.classList.add(`is-${tone}`);
+  }
   note.textContent = text;
   note.style.left = `${x}%`;
   note.style.top = `${y}%`;
   stage.append(note);
   window.setTimeout(() => note.remove(), 1000);
+}
+
+function triggerGopher() {
+  const gopherX = clamp(state.dad.x + (state.dad.x < 50 ? 14 : -14), 13, 87);
+  const gopherY = clamp(state.dad.y + 21, 67, 81);
+
+  window.clearTimeout(gopherTimer);
+  gopher.style.setProperty("--gopher-x", `${gopherX}%`);
+  gopher.style.setProperty("--gopher-y", `${gopherY}%`);
+  gopher.classList.remove("is-popping");
+  void gopher.offsetWidth;
+  gopher.classList.add("is-popping");
+  showFloat("ha ha!", gopherX, Math.max(18, gopherY - 12), "gopher");
+  gopherTimer = window.setTimeout(() => gopher.classList.remove("is-popping"), 1300);
 }
 
 function makeSplash(x, y) {
@@ -394,6 +478,25 @@ function pickEvasiveTarget() {
   state.moveEvery = 650 + Math.random() * 400;
 }
 
+function pickPeekabooTarget() {
+  const hideouts = currentHideouts();
+
+  if (!hideouts.length) {
+    pickWanderTarget();
+    return;
+  }
+
+  state.hideoutIndex = (state.hideoutIndex + 1) % hideouts.length;
+  const hideout = hideouts[state.hideoutIndex];
+
+  state.target = {
+    x: clamp(hideout.x, YARD_LEFT + 3, YARD_RIGHT - 3),
+    y: clamp(hideout.dadY ?? hideout.y - 14, 45, 58)
+  };
+  state.peekUntil = performance.now() + (reduceMotion ? 320 : 850);
+  state.moveEvery = 780 + Math.random() * 520;
+}
+
 function pickDadTarget(options = {}) {
   if (state.phase !== "playing") {
     return;
@@ -403,6 +506,11 @@ function pickDadTarget(options = {}) {
 
   if (forceEvade) {
     pickEvasiveTarget();
+    return;
+  }
+
+  if (isPeekabooLevel()) {
+    pickPeekabooTarget();
     return;
   }
 
@@ -419,6 +527,12 @@ function meterJump() {
   void dad.offsetWidth;
   dad.classList.add("is-meter-jump");
   window.setTimeout(() => dad.classList.remove("is-meter-jump"), 520);
+}
+
+function triggerOuchPose() {
+  window.clearTimeout(ouchTimer);
+  dad.classList.add("is-ouch");
+  ouchTimer = window.setTimeout(() => dad.classList.remove("is-ouch"), 900);
 }
 
 function addMeter(amount = 1) {
@@ -465,34 +579,132 @@ function completeCrossing() {
   pickDadTarget();
 }
 
-function isSplash(point) {
-  const stageRect = stage.getBoundingClientRect();
-  const dadRect = dad.getBoundingClientRect();
-  const dadCenter = {
-    x: dadRect.left + dadRect.width / 2 - stageRect.left,
-    y: dadRect.top + dadRect.height / 2 - stageRect.top
-  };
-  const target = {
+function pointToStagePixels(point, stageRect) {
+  return {
     x: (point.x / 100) * stageRect.width,
     y: (point.y / 100) * stageRect.height
+  };
+}
+
+function rectToStage(rect, stageRect) {
+  return {
+    left: rect.left - stageRect.left,
+    top: rect.top - stageRect.top,
+    width: rect.width,
+    height: rect.height
+  };
+}
+
+function isPointInRect(point, rect, padding = 0) {
+  return (
+    point.x >= rect.left - padding &&
+    point.x <= rect.left + rect.width + padding &&
+    point.y >= rect.top - padding &&
+    point.y <= rect.top + rect.height + padding
+  );
+}
+
+function isPointInEllipse(point, center, radiusX, radiusY) {
+  const dx = (point.x - center.x) / radiusX;
+  const dy = (point.y - center.y) / radiusY;
+  return dx * dx + dy * dy <= 1;
+}
+
+function getDadHit(point, options = {}) {
+  const specialOnly = options.specialOnly || false;
+  const stageRect = stage.getBoundingClientRect();
+  const dadRect = dad.getBoundingClientRect();
+  const dadStageRect = rectToStage(dadRect, stageRect);
+  const target = pointToStagePixels(point, stageRect);
+  const head = dad.querySelector(".dad-head");
+
+  if (head) {
+    const headRect = rectToStage(head.getBoundingClientRect(), stageRect);
+    const headPadding = Math.max(8, Math.min(stageRect.width, stageRect.height) * 0.018);
+
+    if (point.headHint || isPointInRect(target, headRect, headPadding)) {
+      return {
+        zone: "head",
+        points: HEADSHOT_SPLASH_POINTS,
+        line: "HEAD SHOT! Extra splash points!",
+        floatText: "+2 HEAD SHOT!",
+        floatTone: "headshot",
+        floatX: point.x,
+        floatY: Math.max(13, point.y - 8),
+        announcement: "HEAD SHOT! Extra splash points."
+      };
+    }
+  }
+
+  // The lower-center hit zone has no separate DOM part, so approximate it from Dad's figure box.
+  const lowCenter = {
+    x: dadStageRect.left + dadStageRect.width * 0.5,
+    y: dadStageRect.top + dadStageRect.height * 0.72
+  };
+  const lowRadiusX = Math.max(42, dadStageRect.width * 0.45);
+  const lowRadiusY = Math.max(44, dadStageRect.height * 0.26);
+  const percentLowHit =
+    Math.abs(point.x - state.dad.x) <= 12 &&
+    point.y >= state.dad.y + 2 &&
+    point.y <= state.dad.y + 28;
+
+  if (point.lowHint || percentLowHit || isPointInEllipse(target, lowCenter, lowRadiusX, lowRadiusY)) {
+    return {
+      zone: "low",
+      points: NORMAL_SPLASH_POINTS,
+      line: "Ouch!",
+      floatText: "OUCH!",
+      floatTone: "ouch",
+      floatX: point.x,
+      floatY: Math.min(82, point.y + 7),
+      announcement: "Ouch! Low splash counted."
+    };
+  }
+
+  if (specialOnly) {
+    return null;
+  }
+
+  const dadCenter = {
+    x: dadStageRect.left + dadStageRect.width / 2,
+    y: dadStageRect.top + dadStageRect.height / 2
   };
   const distance = Math.hypot(target.x - dadCenter.x, target.y - dadCenter.y);
   const radius = Math.max(72, Math.min(stageRect.width, stageRect.height) * 0.21);
 
-  return distance <= radius;
+  if (distance <= radius) {
+    return {
+      zone: "body",
+      points: NORMAL_SPLASH_POINTS,
+      line: currentLevel().splashLine || splashLines[state.tosses % splashLines.length],
+      floatText: "+1 splash",
+      floatTone: "",
+      floatX: state.dad.x,
+      floatY: Math.max(16, state.dad.y - 26),
+      announcement: null
+    };
+  }
+
+  return null;
 }
 
-function handleSplash(point) {
-  const level = currentLevel();
-  addMeter(1);
+function handleSplash(point, hit) {
+  state.splashHits += 1;
+  addMeter(hit.points);
+  if (hit.zone === "low") {
+    triggerOuchPose();
+  }
+  if (state.splashHits % 3 === 0) {
+    triggerGopher();
+  }
   dad.classList.add("is-splashed");
   window.setTimeout(() => dad.classList.remove("is-splashed"), 520);
 
   triggerEvade(480);
-  dadLine.textContent = level.splashLine || splashLines[state.tosses % splashLines.length];
+  dadLine.textContent = hit.line;
   makeSplash(point.x, point.y);
-  showFloat("+1 splash", state.dad.x, Math.max(16, state.dad.y - 26));
-  announce(`Splash meter ${state.meter} of ${METER_STEPS}. ${dadLine.textContent}`);
+  showFloat(hit.floatText, hit.floatX, hit.floatY, hit.floatTone);
+  announce(`${hit.announcement || dadLine.textContent} Splash meter ${state.meter} of ${METER_STEPS}.`);
 }
 
 function handleDodge(point) {
@@ -510,6 +722,7 @@ function beginVictory() {
 
   state.phase = "celebrate";
   const level = currentLevel();
+  dad.classList.remove("is-ouch", "is-hiding", "is-peeking");
   dadLine.textContent = level.winLine;
   dad.classList.add("is-victory-dance");
   announce(level.winLine);
@@ -531,11 +744,14 @@ function advanceLevel() {
   state.meter = 0;
   state.dadPoints = 0;
   state.ammo = BUCKET_SIZE;
+  state.splashHits = 0;
   state.goalSide = 1;
   state.yardLeg = 0;
   state.phase = "playing";
   state.evadeUntil = 0;
   state.aiBias = 0.5;
+  state.hideoutIndex = -1;
+  state.peekUntil = 0;
   state.dad = { x: YARD_LEFT, y: YARD_Y };
   state.target = { x: YARD_LEFT, y: YARD_Y };
 
@@ -577,6 +793,7 @@ function tossBalloon(point = state.aim) {
   const midX = (startX + point.x) * 0.5;
   const arcLift = 24 + Math.abs(point.x - startX) * 0.18;
   const midY = clamp(Math.min(startY, point.y) - arcLift, 12, 78);
+  const aimedSpecialHit = getDadHit(point, { specialOnly: true });
 
   const animation = balloon.animate(
     [
@@ -607,8 +824,10 @@ function tossBalloon(point = state.aim) {
     .then(() => {
       balloon.remove();
 
-      if (isSplash(point)) {
-        handleSplash(point);
+      const hit = aimedSpecialHit || getDadHit(point);
+
+      if (hit) {
+        handleSplash(point, hit);
       } else {
         handleDodge(point);
       }
@@ -635,6 +854,7 @@ function resetGame() {
   state.meter = 0;
   state.dadPoints = 0;
   state.ammo = BUCKET_SIZE;
+  state.splashHits = 0;
   state.tosses = 0;
   state.inFlight = 0;
   state.goalSide = 1;
@@ -644,8 +864,13 @@ function resetGame() {
   state.aiBias = 0.5;
   state.crossingCooldown = false;
   state.lastMove = 0;
+  state.hideoutIndex = -1;
+  state.peekUntil = 0;
 
-  dad.classList.remove("is-victory-dance", "is-fleeing", "is-splashed", "is-meter-jump");
+  window.clearTimeout(ouchTimer);
+  window.clearTimeout(gopherTimer);
+  gopher.classList.remove("is-popping");
+  dad.classList.remove("is-victory-dance", "is-fleeing", "is-splashed", "is-meter-jump", "is-ouch", "is-hiding", "is-peeking");
   renderMeter();
   renderDadPoints();
   renderAmmo();
@@ -688,6 +913,10 @@ stage.addEventListener("pointermove", (event) => {
 });
 
 stage.addEventListener("pointerdown", (event) => {
+  if (event.target instanceof Element && event.target.closest("button")) {
+    return;
+  }
+
   event.preventDefault();
   stage.focus({ preventScroll: true });
   tossBalloon(percentFromEvent(event));
