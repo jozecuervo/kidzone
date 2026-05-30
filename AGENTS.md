@@ -20,6 +20,14 @@ When product details are missing, favor a static mini-project that can publish
 directly from GitHub Pages without a build step. Add shared infrastructure only
 after more than one project clearly needs it.
 
+## Agent Skills
+
+- Use `skills/kidzone-new-game/` when a user wants to create or brainstorm a
+  new mini-project.
+- Use `skills/kidzone-game-iteration/` when a user wants to tweak, extend, or
+  verify an existing mini-project, especially when the change needs live browser
+  QA or should stack on top of another project PR.
+
 ## Pages Layout
 
 - The repository root is the Kidzone landing page.
