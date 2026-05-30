@@ -67,7 +67,8 @@
           >
             <p id="stage-help" class="sr-only">
               Move the aim spot with touch, pointer, or arrow keys. Press Space or Enter to toss a water balloon.
-              Splash Dad to fill the blue meter. Dad dodges around but keeps working across the yard.
+              Splash Dad to fill the blue meter. Face hits count double, and low hits make Dad say ouch.
+              Every third hit makes a gopher pop up and laugh. Dad dodges around, and on some levels he pops out from behind yard objects.
             </p>
             <div class="yard-lane yard-lane-left" aria-hidden="true"></div>
             <div class="yard-lane yard-lane-right" aria-hidden="true"></div>
@@ -76,7 +77,16 @@
             <div class="sun" aria-hidden="true"></div>
             <div class="cloud cloud-one" aria-hidden="true"></div>
             <div class="cloud cloud-two" aria-hidden="true"></div>
+            <div class="background-tree" aria-hidden="true">
+              <span></span>
+            </div>
             <div class="fence" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
               <span></span>
               <span></span>
               <span></span>
@@ -88,6 +98,18 @@
               <span></span>
             </div>
             <div class="splash-zone" aria-hidden="true"></div>
+            <div id="gopher" class="gopher" aria-hidden="true">
+              <span class="gopher-body">
+                <span class="gopher-ear gopher-ear-left"></span>
+                <span class="gopher-ear gopher-ear-right"></span>
+                <span class="gopher-eye gopher-eye-left"></span>
+                <span class="gopher-eye gopher-eye-right"></span>
+                <span class="gopher-nose"></span>
+                <span class="gopher-mouth"></span>
+                <span class="gopher-paw gopher-paw-left"></span>
+                <span class="gopher-paw gopher-paw-right"></span>
+              </span>
+            </div>
 
             <div id="reticle" class="reticle" aria-hidden="true">
               <span></span>
@@ -117,14 +139,17 @@
               </div>
             </div>
 
+            <div id="foreground" class="foreground" aria-hidden="true"></div>
+
             <div class="ammo-hud" aria-label="Water balloon ammo">
               <span class="ammo-label">Balloons</span>
               <strong id="ammo-count">10</strong>
               <span class="ammo-cap">/ 10</span>
             </div>
 
-            <div id="launcher" class="launcher" aria-hidden="true">
-              <div id="bucket" class="bucket">
+            <div id="launcher" class="launcher">
+              <button id="reload-button" class="primary-button reload-button bucket-reload-button" type="button" hidden>Reload</button>
+              <div id="bucket" class="bucket" aria-hidden="true">
                 <span></span>
                 <span></span>
                 <span></span>
@@ -136,7 +161,6 @@
 
           <div class="controls" aria-label="Game controls">
             <button id="toss-button" class="primary-button" type="button">Toss balloon</button>
-            <button id="reload-button" class="primary-button reload-button" type="button" hidden>Reload bucket</button>
             <button id="reset-button" class="quiet-button" type="button">Reset</button>
           </div>
         </div>
@@ -149,7 +173,7 @@
           </section>
           <section class="panel-section kindness-note">
             <h2>Splash rules</h2>
-            <p>Each bucket holds 10 balloons. Reload when you run out. Splashes fill your meter; each edge crossing gives Dad a point.</p>
+            <p>Each bucket holds 10 balloons. Reload when you run out. Every third hit gets a laughing gopher; some levels add yard hideouts.</p>
           </section>
         </aside>
       </section>
