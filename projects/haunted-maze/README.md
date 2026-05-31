@@ -13,7 +13,8 @@ public sharing.
 - Clickable open paths so players can walk in any direction.
 - Searchlight footprints that lead only to the locked door.
 - Dark areas that hide the key or a vampire, witch, werewolf, or zombie.
-- Glowing pirate gold discoveries that open a pirate booty picture popup.
+- Multiple glowing pirate gold discoveries per level that brighten as the
+  player walks closer and open a pirate booty picture popup when collected.
 - Hidden key discoveries that open a key picture popup before the door unlocks.
 - Local-only static HTML, CSS, and JavaScript.
 

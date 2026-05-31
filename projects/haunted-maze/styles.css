@@ -649,15 +649,23 @@ button {
 }
 
 .maze-gold-cell {
+  --gold-alpha: 0.42;
+  --gold-soft-alpha: 0.26;
+  --gold-warm-alpha: 0.18;
+  --gold-halo: 1rem;
+  --gold-spill: 1.6rem;
+  --coin-glow: 0.55;
+  --coin-scale: 0.9;
   cursor: pointer;
   background:
-    radial-gradient(circle at 50% 44%, rgba(255, 246, 214, 0.58), rgba(255, 209, 102, 0.34) 36%, rgba(110, 70, 23, 0.36) 68%),
+    radial-gradient(circle at 50% 44%, rgba(255, 246, 214, var(--gold-alpha)), rgba(255, 209, 102, var(--gold-soft-alpha)) 36%, rgba(110, 70, 23, 0.36) 68%),
     linear-gradient(180deg, var(--dirt-light), var(--dirt-mid));
   box-shadow:
     inset 0 0 0 2px rgba(255, 209, 102, 0.5),
     inset 0 -0.45rem 0.9rem rgba(80, 43, 11, 0.34),
-    0 0 1.2rem rgba(255, 209, 102, 0.5),
-    0 0 2rem rgba(255, 138, 61, 0.2);
+    0 0 var(--gold-halo) rgba(255, 209, 102, var(--gold-alpha)),
+    0 0 var(--gold-spill) rgba(255, 138, 61, var(--gold-warm-alpha));
+  transition: box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .maze-gold-cell::before,
@@ -674,18 +682,19 @@ button {
   z-index: 1;
   width: 0.78rem;
   height: 0.78rem;
+  transform: translate(-50%, -50%) scale(var(--coin-scale));
   background: radial-gradient(circle at 34% 28%, #fff6d6 0 16%, #ffd166 18% 58%, #c06a1c 60% 100%);
   box-shadow:
     -0.64rem 0.2rem 0 -0.06rem #ffb63b,
     0.64rem 0.18rem 0 -0.08rem #f2a62c,
     -0.24rem -0.32rem 0 -0.08rem #ffe08a,
     0.26rem -0.28rem 0 -0.1rem #ffd166,
-    0 0 0.5rem rgba(255, 246, 214, 0.6);
+    0 0 var(--gold-halo) rgba(255, 246, 214, var(--coin-glow));
 }
 
 .maze-gold-cell::after {
   inset: 12%;
-  background: radial-gradient(circle, rgba(255, 209, 102, 0.46), transparent 64%);
+  background: radial-gradient(circle, rgba(255, 209, 102, var(--gold-alpha)), transparent 64%);
   filter: blur(0.18rem);
 }
 

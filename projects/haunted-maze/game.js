@@ -38,11 +38,11 @@ const LEVELS = [
     decorClass: "theme-pumpkins",
     rows: [
       "#######",
-      "#S....#",
+      "#S..G.#",
       "#.###.#",
       "#.K.D.#",
       "#.###.#",
-      "#.G..E#",
+      "#.G.GE#",
       "#######",
     ],
   },
@@ -51,13 +51,13 @@ const LEVELS = [
     decorClass: "theme-graveyard",
     rows: [
       "#########",
-      "#S......#",
+      "#S...G..#",
       "#.#####.#",
       "#.#D..#.#",
       "#.#.#K#.#",
-      "#.G.#...#",
+      "#.G.#.G.#",
       "###.#.###",
-      "#...#..E#",
+      "#.G.#..E#",
       "#########",
     ],
   },
@@ -66,16 +66,16 @@ const LEVELS = [
     decorClass: "theme-garden",
     rows: [
       "###########",
-      "#S........#",
+      "#S..G.....#",
       "#.#######.#",
-      "#.#.....#.#",
+      "#.#..G..#.#",
       "#.#.###.#.#",
       "#.#.#.#.#.#",
       "#...#D#...#",
       "###.#.#.###",
       "#...#G#.K.#",
       "#.###.###.#",
-      "#.....E...#",
+      "#..G..E..G#",
       "###########",
     ],
   },
@@ -84,17 +84,17 @@ const LEVELS = [
     decorClass: "theme-forest",
     rows: [
       "#############",
-      "#S....#.....#",
+      "#S..G.#..G..#",
       "###.#.#.###.#",
       "#...#.#...#.#",
       "#.###.###.#.#",
       "#...#.D...#.#",
       "#.#.#######.#",
-      "#.#.......#.#",
+      "#.#..G...#.#",
       "#.#######.#K#",
-      "#..G....#...#",
+      "#..G..G.#...#",
       "#######.###.#",
-      "#..........E#",
+      "#....G....GE#",
       "#############",
     ],
   },
@@ -103,21 +103,21 @@ const LEVELS = [
     decorClass: "theme-castle",
     rows: [
       "###############",
-      "#S..#.#.......#",
+      "#S.G#.#...G...#",
       "###.#.#.#####.#",
-      "#...#...#.....#",
+      "#.G.#...#..G..#",
       "#.#######.###.#",
       "#...#.....#.#.#",
       "###.#.#####.#.#",
-      "#D#...#.....#.#",
+      "#D#...#..G..#.#",
       "#.#####.###.#.#",
       "#.G.#.#...#...#",
       "#.#.#.###.#####",
-      "#.#...#...#...#",
+      "#.#G..#...#...#",
       "#.###.#.###.#.#",
       "#.#...#.#...#.#",
       "#.#####.#.###.#",
-      "#.........#K.E#",
+      "#....G....#K.E#",
       "###############",
     ],
   },
@@ -134,6 +134,7 @@ const VIEW_SIZE = 7;
 const VIEW_RADIUS = Math.floor(VIEW_SIZE / 2);
 const FOOTPRINT_REVEAL_DISTANCE = 16;
 const LIGHT_STEP = 7;
+const MIN_GOLD_PER_LEVEL = 3;
 const REWARD_IMAGES = {
   gold: {
     src: "./assets/pirate-booty.svg",
@@ -327,6 +328,12 @@ function applyMove(target) {
   const darkSpot = darkSpotAt(target);
   if (darkSpot) {
     triggerDarkSpot(darkSpot);
+    return;
+  }
+
+  const goldSpot = goldSpotAt(target);
+  if (goldSpot) {
+    collectGold(goldSpot);
     return;
   }
 
@@ -586,17 +593,6 @@ function movementTargetFromClient(clientX, clientY) {
   return step;
 }
 
-function clickedGold(clientX, clientY) {
-  const point = viewPointFromClient(clientX, clientY);
-  const cell = visibleCellFromPoint(point);
-  const position = {
-    r: state.position.r + cell.row - VIEW_RADIUS,
-    c: state.position.c + cell.col - VIEW_RADIUS,
-  };
-
-  return goldSpotAt(position);
-}
-
 function visibleCellPosition(rowOffset, colOffset) {
   return {
     x: ((colOffset + 0.5) / VIEW_SIZE) * 100,
@@ -723,6 +719,21 @@ function decorationForCell(r, c, isWall, isExit, isCenter) {
   return pathDecor[seed % pathDecor.length];
 }
 
+function goldGlowForCell(r, c) {
+  const distance = Math.hypot(r - state.position.r, c - state.position.c);
+  const closeness = 1 - Math.min(distance, VIEW_RADIUS + 1) / (VIEW_RADIUS + 1);
+
+  return {
+    alpha: 0.2 + closeness * 0.56,
+    softAlpha: 0.13 + closeness * 0.37,
+    warmAlpha: 0.1 + closeness * 0.26,
+    halo: 0.8 + closeness * 1.5,
+    spill: 1.45 + closeness * 2.15,
+    coinGlow: 0.45 + closeness * 0.38,
+    coinScale: 0.82 + closeness * 0.22,
+  };
+}
+
 function renderMazeWindow() {
   const fragment = document.createDocumentFragment();
   const level = LEVELS[state.levelIndex];
@@ -760,7 +771,15 @@ function renderMazeWindow() {
       }
 
       if (isGoldCell) {
+        const glow = goldGlowForCell(r, c);
         cell.classList.add("maze-gold-cell");
+        cell.style.setProperty("--gold-alpha", glow.alpha.toFixed(2));
+        cell.style.setProperty("--gold-soft-alpha", glow.softAlpha.toFixed(2));
+        cell.style.setProperty("--gold-warm-alpha", glow.warmAlpha.toFixed(2));
+        cell.style.setProperty("--gold-halo", `${glow.halo.toFixed(2)}rem`);
+        cell.style.setProperty("--gold-spill", `${glow.spill.toFixed(2)}rem`);
+        cell.style.setProperty("--coin-glow", glow.coinGlow.toFixed(2));
+        cell.style.setProperty("--coin-scale", glow.coinScale.toFixed(2));
       }
 
       if (isCenter) {
@@ -803,7 +822,7 @@ function updateSceneView() {
   updateGuideClues(guide);
   ui.mazeView.setAttribute(
     "aria-label",
-    `Framed view of the nearby maze. Facing ${DIRECTIONS[state.facing].label}. Click an open path to walk. Searchlight footprints lead to the door: ${guide ? GUIDE_LABELS[guide.action] : "look around"}. ${state.hasKey ? "Key found." : "Dark areas may hide the key or a spooky friend. Glowing gold coins can be collected."} Arrow keys can sweep the light. Press Enter when footprints are found to follow them. ${availablePathText()}`
+    `Framed view of the nearby maze. Facing ${DIRECTIONS[state.facing].label}. Click an open path to walk. Searchlight footprints lead to the door: ${guide ? GUIDE_LABELS[guide.action] : "look around"}. ${state.hasKey ? "Key found." : "Dark areas may hide the key or a spooky friend. Walk onto glowing gold coins to collect them."} Arrow keys can sweep the light. Press Enter when footprints are found to follow them. ${availablePathText()}`
   );
 }
 
@@ -835,8 +854,10 @@ function loadLevel(index) {
     throw new Error(`Maze level "${level.theme}" is missing a hidden key.`);
   }
 
-  if (goldSpots.length === 0) {
-    throw new Error(`Maze level "${level.theme}" is missing pirate gold.`);
+  if (goldSpots.length < MIN_GOLD_PER_LEVEL) {
+    throw new Error(
+      `Maze level "${level.theme}" needs at least ${MIN_GOLD_PER_LEVEL} pirate gold spots.`
+    );
   }
 
   state.levelIndex = index;
@@ -875,7 +896,7 @@ function loadLevel(index) {
   updateGoldStatus();
   setLightPosition(state.light.x, state.light.y);
   updateSceneView();
-  updateScene("Click open paths to walk. Search dark areas for the key or a spooky surprise, and collect glowing gold coins.");
+  updateScene("Click open paths to walk. Walk onto glowing gold to collect it; it shines brighter as you get closer.");
 }
 
 function nextLevel() {
@@ -894,12 +915,6 @@ ui.mazeView.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   ui.mazeView.setPointerCapture?.(event.pointerId);
   sweepLightToPoint(event.clientX, event.clientY);
-
-  const goldSpot = clickedGold(event.clientX, event.clientY);
-  if (goldSpot) {
-    collectGold(goldSpot);
-    return;
-  }
 
   const target = movementTargetFromClient(event.clientX, event.clientY);
   if (target) {
