@@ -1,7 +1,7 @@
 {
   "title": "Haunted Maze Walk",
-  "summary": "Click open paths, follow footprints to the door, search dark areas for keys, and collect glowing pirate gold.",
-  "description": "A local-only maze walk with a framed maze view, free click-to-move exploration, footprint clues to the locked door, dark areas that hide keys or cartoon monster jump-outs, glowing pirate gold on the path, and picture popups for treasure and hidden-key discoveries. No timers, no losing, and hints when you get lost.",
+  "summary": "Click open paths, follow footprints to the door, search dark areas for keys, and walk toward glowing pirate gold.",
+  "description": "A local-only maze walk with a framed maze view, free click-to-move exploration, footprint clues to the locked door, dark areas that hide keys or cartoon monster jump-outs, multiple pirate gold finds per level that glow brighter as you walk closer, and picture popups for treasure and hidden-key discoveries. No timers, no losing, and hints when you get lost.",
   "date": "2026-05-29",
   "dateSource": "project metadata",
   "entry": "index.html",
