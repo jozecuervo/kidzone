@@ -8,7 +8,7 @@ public sharing.
 
 ## First Playable
 
-- Five static maze levels with increasing size.
+- Ten static maze levels with increasing size and longer paths.
 - Keyboard, pointer, and touch controls inside the maze frame.
 - Clickable open paths so players can walk in any direction.
 - Searchlight footprints that lead only to the locked door.
