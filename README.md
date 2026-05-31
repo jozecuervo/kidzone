@@ -102,6 +102,23 @@ The check looks for stale project metadata, JavaScript syntax errors, undeclared
 external URLs, and privacy-sensitive features that are missing from
 `project.json`.
 
+## Take Project Snapshots
+
+Install the Playwright package and Chromium browser once:
+
+```sh
+npm install
+npm run snapshots:install
+```
+
+Capture a fresh screenshot of every published project:
+
+```sh
+npm run snapshots
+```
+
+Screenshots are written to `snapshots/projects/`, which is ignored by Git.
+
 ## Project Shape
 
 ```text

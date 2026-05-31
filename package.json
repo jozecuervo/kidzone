@@ -1,0 +1,14 @@
+{
+  "name": "kidzone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node ./scripts/check.mjs",
+    "snapshots": "playwright test",
+    "snapshots:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
+}
