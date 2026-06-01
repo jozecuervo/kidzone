@@ -35,6 +35,41 @@
       }
     },
     {
+      "slug": "janice-puppet-workshop",
+      "title": "JANICE Puppet Workshop",
+      "description": "A browser-safe JANICE schema lab for animatable digital puppets, starting with a green-loving runway model and a very different test character.",
+      "date": "2026-05-30",
+      "dateSource": "project scaffold and JANICE schema implementation",
+      "summary": "Build and test digital puppets with skeletons, outfits, accessories, and moves.",
+      "href": "./projects/janice-puppet-workshop/",
+      "entry": "index.html",
+      "cta": "Open the workshop",
+      "tags": [
+        "puppet",
+        "creative",
+        "schema"
+      ],
+      "order": 20,
+      "ageRange": "7-12",
+      "interaction": [
+        "pointer",
+        "touch",
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, uploads, saved data, analytics, or remote services.",
+        "adultHelp": "None required for digital play; adult help may be useful later if printable craft templates are added.",
+        "notes": "Dress-up and posing are expressive, not ranked. There are no scores, timers, streaks, public posting, or body/beauty judgments."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
       "slug": "world-of-poo",
       "title": "World of Poo",
       "description": "Build goo structures toward the pipe, manage limited goo balls, switch modes, and solve each physics level.",
