@@ -212,6 +212,43 @@ test("disconnected joints are rejected", () => {
   assertInvalid(puppet, "exactly one parentless root joint");
 });
 
+test("skeleton.rootJoint must name the actual parentless root", () => {
+  const puppet = clone(JANICE_PUPPET);
+  puppet.skeleton.rootJoint = "chest";
+  assertInvalid(puppet, "must reference the parentless root joint");
+  assertInvalid(puppet, "is not reachable from skeleton.rootJoint");
+});
+
+test("attachment point ids are unique across body and outfit namespaces", () => {
+  const puppet = clone(JANICE_PUPPET);
+  puppet.outfitPoints[0].id = puppet.bodyPoints[0].id;
+  assertInvalid(puppet, "must be unique across bodyPoints and outfitPoints");
+});
+
+test("malformed nested joint entries return invalid results instead of throwing", () => {
+  const puppet = clone(JANICE_PUPPET);
+  puppet.skeleton.joints[0] = null;
+  assertInvalid(puppet, "Puppet structure could not be validated");
+});
+
+test("malformed visibility sets return invalid results instead of throwing", () => {
+  const puppet = clone(JANICE_PUPPET);
+  puppet.visibilitySets.standing = null;
+  assertInvalid(puppet, "Puppet structure could not be validated");
+});
+
+test("malformed outfit entries return invalid results instead of throwing", () => {
+  const puppet = clone(JANICE_PUPPET);
+  puppet.outfits[0] = null;
+  assertInvalid(puppet, "Puppet structure could not be validated");
+});
+
+test("malformed puppet-set entries return invalid results instead of throwing", () => {
+  const result = validatePuppetSet([null, JANICE_PUPPET]);
+  assert(!result.valid, "Expected malformed puppet set to be invalid.");
+  assert(result.errors.some((error) => error.includes("invalid puppet")), result.errors.join("; "));
+});
+
 test("circle shapes require a radius", () => {
   const puppet = clone(JANICE_PUPPET);
   delete puppet.bodyParts.find((part) => part.id === "face").shape.width;
@@ -401,6 +438,24 @@ test("looping clips can hold a base pose while animating accent joints", () => {
   assertClose(threeQuarter.jointTurns.rightElbow, -36, "wave elbow pulses from held bend");
   assertClose(threeQuarter.jointTurns.rightWrist, -22, "wave wrist swings inward");
   assertClose(quarter.rootMotion.y, 0, "non-walk looping clips should not bounce by default");
+});
+
+test("animated held poses compose into final world transforms exactly once", () => {
+  const puppet = clone(JANICE_PUPPET);
+  const clip = animatedClipAt({
+    id: "testHeldWorldPose",
+    loops: true,
+    durationMs: 800,
+    holdTurns: { rightShoulder: -52 },
+    jointTurns: { rightElbow: -10 }
+  }, 200);
+  const transforms = worldTransforms(puppet, clip);
+  const chest = transforms.get("chest");
+  const shoulder = transforms.get("rightShoulder");
+  const elbow = transforms.get("rightElbow");
+
+  assertClose(shoulder.rotation - chest.rotation, -52, "held shoulder rotation is composed once");
+  assertClose(elbow.rotation - shoulder.rotation, -2.5, "animated elbow accent is composed once");
 });
 
 test("non-looping clips are not animated", () => {

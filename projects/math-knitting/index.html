@@ -43,11 +43,11 @@
             </div>
 
             <div class="answer-section">
-                <input type="number" id="answer-input" placeholder="Your answer" autofocus>
+                <input type="number" id="answer-input" placeholder="Your answer" step="1" inputmode="numeric" autofocus>
                 <button id="submit-btn">Submit</button>
             </div>
 
-            <div id="feedback" class="feedback"></div>
+            <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
         </div>
 
         <div class="game-over" id="game-over" style="display: none;">

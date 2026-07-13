@@ -12,8 +12,16 @@ const game = {
     score: 0,
     level: 1,
     gravity: 0.5,
-    running: true
+    running: true,
+    seed: 1,
+    damageCooldown: 0
 };
+
+const STEP_MS = 1000 / 60;
+const POWER_UP_MS = 5000;
+const DAMAGE_COOLDOWN_MS = 1000;
+const FLATTENED_MS = 1000;
+const SPAWN = { x: 100, y: 435 };
 
 // Mouse player
 const mouse = {
@@ -47,6 +55,18 @@ let cheeses = [];
 // Enemies
 let enemies = [];
 
+function seededRandom(seed) {
+    let state = seed >>> 0;
+    return () => {
+        state = (state * 1664525 + 1013904223) >>> 0;
+        return state / 4294967296;
+    };
+}
+
+function levelSeed(levelNum) {
+    return (game.seed + Math.imul(levelNum, 2654435761)) >>> 0;
+}
+
 // Initialize level
 function initLevel(levelNum) {
     platforms = [];
@@ -56,24 +76,21 @@ function initLevel(levelNum) {
     // Ground
     platforms.push({ x: 0, y: 460, width: 800, height: 40 });
 
-    // Generate platforms based on level
-    // Create platforms at reachable heights (layered approach)
-    const numPlatforms = 5 + levelNum;
-    const layers = [
-        { minY: 360, maxY: 400 },  // Low platforms - easy jump from ground
-        { minY: 280, maxY: 340 },  // Medium platforms
-        { minY: 200, maxY: 260 },  // Higher platforms
-        { minY: 140, maxY: 190 }   // Highest platforms (reachable from medium)
-    ];
+    const random = seededRandom(levelSeed(levelNum));
 
+    // Build a connected staircase. Each platform overlaps the horizontal jump
+    // range of the previous platform and rises by no more than 70 pixels.
+    const numPlatforms = 5 + levelNum;
+    let previous = platforms[0];
     for (let i = 0; i < numPlatforms; i++) {
-        const width = 80 + Math.random() * 100;
-        const x = Math.random() * (canvas.width - width);
-        // Pick a layer, favoring lower layers
-        const layerIndex = Math.min(Math.floor(i / 2), layers.length - 1);
-        const layer = layers[layerIndex];
-        const y = layer.minY + Math.random() * (layer.maxY - layer.minY);
-        platforms.push({ x, y, width, height: 20 });
+        const width = 110 + random() * 60;
+        const direction = i % 2 === 0 ? 1 : -1;
+        const anchor = direction > 0 ? previous.x + previous.width - 35 : previous.x - width + 35;
+        const x = Math.max(12, Math.min(canvas.width - width - 12, anchor + (random() - 0.5) * 50));
+        const y = Math.max(120, previous.y - (45 + random() * 25));
+        const platform = { x, y, width, height: 20, reachableFrom: platforms.length - 1 };
+        platforms.push(platform);
+        previous = platform;
     }
 
     // Sort platforms by height so we can verify reachability
@@ -85,7 +102,7 @@ function initLevel(levelNum) {
             // Add multiple cheeses on ground
             for (let i = 0; i < 3; i++) {
                 cheeses.push({
-                    x: 150 + i * 200 + Math.random() * 100,
+                    x: 150 + i * 200 + random() * 100,
                     y: plat.y - 30,
                     width: 25,
                     height: 20,
@@ -185,19 +202,23 @@ function initLevel(levelNum) {
     }
 
     // Reset mouse position
-    mouse.x = 100;
-    mouse.y = 300;
+    mouse.x = SPAWN.x;
+    mouse.y = SPAWN.y;
     mouse.velX = 0;
     mouse.velY = 0;
     mouse.powerUp = null;
     mouse.powerUpTimer = 0;
     mouse.speed = 5;
+    game.damageCooldown = 0;
     powerUpDisplay.style.display = 'none';
 }
 
 // Draw the mouse character
 function drawMouse() {
     ctx.save();
+    if (game.damageCooldown > 0 && Math.floor(game.damageCooldown / 100) % 2 === 0) {
+        ctx.globalAlpha = 0.45;
+    }
     ctx.translate(mouse.x + mouse.width / 2, mouse.y + mouse.height / 2);
     ctx.scale(mouse.direction, 1);
     ctx.translate(-mouse.width / 2, -mouse.height / 2);
@@ -666,7 +687,7 @@ function checkCollision(rect1, rect2) {
 }
 
 // Update game state
-function update() {
+function update(stepMs = STEP_MS) {
     // Horizontal movement
     if (keys.left) {
         mouse.velX = -mouse.speed;
@@ -737,11 +758,11 @@ function update() {
 
     // Update power-up timer
     if (mouse.powerUp) {
-        mouse.powerUpTimer--;
+        mouse.powerUpTimer -= stepMs;
         powerUpDisplay.style.display = 'inline';
         // Blink when about to expire
-        if (mouse.powerUpTimer < 60) {
-            powerUpDisplay.style.opacity = Math.sin(mouse.powerUpTimer * 0.3) > 0 ? 1 : 0.3;
+        if (mouse.powerUpTimer < 1000) {
+            powerUpDisplay.style.opacity = Math.sin(mouse.powerUpTimer * 0.018) > 0 ? 1 : 0.3;
         }
         if (mouse.powerUpTimer <= 0) {
             mouse.powerUp = null;
@@ -752,15 +773,16 @@ function update() {
     }
 
     // Update enemies
-    enemies.forEach(enemy => {
+    game.damageCooldown = Math.max(0, game.damageCooldown - stepMs);
+    for (const enemy of enemies) {
         // Skip if flattened and timer expired
         if (enemy.flattened) {
-            enemy.flattenTimer--;
+            enemy.flattenTimer -= stepMs;
             if (enemy.flattenTimer <= 0) {
                 // Remove flattened enemy by marking for removal
                 enemy.removed = true;
             }
-            return;
+            continue;
         }
 
         // Old man agitation - check distance to mouse
@@ -824,7 +846,7 @@ function update() {
             if (stompingFromAbove) {
                 // Stomp the enemy!
                 enemy.flattened = true;
-                enemy.flattenTimer = 60; // Show flattened for 1 second
+                enemy.flattenTimer = FLATTENED_MS;
                 enemy.height = enemy.originalHeight * 0.25; // Squish!
                 enemy.y = enemy.baseY + enemy.originalHeight - enemy.height;
 
@@ -833,31 +855,33 @@ function update() {
 
                 // Give power-up
                 mouse.powerUp = 'speed';
-                mouse.powerUpTimer = 300; // 5 seconds
+                mouse.powerUpTimer = POWER_UP_MS;
                 mouse.speed = 8;
 
                 // Bonus points
                 game.score += 25;
                 scoreDisplay.textContent = game.score;
-            } else if (!mouse.powerUp) {
+            } else if (!mouse.powerUp && game.damageCooldown <= 0) {
                 // Mouse gets hit - lose some cheese and respawn
                 game.score = Math.max(0, game.score - 5);
                 scoreDisplay.textContent = game.score;
-                mouse.x = 100;
-                mouse.y = 300;
+                mouse.x = SPAWN.x;
+                mouse.y = SPAWN.y;
                 mouse.velX = 0;
                 mouse.velY = 0;
+                game.damageCooldown = DAMAGE_COOLDOWN_MS;
+                break;
             }
         }
-    });
+    }
 
     // Remove flattened enemies
     enemies = enemies.filter(e => !e.removed);
 
     // Fall off screen - reset position
     if (mouse.y > canvas.height) {
-        mouse.x = 100;
-        mouse.y = 300;
+        mouse.x = SPAWN.x;
+        mouse.y = SPAWN.y;
         mouse.velY = 0;
         mouse.powerUp = null;
         mouse.powerUpTimer = 0;
@@ -885,8 +909,18 @@ function render() {
 }
 
 // Game loop
-function gameLoop() {
-    update();
+let previousTime = performance.now();
+let accumulator = 0;
+function advanceFrame(elapsedMs) {
+    accumulator += Math.min(100, elapsedMs);
+    while (accumulator >= STEP_MS) {
+        update(STEP_MS);
+        accumulator -= STEP_MS;
+    }
+}
+function gameLoop(now) {
+    if (game.running) advanceFrame(now - previousTime);
+    previousTime = now;
     render();
     requestAnimationFrame(gameLoop);
 }
@@ -926,6 +960,11 @@ function controlFromKey(key) {
     }
 }
 
+function shouldHandleGameplayKey(event) {
+    return !event.metaKey && !event.ctrlKey && !event.altKey &&
+        !event.target.closest('button, input, select, textarea, a[href]');
+}
+
 function releaseAllControls() {
     keys.left = false;
     keys.right = false;
@@ -939,15 +978,13 @@ function releaseAllControls() {
 document.addEventListener('keydown', (e) => {
     const control = controlFromKey(e.key);
 
-    if (!control) {
+    if (!control || !shouldHandleGameplayKey(e)) {
         return;
     }
 
     setControl(control, true);
 
-    if (control === 'jump') {
-        e.preventDefault();
-    }
+    e.preventDefault();
 });
 
 document.addEventListener('keyup', (e) => {
@@ -957,11 +994,10 @@ document.addEventListener('keyup', (e) => {
         return;
     }
 
+    // Always honor releases, even if focus moved onto a button while the key
+    // was held. Scoping releases to the current target can leave movement stuck.
     setControl(control, false);
-
-    if (control === 'jump') {
-        e.preventDefault();
-    }
+    if (shouldHandleGameplayKey(e)) e.preventDefault();
 });
 
 touchControls.forEach(button => {
@@ -984,7 +1020,52 @@ touchControls.forEach(button => {
 });
 
 window.addEventListener('blur', releaseAllControls);
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAllControls();
+});
+
+window.__cheeseworldTest = {
+    initLevel,
+    step(milliseconds) {
+        const count = Math.round(milliseconds / STEP_MS);
+        for (let i = 0; i < count; i++) update(STEP_MS);
+    },
+    runFrameDeltas(deltas) {
+        accumulator = 0;
+        deltas.forEach(advanceFrame);
+    },
+    setSeed(seed) {
+        game.seed = seed >>> 0;
+    },
+    state() {
+        return {
+            game: { ...game },
+            mouse: { ...mouse },
+            platforms: platforms.map(platform => ({ ...platform })),
+            enemies: enemies.map(enemy => ({ ...enemy })),
+            keys: { ...keys }
+        };
+    },
+    arrangeDamageTest() {
+        game.running = false;
+        game.score = 20;
+        game.damageCooldown = 0;
+        mouse.powerUp = null;
+        mouse.x = 200;
+        mouse.y = 435;
+        mouse.velX = 0;
+        mouse.velY = 0;
+        cheeses = [{ x: 700, y: 100, width: 25, height: 20, collected: false }];
+        enemies = [0, 1].map(() => ({
+            type: 'cat', x: 200, y: 400, baseY: 400, width: 50, height: 40,
+            originalHeight: 40, speed: 0, direction: 1, patrolMin: 200,
+            patrolMax: 200, frameTime: 0, flattened: false, flattenTimer: 0,
+            velY: 0, jumping: false
+        }));
+        scoreDisplay.textContent = game.score;
+    }
+};
 
 // Start game
 initLevel(1);
-gameLoop();
+requestAnimationFrame(gameLoop);
