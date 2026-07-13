@@ -3,10 +3,31 @@ import { expect, test } from "@playwright/test";
 const gamePath = "/projects/make-a-game/";
 
 async function cometPosition(region) {
+  await expect(region).toHaveAttribute("data-comet-x", /^\d+$/);
+  await expect(region).toHaveAttribute("data-comet-y", /^\d+$/);
+
   return {
     x: Number(await region.getAttribute("data-comet-x")),
     y: Number(await region.getAttribute("data-comet-y"))
   };
+}
+
+async function waitForAnimationFrames(page, frameCount = 4) {
+  await page.evaluate(
+    (count) => new Promise((resolve) => {
+      function nextFrame(framesLeft) {
+        if (framesLeft === 0) {
+          resolve();
+          return;
+        }
+
+        requestAnimationFrame(() => nextFrame(framesLeft - 1));
+      }
+
+      nextFrame(count);
+    }),
+    frameCount
+  );
 }
 
 test.beforeEach(async ({ page }) => {
@@ -19,15 +40,14 @@ test("keyboard input is scoped to the focused game region", async ({ page }) => 
   const start = await cometPosition(region);
 
   await page.keyboard.down("ArrowRight");
-  await page.waitForTimeout(150);
+  await waitForAnimationFrames(page);
   await page.keyboard.up("ArrowRight");
   expect((await cometPosition(region)).x).toBe(start.x);
 
   await region.focus();
   await page.keyboard.down("ArrowRight");
-  await page.waitForTimeout(150);
+  await expect.poll(async () => (await cometPosition(region)).x).toBeGreaterThan(start.x);
   await page.keyboard.up("ArrowRight");
-  expect((await cometPosition(region)).x).toBeGreaterThan(start.x);
 });
 
 test("pointer controls move and stop the comet", async ({ page }) => {
@@ -38,23 +58,23 @@ test("pointer controls move and stop the comet", async ({ page }) => {
 
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.waitForTimeout(150);
+  await expect.poll(async () => (await cometPosition(region)).x).toBeLessThan(start.x);
   await page.mouse.up();
   const moved = await cometPosition(region);
-  expect(moved.x).toBeLessThan(start.x);
 
-  await page.waitForTimeout(150);
+  await waitForAnimationFrames(page);
   expect((await cometPosition(region)).x).toBe(moved.x);
 });
 
 test("blur clears held keyboard input", async ({ page }) => {
   const region = page.locator("[data-game-region]");
   await region.focus();
+  const start = await cometPosition(region);
   await page.keyboard.down("d");
-  await page.waitForTimeout(120);
+  await expect.poll(async () => (await cometPosition(region)).x).toBeGreaterThan(start.x);
   await page.evaluate(() => window.dispatchEvent(new Event("blur")));
   const afterBlur = await cometPosition(region);
-  await page.waitForTimeout(150);
+  await waitForAnimationFrames(page);
   expect((await cometPosition(region)).x).toBe(afterBlur.x);
   await page.keyboard.up("d");
 });
@@ -73,10 +93,9 @@ test("touch controls fit and move at a narrow viewport", async ({ page }) => {
     pointerId: 1,
     pointerType: "touch"
   });
-  await page.waitForTimeout(150);
+  await expect.poll(async () => (await cometPosition(region)).y).toBeGreaterThan(start.y);
   await button.dispatchEvent("pointerup", {
     pointerId: 1,
     pointerType: "touch"
   });
-  expect((await cometPosition(region)).y).toBeGreaterThan(start.y);
 });
