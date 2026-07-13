@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const siteRoot = fileURLToPath(new URL(".", import.meta.url));
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number.parseInt(process.env.PORT ?? "4173", 10);
+const configuredBasePath = process.env.SITE_BASE_PATH ?? "/";
+const basePath = `/${configuredBasePath.replace(/^\/+|\/+$/g, "")}`.replace(/^\/$/, "");
 
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -40,7 +42,12 @@ function sendText(response, statusCode, body) {
 
 function resolveRequestPath(requestUrl) {
   const url = new URL(requestUrl ?? "/", "http://kidzone.local");
-  const pathname = decodeURIComponent(url.pathname);
+  let pathname = decodeURIComponent(url.pathname);
+
+  if (basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`))) {
+    pathname = pathname.slice(basePath.length) || "/";
+  }
+
   const filePath = resolve(siteRoot, `.${pathname}`);
   const pathFromRoot = relative(siteRoot, filePath);
 
@@ -117,5 +124,5 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Kidzone static server listening at http://${host}:${port}`);
+  console.log(`Kidzone static server listening at http://${host}:${port}${basePath}/`);
 });

@@ -11,6 +11,6 @@ export async function publishedProjects() {
 
   return index.projects.map((project) => ({
     ...project,
-    path: project.href.replace(/^\.\//, "/")
+    path: project.href.replace(/^\.\//, "")
   }));
 }

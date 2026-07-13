@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "check": "node ./scripts/check.mjs",
+    "test:unit": "node --test",
     "smoke": "playwright test tests/project-smoke.spec.mjs",
     "snapshots": "playwright test tests/project-snapshots.spec.mjs",
     "playwright:install": "playwright install chromium"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "1.60.0"
   }
 }

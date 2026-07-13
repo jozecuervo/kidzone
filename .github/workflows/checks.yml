@@ -10,14 +10,16 @@ permissions:
 jobs:
   kidzone:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24.x
           cache: npm
       - run: npm ci
-      - run: node ./scripts/check.mjs
+      - run: npm run check
+      - run: npm run test:unit
       - run: npx playwright install --with-deps chromium
       - run: npm run smoke
       - name: Upload browser failure artifacts

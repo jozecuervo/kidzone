@@ -1,30 +1,16 @@
 import { expect } from "@playwright/test";
 
-// Baseline gaps found when this suite was introduced. These stay explicit so a
-// project fix can remove one line and turn the smoke check into a regression guard.
-// Do not add an exception for page errors, console errors, or broken resources.
+const testSiteBasePath = "/kidzone/";
+
 const projectExceptions = {
-  "astro-bot-screensaver": {
-    missingViewport: "Legacy screensaver does not yet declare a mobile viewport.",
-    missingH1: "Legacy animation has no visible level-one heading."
-  },
-  "math-knitting": {
-    mobileOverflow: "Legacy fixed-width game is 36px wider than the 390px viewport."
-  },
   "old-rules": {
-    mobileOverflow: "Legacy fixed-width game is 213px wider than the 390px viewport."
+    mobileOverflow: "The game board still requires a wider-than-phone playfield."
   },
   "world-of-poo": {
-    missingH1: "Legacy game logo is not yet exposed as a level-one heading.",
-    mobileOverflow: "Legacy physics game is 405px wider than the 390px viewport."
+    missingH1: "The canvas game logo is not yet exposed as a level-one heading.",
+    mobileOverflow: "The physics game still requires a wider-than-phone playfield."
   }
 };
-
-const allowedConsoleMessages = [];
-
-function isAllowedConsoleMessage(text) {
-  return allowedConsoleMessages.some((pattern) => pattern.test(text));
-}
 
 export function observePage(page) {
   const pageErrors = [];
@@ -33,7 +19,7 @@ export function observePage(page) {
 
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error" && !isAllowedConsoleMessage(message.text())) {
+    if (message.type() === "error") {
       consoleErrors.push(message.text());
     }
   });
@@ -41,18 +27,19 @@ export function observePage(page) {
     const url = new URL(response.url());
     if (
       url.origin === "http://127.0.0.1:4173" &&
-      response.status() >= 400
+      !url.pathname.startsWith(testSiteBasePath)
     ) {
-      failedLocalResources.push(`${response.status()} ${url.pathname}`);
+      failedLocalResources.push(`resource escaped ${testSiteBasePath}: ${url.href}`);
+    }
+    if (response.status() >= 400) {
+      failedLocalResources.push(`${response.status()} ${url.href}`);
     }
   });
   page.on("requestfailed", (request) => {
     const url = new URL(request.url());
-    if (url.origin === "http://127.0.0.1:4173") {
-      failedLocalResources.push(
-        `${request.failure()?.errorText ?? "request failed"} ${url.pathname}`
-      );
-    }
+    failedLocalResources.push(
+      `${request.failure()?.errorText ?? "request failed"} ${url.href}`
+    );
   });
 
   return { pageErrors, consoleErrors, failedLocalResources };
@@ -65,12 +52,10 @@ export async function expectProjectShell(page, project, observations) {
   expect(response?.ok(), `entry response for ${project.slug}`).toBe(true);
   await expect(page.locator("html")).toHaveAttribute("lang", /\S+/);
   await expect(page).toHaveTitle(/\S+/);
-  if (!exceptions.missingViewport) {
-    await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
-      "content",
-      /width=device-width/i
-    );
-  }
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+    "content",
+    /width=device-width/i
+  );
   if (!exceptions.missingH1) {
     await expect(page.locator("h1")).toHaveCount(1);
   }
@@ -79,12 +64,14 @@ export async function expectProjectShell(page, project, observations) {
   expect(mainCount, `${project.slug} should have at most one main landmark`).toBeLessThanOrEqual(1);
 
   const homeLinks = page.getByRole("link", { name: /(?:back to )?kidzone/i });
+  const expectedSiteRoot = new URL("../../", page.url()).pathname;
   for (let index = 0; index < await homeLinks.count(); index += 1) {
     const href = await homeLinks.nth(index).getAttribute("href");
-    expect(new URL(href, page.url()).pathname, "Kidzone link should return to the site root").toBe("/");
+    expect(new URL(href, page.url()).pathname, "Kidzone link should return to the site root").toBe(expectedSiteRoot);
   }
 
-  // Let load handlers and their first rendered frame settle without a timed sleep.
+  await page.waitForLoadState("networkidle");
+  // Let load handlers and their first rendered frame settle.
   await page.evaluate(() => new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(resolve));
   }));
