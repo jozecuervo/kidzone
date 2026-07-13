@@ -27,6 +27,7 @@ const MAX_BALLOONS = 4;
 const BUCKET_SIZE = 10;
 const MAX_FRAME_MS = 50;
 const CROSS_RATE = 1.45;
+const REDUCED_CROSS_RATE = 0.16;
 const WANDER_RATE = 1.65;
 const EVADE_RATE = 2.2;
 const METER_STEPS = 6;
@@ -513,6 +514,16 @@ function pickDadTarget(options = {}) {
     return;
   }
 
+  if (reduceMotion) {
+    // Keep the crossing game intact without repeated dodges, vertical wandering,
+    // or hideout pops. The slower straight path remains easy to follow.
+    state.target = { x: goalX(), y: YARD_Y };
+    state.evadeUntil = 0;
+    state.peekUntil = 0;
+    state.moveEvery = 4000;
+    return;
+  }
+
   const forceEvade = options.evasive || performance.now() < state.evadeUntil;
 
   if (forceEvade) {
@@ -529,6 +540,9 @@ function pickDadTarget(options = {}) {
 }
 
 function triggerEvade(duration = 480) {
+  if (reduceMotion) {
+    return;
+  }
   state.evadeUntil = performance.now() + duration;
   pickDadTarget({ evasive: true });
 }
@@ -925,10 +939,13 @@ function loop(time) {
       state.dad.x += (state.target.x - state.dad.x) * evadeEase;
       state.dad.y += (state.target.y - state.dad.y) * evadeEase;
     } else {
-      const crossingRate = state.ammo <= 0 ? CROSS_RATE : CROSS_RATE * 1.2;
+      const baseCrossingRate = reduceMotion ? REDUCED_CROSS_RATE : CROSS_RATE;
+      const crossingRate = state.ammo <= 0 ? baseCrossingRate : baseCrossingRate * 1.2;
       const crossEase = 1 - Math.exp(-crossingRate * elapsedSeconds);
       state.dad.x += (goal - state.dad.x) * crossEase;
-      state.dad.x += (state.target.x - state.dad.x) * (1 - Math.exp(-0.62 * elapsedSeconds));
+      if (!reduceMotion) {
+        state.dad.x += (state.target.x - state.dad.x) * (1 - Math.exp(-0.62 * elapsedSeconds));
+      }
       state.dad.y += (state.target.y - state.dad.y) * wanderEase;
     }
   } else {

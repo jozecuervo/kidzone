@@ -75,6 +75,32 @@ test("reduced motion shortens the toss and disables repeating CSS motion", async
   await context.close();
 });
 
+test("reduced motion substantially slows Dad and removes vertical wandering", async ({ browser }) => {
+  async function measureMovement(reducedMotion) {
+    const context = await browser.newContext({ reducedMotion });
+    const page = await context.newPage();
+    await page.goto(gameUrl);
+    await page.waitForTimeout(100);
+    const start = await page.locator("#dad").evaluate((node) => ({
+      x: Number.parseFloat(node.style.getPropertyValue("--dad-x")),
+      y: Number.parseFloat(node.style.getPropertyValue("--dad-y"))
+    }));
+    await page.waitForTimeout(900);
+    const end = await page.locator("#dad").evaluate((node) => ({
+      x: Number.parseFloat(node.style.getPropertyValue("--dad-x")),
+      y: Number.parseFloat(node.style.getPropertyValue("--dad-y"))
+    }));
+    await context.close();
+    return { x: end.x - start.x, y: Math.abs(end.y - start.y) };
+  }
+
+  const normal = await measureMovement("no-preference");
+  const reduced = await measureMovement("reduce");
+  expect(reduced.x).toBeGreaterThan(0);
+  expect(normal.x).toBeGreaterThan(reduced.x * 2);
+  expect(reduced.y).toBeLessThan(0.1);
+});
+
 test("mobile splash zone fits without page overflow or console errors", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
