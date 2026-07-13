@@ -16,6 +16,11 @@ test("presents featured work and the complete project shelf", async ({ page }) =
   await expect(page.locator(".featured-card")).toHaveCount(3);
   await expect(page.locator(".project-card")).toHaveCount(11);
   await expect(page.locator(".featured-preview img")).toHaveCount(3);
+  await expect(
+    page.locator('.project-card a[href="./projects/haunted-maze/"] p')
+  ).toHaveText(
+    "Click open paths, follow footprints to the door, search dark areas for keys, and walk toward glowing pirate gold."
+  );
 
   const brokenPreviewCount = await page.locator(".featured-preview img").evaluateAll(
     (images) => images.filter((image) => !image.complete || image.naturalWidth === 0).length

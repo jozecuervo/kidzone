@@ -72,7 +72,7 @@ function projectCard(project) {
 
   link.href = project.href;
   title.textContent = project.title;
-  description.textContent = project.description ?? project.summary;
+  description.textContent = project.summary ?? project.description;
   cta.textContent = project.cta ?? "Open project";
 
   if (project.date) {
