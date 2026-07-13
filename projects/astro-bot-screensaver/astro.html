@@ -748,10 +748,15 @@ function renderStaticFrame() { bots.forEach((bot) => bot.screen.draw()); }
 function updatePauseUi(announce = false) {
   const paused = isPaused();
   pauseButton.setAttribute('aria-pressed', String(userPaused));
-  pauseButton.textContent = userPaused ? 'Resume animation' : 'Pause animation';
-  if (announce) status.textContent = reducedMotion
-    ? 'Animation is limited by your reduced motion setting.'
-    : paused ? 'Animation paused.' : 'Animation resumed.';
+  pauseButton.disabled = reducedMotion;
+  pauseButton.textContent = reducedMotion
+    ? 'Animation limited'
+    : userPaused ? 'Resume animation' : 'Pause animation';
+  if (reducedMotion) {
+    status.textContent = 'Animation is limited by your reduced motion setting.';
+  } else if (announce) {
+    status.textContent = paused ? 'Animation paused.' : 'Animation resumed.';
+  }
 }
 
 function frame(timestamp) {

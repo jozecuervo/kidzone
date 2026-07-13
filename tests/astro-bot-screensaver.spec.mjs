@@ -23,8 +23,11 @@ test('pauses when hidden and honors reduced motion', async ({ page }) => {
   expect(await page.evaluate(() => window.__astroDebug.state)).toMatchObject({
     paused: true, reducedMotion: true, schedulerCount: 0
   });
+  await expect(page.getByRole('button', { name: 'Animation limited' })).toBeDisabled();
+  await expect(page.getByRole('status')).toContainText('reduced motion setting');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await expect.poll(() => page.evaluate(() => window.__astroDebug.state.schedulerCount)).toBe(1);
+  await expect(page.getByRole('button', { name: 'Pause animation' })).toBeEnabled();
   await page.evaluate(() => window.__astroDebug.setHiddenForTest(true));
   await expect.poll(() => page.evaluate(() => window.__astroDebug.state.schedulerCount)).toBe(0);
 });
