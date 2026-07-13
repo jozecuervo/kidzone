@@ -1,5 +1,10 @@
 export const MATCH_TOLERANCE = 18;
 export const MAX_VISIBLE_DROPS = 12;
+export const MAX_TOTAL_DROPS = 60;
+
+export function canAddDrop(total, limit = MAX_TOTAL_DROPS) {
+  return total < limit;
+}
 
 export function colorDistance(first, second) {
   return Math.hypot(

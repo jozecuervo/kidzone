@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   MATCH_TOLERANCE,
+  MAX_TOTAL_DROPS,
+  canAddDrop,
   closenessLabel,
   colorDistance,
   isColorMatch,
@@ -36,4 +38,11 @@ test("visible history stays bounded and summarizes older drops", () => {
   assert.equal(result.visible.length, 12);
   assert.equal(result.visible[0], "paint-28");
   assert.equal(result.visible.at(-1), "paint-39");
+});
+
+test("cup capacity bounds gameplay history well above intended recipes", () => {
+  assert.equal(canAddDrop(MAX_TOTAL_DROPS - 1), true);
+  assert.equal(canAddDrop(MAX_TOTAL_DROPS), false);
+  assert.equal(canAddDrop(MAX_TOTAL_DROPS + 1), false);
+  assert.ok(MAX_TOTAL_DROPS > 9, "capacity should exceed the longest recipe");
 });

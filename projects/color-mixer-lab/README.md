@@ -11,6 +11,8 @@ only an approximation of real paint, a small RGB distance of 18 or less counts
 as a match. A text closeness label and light/dark or warm/cool hint accompany
 the swatches so progress does not depend on color perception alone. Feedback
 waits for the player to choose Continue or Retry; there are no timed rounds.
+The cup holds at most 60 drops—well above the longest nine-drop recipe—to keep
+long play sessions bounded while leaving plenty of room to experiment.
 
 ## Original Prompt
 

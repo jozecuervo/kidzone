@@ -1,5 +1,7 @@
 import {
   MATCH_TOLERANCE,
+  MAX_TOTAL_DROPS,
+  canAddDrop,
   closenessLabel,
   colorDistance,
   isColorMatch,
@@ -251,7 +253,11 @@ function renderMix() {
       button.dataset.action === "remove" &&
       state.counts[button.dataset.paintId] === 0;
 
-    button.disabled = state.locked || isEmptyRemove;
+    const isFullAdd =
+      button.dataset.action === "add" &&
+      !canAddDrop(drops, MAX_TOTAL_DROPS);
+
+    button.disabled = state.locked || isEmptyRemove || isFullAdd;
   });
 }
 
@@ -260,10 +266,19 @@ function addPaint(id) {
     return;
   }
 
+  if (!canAddDrop(totalDrops(), MAX_TOTAL_DROPS)) {
+    elements.feedback.textContent = `The cup is full at ${MAX_TOTAL_DROPS} drops. Undo or reset to make room.`;
+    elements.feedback.className = "feedback retry";
+    return;
+  }
+
   state.counts[id] += 1;
   state.history.push(id);
-  elements.feedback.textContent = `${paintById[id].name} added.`;
-  elements.feedback.className = "feedback";
+  const isNowFull = !canAddDrop(totalDrops(), MAX_TOTAL_DROPS);
+  elements.feedback.textContent = isNowFull
+    ? `${paintById[id].name} added. The cup is full at ${MAX_TOTAL_DROPS} drops. Undo or reset to make room.`
+    : `${paintById[id].name} added.`;
+  elements.feedback.className = isNowFull ? "feedback retry" : "feedback";
   renderMix();
 }
 

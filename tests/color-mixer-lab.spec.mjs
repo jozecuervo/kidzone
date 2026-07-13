@@ -47,6 +47,38 @@ test("closeness text and drop history work without color-only feedback", async (
   await expect(page.locator(".drop-summary")).toHaveText("Earlier: 8");
 });
 
+test("cup capacity bounds counts, history, and rendered drop nodes", async ({ page }) => {
+  await page.goto(gamePath);
+  const addRed = page.getByRole("button", { name: "Add Red" });
+
+  for (let index = 0; index < 60; index += 1) await addRed.click();
+
+  await expect(page.locator("#drop-total")).toHaveText("60");
+  await expect(page.locator("#red-count")).toHaveText("60");
+  await expect(page.locator(".drop-chip")).toHaveCount(12);
+  await expect(page.locator(".drop-summary")).toHaveText("Earlier: 48");
+  await expect(addRed).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add Yellow" })).toBeDisabled();
+  await expect(page.getByRole("status")).toContainText("cup is full at 60 drops");
+
+  const boundedState = await page.evaluate(() => ({
+    total: document.querySelector("#drop-total")?.textContent,
+    renderedDrops: document.querySelectorAll(".drop-chip").length
+  }));
+  expect(boundedState).toEqual({ total: "60", renderedDrops: 12 });
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator("#drop-total")).toHaveText("59");
+  await expect(addRed).toBeEnabled();
+  await addRed.click();
+  await expect(page.locator("#drop-total")).toHaveText("60");
+
+  await page.getByRole("button", { name: "Reset" }).click();
+  await expect(page.locator("#drop-total")).toHaveText("0");
+  await expect(page.locator(".drop-chip")).toHaveCount(0);
+  await expect(addRed).toBeEnabled();
+});
+
 test("completion moves focus to a useful replay action", async ({ page }) => {
   const recipes = [
     { Yellow: 4, White: 2, Brown: 1 },
