@@ -65,6 +65,7 @@ export class LaplacianAlgorithm extends BaseAlgorithm {
 
     applyLaplacian(grayscale, width, height, threshold) {
         const laplacianData = new Uint8ClampedArray(width * height);
+        laplacianData.fill(255);
 
         // Laplacian kernel (detects second derivatives)
         const laplacian = [
