@@ -67,6 +67,15 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
+      },
+      "portfolio": {
+        "featured": true,
+        "preview": "./projects/janice-puppet-workshop/preview.jpg",
+        "technicalHighlights": [
+          "Declarative puppet schema",
+          "Runtime validation",
+          "Accessible interactive controls"
+        ]
       }
     },
     {
@@ -208,6 +217,15 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
+      },
+      "portfolio": {
+        "featured": true,
+        "preview": "./projects/photo-by-numbers/preview.jpg",
+        "technicalHighlights": [
+          "Local image processing",
+          "Pluggable edge algorithms",
+          "Camera and file workflows"
+        ]
       }
     },
     {
@@ -345,6 +363,15 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
+      },
+      "portfolio": {
+        "featured": true,
+        "preview": "./projects/haunted-maze/preview.jpg",
+        "technicalHighlights": [
+          "Validated ten-level progression",
+          "Pointer, touch, and keyboard input",
+          "Forgiving hint system"
+        ]
       }
     },
     {

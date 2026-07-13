@@ -4,7 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#05b8d8">
-    <title>Kidzone</title>
+    <meta name="description" content="Kidzone is a collection of privacy-minded browser games and creative tools built by José for kids and their trusted adults.">
+    <meta property="og:title" content="Kidzone — playful browser projects">
+    <meta property="og:description" content="Games and creative tools built with plain web technology, accessible interactions, and kid safety in mind.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://jozecuervo.github.io/kidzone/">
+    <meta property="og:image" content="https://jozecuervo.github.io/kidzone/assets/game-maker-desk.png">
+    <title>Kidzone — playful browser projects by José</title>
+    <link rel="canonical" href="https://jozecuervo.github.io/kidzone/">
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png">
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
     <link rel="manifest" href="./site.webmanifest">
@@ -19,16 +26,63 @@
         alt=""
       >
       <div class="hero-copy">
-        <p class="hero-kicker">Tiny games and bright experiments</p>
+        <p class="hero-kicker">Playful software, thoughtfully built</p>
         <h1>Kidzone</h1>
         <p>
-          Pick a project, change one idea, and send your next pull request into
-          the world.
+          Browser games and creative tools for kids, designed with privacy,
+          accessible interactions, and parent-assisted making in mind.
         </p>
-        <a href="#projects">See the projects</a>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#featured">Explore the work</a>
+          <a class="button button-secondary" href="https://github.com/jozecuervo/kidzone">View source</a>
+        </div>
       </div>
     </header>
     <main>
+      <section class="intro section" aria-labelledby="intro-title">
+        <div class="section-heading intro-heading">
+          <div>
+            <p class="eyebrow">The idea</p>
+            <h2 id="intro-title">Small projects with real product constraints</h2>
+          </div>
+          <p>
+            Kidzone is an evolving open-source playground by José. Each project
+            is deliberately self-contained, easy to inspect, and explicit about
+            safety, storage, network access, and the help a young player may need.
+          </p>
+        </div>
+        <ul class="principle-list" aria-label="Kidzone principles">
+          <li><strong>Local first</strong><span>No accounts, chat, analytics, or surprise uploads.</span></li>
+          <li><strong>Made to explore</strong><span>Creation, puzzles, and experiments over attention traps.</span></li>
+          <li><strong>Built in the open</strong><span>Plain web technology, documented metadata, and automated checks.</span></li>
+        </ul>
+      </section>
+
+      <section class="featured section" id="featured" aria-labelledby="featured-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Selected work</p>
+            <h2 id="featured-title">Projects that show the range</h2>
+          </div>
+          <p>From schema-driven characters to local image processing and a ten-level maze.</p>
+        </div>
+        <div class="featured-grid" data-featured-grid></div>
+      </section>
+
+      <section class="craft section" aria-labelledby="craft-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Under the hood</p>
+            <h2 id="craft-title">A lightweight system, not just a folder of demos</h2>
+          </div>
+        </div>
+        <div class="craft-grid">
+          <article><span>01</span><h3>Metadata-driven</h3><p>A validated project contract generates the shelf and makes privacy decisions visible.</p></article>
+          <article><span>02</span><h3>Deployable anywhere</h3><p>Relative paths and static entry points keep projects compatible with GitHub Pages.</p></article>
+          <article><span>03</span><h3>Checked as a collection</h3><p>Repository checks catch stale metadata, syntax errors, undeclared URLs, and safety gaps.</p></article>
+        </div>
+      </section>
+
       <section class="project-shelf" id="projects" aria-labelledby="projects-title">
         <div class="shelf-heading">
           <h2 id="projects-title">Project shelf</h2>
@@ -37,5 +91,17 @@
         <div class="project-grid" data-project-grid></div>
       </section>
     </main>
+    <footer>
+      <div>
+        <p class="eyebrow">Built by José</p>
+        <h2>Curious software for curious people.</h2>
+      </div>
+      <nav aria-label="Footer">
+        <a href="https://github.com/jozecuervo">GitHub profile</a>
+        <a href="https://github.com/jozecuervo/kidzone">Source</a>
+        <a href="./CONTRIBUTING.md">Contributing</a>
+        <a href="./LICENSE">MIT License</a>
+      </nav>
+    </footer>
   </body>
 </html>

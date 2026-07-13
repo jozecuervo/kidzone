@@ -29,5 +29,14 @@
     "networkAccess": "none",
     "storesData": false,
     "externalDependencies": []
+  },
+  "portfolio": {
+    "featured": true,
+    "preview": "preview.jpg",
+    "technicalHighlights": [
+      "Declarative puppet schema",
+      "Runtime validation",
+      "Accessible interactive controls"
+    ]
   }
 }

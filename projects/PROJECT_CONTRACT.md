@@ -42,9 +42,25 @@ the entry must stay inside the project folder.
     "networkAccess": "none",
     "storesData": false,
     "externalDependencies": []
+  },
+  "portfolio": {
+    "featured": true,
+    "preview": "preview.jpg",
+    "technicalHighlights": ["Canvas rendering", "Responsive controls"]
   }
 }
 ```
+
+## Optional Portfolio Metadata
+
+Use `portfolio` for a small number of projects that demonstrate especially
+useful design or engineering ideas on the landing page. The preview stays in
+the project folder and must use a relative path. Technical highlights should be
+short, concrete phrases that a reviewer can verify in the project.
+
+Omit the entire object when a project does not need featured treatment. This
+metadata affects presentation only; it does not change the project's safety or
+runtime declarations.
 
 ## Safety Defaults
 
