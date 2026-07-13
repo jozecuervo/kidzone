@@ -169,7 +169,7 @@ function projectRecord(slug, metadata) {
     interaction: metadata.interaction,
     safety: metadata.safety,
     runtime: metadata.runtime,
-    portfolio
+    ...(portfolio ? { portfolio } : {})
   };
 }
 

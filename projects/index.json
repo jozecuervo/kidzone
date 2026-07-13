@@ -32,8 +32,7 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
-      },
-      "portfolio": null
+      }
     },
     {
       "slug": "janice-puppet-workshop",
@@ -116,8 +115,7 @@
             "reason": "Physics engine for the goo-building puzzle prototype."
           }
         ]
-      },
-      "portfolio": null
+      }
     },
     {
       "slug": "math-knitting",
@@ -150,8 +148,7 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
-      },
-      "portfolio": null
+      }
     },
     {
       "slug": "astro-bot-screensaver",
@@ -184,8 +181,7 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
-      },
-      "portfolio": null
+      }
     },
     {
       "slug": "photo-by-numbers",
@@ -262,8 +258,7 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
-      },
-      "portfolio": null
+      }
     },
     {
       "slug": "dads-dodge-dance",
@@ -298,8 +293,7 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
-      },
-      "portfolio": null
+      }
     },
     {
       "slug": "old-rules",
@@ -332,8 +326,7 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
-      },
-      "portfolio": null
+      }
     },
     {
       "slug": "haunted-maze",
@@ -413,8 +406,7 @@
         "networkAccess": "none",
         "storesData": false,
         "externalDependencies": []
-      },
-      "portfolio": null
+      }
     }
   ]
 }
