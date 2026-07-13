@@ -66,6 +66,21 @@ test("pointer controls move and stop the comet", async ({ page }) => {
   expect((await cometPosition(region)).x).toBe(moved.x);
 });
 
+test("direction buttons work with keyboard activation and stop on release", async ({ page }) => {
+  const region = page.locator("[data-game-region]");
+  const button = page.getByRole("button", { name: "Move up" });
+  const start = await cometPosition(region);
+
+  await button.focus();
+  await page.keyboard.down("Enter");
+  await expect.poll(async () => (await cometPosition(region)).y).toBeLessThan(start.y);
+  await page.keyboard.up("Enter");
+  const moved = await cometPosition(region);
+
+  await waitForAnimationFrames(page);
+  expect((await cometPosition(region)).y).toBe(moved.y);
+});
+
 test("blur clears held keyboard input", async ({ page }) => {
   const region = page.locator("[data-game-region]");
   await region.focus();

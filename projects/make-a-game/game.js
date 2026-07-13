@@ -204,6 +204,24 @@ for (const button of moveButtons) {
     heldDirections.add(direction);
   });
 
+  button.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    heldDirections.add(direction);
+  });
+
+  button.addEventListener("keyup", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      heldDirections.delete(direction);
+    }
+  });
+
+  button.addEventListener("blur", () => heldDirections.delete(direction));
+
   for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) {
     button.addEventListener(eventName, () => heldDirections.delete(direction));
   }
