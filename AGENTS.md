@@ -43,6 +43,28 @@ after more than one project clearly needs it.
 - Record asset source/license or authorship, and remove or explicitly justify
   unused assets before shipping.
 
+## Game Change Definition Of Done
+
+Before marking a game pull request ready:
+
+- State the core invariants in the PR or tests: exact win/progress gate,
+  damage/loss rule, required collectibles, legal phases, and reset result.
+- Prove every authored level is completable. Use a route/state solver for gated
+  levels; use deterministic seeds plus solvability checks for generated levels.
+- Exercise every declared input on a meaningful path. Native controls must work
+  with pointer/touch and Enter/Space; held input must release after focus changes,
+  blur, visibility loss, reset, and phase changes.
+- Exercise transition sequences at least twice in one page session, including
+  `start -> reset -> start`, `level -> next -> restart`, and any pending action
+  interrupted by reset.
+- Derive enabled controls, instructions, and status copy from the current game
+  phase so visible UI cannot contradict accepted behavior.
+- Make regression assertions prove the intended state changed. Avoid tests that
+  pass merely because code ran without throwing or because a fixture was empty.
+- Fetch and compare against current `origin/main`, rerun focused and repository
+  checks on the final commit, and require an independent review for gameplay,
+  lifecycle, input, level-data, or safety changes.
+
 ## Agent Skills
 
 - Use `skills/kidzone-new-game/` when a user wants to create or brainstorm a

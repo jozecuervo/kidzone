@@ -67,6 +67,8 @@ Turn the user's answers into a short Game Brief before implementation:
 - Core loop: what the player repeatedly does and why it changes
 - Main interaction: keyboard, mouse, touch, or mixed
 - Progress rule: win, complete, collect, discover, or open-ended creation
+- Core invariants: exact progress/win gate, required collectibles, legal phases,
+  damage/loss rule if any, and the state produced by reset
 - Safety and privacy boundaries
 - Accessibility notes for kids
 - Visual/audio mood, using static assets only when helpful
@@ -112,6 +114,10 @@ Architect review:
   focus movement, and a reduced-motion behavior that preserves game meaning
 - Random generation: a deterministic seed for tests/debugging and a solvability
   check before a generated level is offered
+- Level proof: a complete route/state validation for every authored level,
+  including collectibles, gates, and exit requirements
+- Input lifecycle: pointer/touch and Enter/Space behavior for native controls,
+  plus release on focus change, blur, visibility loss, reset, and phase changes
 - Project contract: age range, interactions, safety/privacy notes, storage,
   network access, and dependency declarations for `project.json`
 - Validation plan: project-level behavior tests plus exact local commands and
@@ -135,6 +141,10 @@ After the review is approved, follow the repo's Kidzone conventions:
 - Run `node ./scripts/check.mjs` before considering the work done when possible.
 - Add focused project tests for the core loop, win/progress rules, reset, and
   failure-prone state transitions. A P0/P1 fix always needs a regression test.
+- Exercise `start -> reset -> start`, `level -> next -> restart`, and pending
+  actions interrupted by reset in one page session where applicable.
+- Make assertions prove expected state changes; do not accept a no-throw check
+  or screenshot as proof of gameplay correctness.
 - Document asset authorship/source and license, then remove unused assets or
   explain why they remain.
 

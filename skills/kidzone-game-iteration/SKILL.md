@@ -18,6 +18,7 @@ Read the local project context first:
 - `projects/<project-slug>/README.md`, when present
 - `projects/<project-slug>/project.json`
 - the files directly involved in the requested behavior
+- existing project tests and the game invariants they cover
 - the current Git branch and working tree status
 
 If the work is meant to stack on another PR, branch from the current PR branch
@@ -67,6 +68,15 @@ Keep timing and teardown explicit:
 - For canvas or SVG games, mirror essential instructions, state, and status in
   accessible DOM content and restore focus after view/dialog changes.
 
+Before changing code, name the affected invariants: win/progress gates,
+collectible requirements, damage/loss rules, legal phases, and reset behavior.
+For authored levels, validate a complete route through every gate and exit. For
+generated levels, test deterministic seeds and reject unsolvable output.
+
+Treat input press and release as separate contracts. Native controls must work
+with pointer/touch and Enter/Space. Release held input even if focus moves before
+keyup, and on blur, visibility loss, reset, and phase transitions.
+
 ## Validation
 
 Run the repo check before calling the work done:
@@ -95,8 +105,21 @@ mobile, keyboard and touch when declared, blur/tab-away and return, reset,
 reduced motion, and focus transitions. Screenshots verify layout and appearance;
 they do not verify behavior.
 
+For lifecycle, input, progression, or phase changes, exercise at least two
+transitions in one page session: `start -> reset -> start`,
+`level -> next -> restart`, and pending action interrupted by reset when
+applicable. Confirm enabled controls, instructions, and status copy all match the
+current phase.
+
+Make assertions demonstrate the expected state change and fail against the old
+bug; avoid vacuous checks that only prove code did not throw. Before marking a
+PR ready, fetch current `origin/main`, inspect the merge diff, rerun focused and
+repository checks on the final commit, and get an independent review for changes
+to gameplay, lifecycle, input, level data, or safety.
+
 When assets change, record source/authorship and license, and review for unused
 files rather than silently carrying them forward.
+
 Stop the preview server before handing off if the user asks to shut down or the
 server is no longer needed.
 
