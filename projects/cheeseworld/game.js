@@ -990,13 +990,14 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => {
     const control = controlFromKey(e.key);
 
-    if (!control || !shouldHandleGameplayKey(e)) {
+    if (!control) {
         return;
     }
 
+    // Always honor releases, even if focus moved onto a button while the key
+    // was held. Scoping releases to the current target can leave movement stuck.
     setControl(control, false);
-
-    e.preventDefault();
+    if (shouldHandleGameplayKey(e)) e.preventDefault();
 });
 
 touchControls.forEach(button => {

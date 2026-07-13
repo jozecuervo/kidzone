@@ -79,6 +79,18 @@ test("gameplay keys are scoped and held input clears when focus leaves", async (
   await page.keyboard.up("ArrowRight");
 });
 
+test("releasing a held key still works after focus moves onto a control", async ({ page }) => {
+  await page.keyboard.down("ArrowRight");
+  expect(await page.evaluate(() => window.__cheeseworldTest.state().keys.right)).toBe(true);
+  await page.evaluate(() => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    button.focus();
+  });
+  await page.keyboard.up("ArrowRight");
+  expect(await page.evaluate(() => window.__cheeseworldTest.state().keys.right)).toBe(false);
+});
+
 test("mobile controls remain visible and playable without overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = [];
