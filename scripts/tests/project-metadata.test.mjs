@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { interactionTypes, projectRecord } from "../project-metadata.mjs";
+import {
+  interactionTypes,
+  projectRecord,
+  scaffoldProjectMetadata
+} from "../project-metadata.mjs";
+import { assertProjectFile } from "../update-project-index.mjs";
 
 function metadata(overrides = {}) {
   return {
@@ -38,6 +46,28 @@ test("accepts the documented static project shape", () => {
   assert.deepEqual(interactionTypes, [
     "camera", "file-upload", "keyboard", "passive", "pointer", "touch"
   ]);
+});
+
+test("keeps newly scaffolded project metadata compatible with validation", () => {
+  const scaffold = scaffoldProjectMetadata("Paper Plane Lab", "2026-05-23");
+  assert.doesNotThrow(() => projectRecord("paper-plane-lab", scaffold));
+  assert.deepEqual(scaffold.interaction, ["passive"]);
+});
+
+test("reports malformed top-level metadata and generated field types clearly", () => {
+  assert.throws(
+    () => projectRecord("Paper Plane Lab", metadata()),
+    /Project folders must use lowercase letters, numbers, and single hyphens/
+  );
+  assert.throws(
+    () => projectRecord("paper-plane-lab", null),
+    /needs a top-level metadata object/
+  );
+  assert.throws(
+    () => projectRecord("paper-plane-lab", []),
+    /needs a top-level metadata object/
+  );
+  rejects({ dateSource: 42 }, /needs a non-empty dateSource/);
 });
 
 test("rejects unknown and duplicate interactions", () => {
@@ -89,6 +119,29 @@ test("enforces static hosting and network dependency cross-fields", () => {
     },
     /valid HTTP\(S\) URLs/
   );
+  rejects(
+    {
+      runtime: {
+        ...metadata().runtime,
+        networkAccess: "declared-external-dependency",
+        externalDependencies: [
+          { name: "First", url: "https://EXAMPLE.com:443/lib.js", reason: "Rendering" },
+          { name: "Second", url: "https://example.com/lib.js", reason: "Rendering" }
+        ]
+      }
+    },
+    /URLs must be unique/
+  );
+  assert.doesNotThrow(() => projectRecord("case-sensitive-paths", metadata({
+    runtime: {
+      ...metadata().runtime,
+      networkAccess: "declared-external-dependency",
+      externalDependencies: [
+        { name: "Upper", url: "https://example.com/Lib.js", reason: "Rendering" },
+        { name: "Lower", url: "https://example.com/lib.js", reason: "Rendering" }
+      ]
+    }
+  })));
 });
 
 test("keeps entries and portfolio previews inside the project", () => {
@@ -102,4 +155,29 @@ test("keeps entries and portfolio previews inside the project", () => {
     portfolio: { featured: true, preview: "assets/preview.webp", technicalHighlights: ["Canvas"] }
   }));
   assert.equal(record.portfolio.preview, "./projects/paper-plane-lab/assets/preview.webp");
+});
+
+test("requires local project paths to resolve to regular files inside the project", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "kidzone-metadata-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const projectRoot = join(root, "paper-plane-lab");
+  const outsideFile = join(root, "outside.html");
+  await mkdir(join(projectRoot, "assets"), { recursive: true });
+  await writeFile(join(projectRoot, "index.html"), "<!doctype html>");
+  await writeFile(outsideFile, "private");
+  await symlink(outsideFile, join(projectRoot, "escaped.html"));
+
+  await assert.doesNotReject(() => assertProjectFile(projectRoot, "index.html", "entry"));
+  await assert.rejects(
+    () => assertProjectFile(projectRoot, "missing.html", "entry"),
+    /entry does not exist/
+  );
+  await assert.rejects(
+    () => assertProjectFile(projectRoot, "assets", "portfolio.preview"),
+    /portfolio\.preview must refer to a file/
+  );
+  await assert.rejects(
+    () => assertProjectFile(projectRoot, "escaped.html", "entry"),
+    /entry must stay inside the project folder/
+  );
 });

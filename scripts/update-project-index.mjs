@@ -1,5 +1,5 @@
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectRecord } from "./project-metadata.mjs";
 
@@ -8,12 +8,25 @@ const kidzoneRoot = dirname(scriptDir);
 const projectsRoot = join(kidzoneRoot, "projects");
 const indexPath = join(projectsRoot, "index.json");
 
-async function assertProjectFile(slug, path, label) {
+export async function assertProjectFile(projectRoot, path, label, slug = basename(projectRoot)) {
+  const resolvedRoot = await realpath(projectRoot);
+  let resolvedPath;
+
   let details;
   try {
-    details = await stat(join(projectsRoot, slug, path));
+    resolvedPath = await realpath(join(resolvedRoot, path));
+    details = await stat(resolvedPath);
   } catch {
     throw new Error(`${slug}/project.json ${label} does not exist: ${path}`);
+  }
+
+  const projectRelativePath = relative(resolvedRoot, resolvedPath);
+  if (
+    projectRelativePath === ".." ||
+    projectRelativePath.startsWith(`..${sep}`) ||
+    isAbsolute(projectRelativePath)
+  ) {
+    throw new Error(`${slug}/project.json ${label} must stay inside the project folder: ${path}`);
   }
 
   if (!details.isFile()) {
@@ -23,12 +36,20 @@ async function assertProjectFile(slug, path, label) {
 
 async function readProject(directory) {
   const metadataPath = join(projectsRoot, directory.name, "project.json");
-  const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+  let metadata;
+  try {
+    metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+  } catch (error) {
+    throw new Error(`${directory.name}/project.json must contain valid JSON: ${error.message}`, {
+      cause: error
+    });
+  }
   const record = projectRecord(directory.name, metadata);
+  const projectRoot = join(projectsRoot, directory.name);
 
-  await assertProjectFile(directory.name, record.entry, "entry");
+  await assertProjectFile(projectRoot, record.entry, "entry", directory.name);
   if (metadata.portfolio !== undefined) {
-    await assertProjectFile(directory.name, metadata.portfolio.preview, "portfolio.preview");
+    await assertProjectFile(projectRoot, metadata.portfolio.preview, "portfolio.preview", directory.name);
   }
 
   return record;

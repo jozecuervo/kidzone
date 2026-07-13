@@ -58,6 +58,7 @@ the entry must stay inside the project folder.
 
 ## Validation Rules
 
+- Project folder slugs use lowercase letters, numbers, and single hyphens.
 - `date`, when present, must be a real calendar date written as `YYYY-MM-DD`.
 - `tags`, when present, must contain nonblank strings with no duplicates after
   trimming whitespace and ignoring letter case.
@@ -67,8 +68,10 @@ the entry must stay inside the project folder.
   support from source-code text.
 - Required published copy (`title`, `summary`, `ageRange`, and the three `safety`
   strings) must be nonblank and cannot contain `TBD`, `TODO`, or `placeholder`.
-- `entry` and an optional `portfolio.preview` must be relative paths that stay
-  inside the project folder, and the referenced files must exist.
+- New scaffolds declare only the passive page they initially provide. Update
+  interactions and safety notes as playable features are added.
+- `entry` and an optional `portfolio.preview` must be relative paths that resolve
+  to regular files inside the project folder; links cannot escape that folder.
 - A `static` project must set `requiresServer` to `false` so it remains
   publishable on GitHub Pages.
 - `networkAccess: "none"` requires an empty `externalDependencies` array.

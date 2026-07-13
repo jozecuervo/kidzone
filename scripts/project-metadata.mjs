@@ -12,6 +12,35 @@ export const interactionTypes = Object.freeze([
 
 const interactionTypeSet = new Set(interactionTypes);
 const placeholderPattern = /\b(?:placeholder|tbd|todo)\b/i;
+const projectSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function scaffoldProjectMetadata(title, date = new Date().toISOString().slice(0, 10)) {
+  return {
+    title,
+    summary: "A new Kidzone mini-project ready for its first idea.",
+    description: "A new Kidzone mini-project ready for its first idea.",
+    date,
+    dateSource: "generated when the project was scaffolded",
+    entry: "index.html",
+    cta: "Open project",
+    tags: ["new"],
+    order: 999,
+    ageRange: "6-12 with adult review before publishing",
+    interaction: ["passive"],
+    safety: {
+      privacy: "Local-only play with no accounts, chat, sharing, or saved data.",
+      adultHelp: "Adult review is required before publishing and recommended for first use.",
+      notes: "This scaffold has no accounts, sharing, storage, or network access; review these notes as features are added."
+    },
+    runtime: {
+      type: "static",
+      requiresServer: false,
+      networkAccess: "none",
+      storesData: false,
+      externalDependencies: []
+    }
+  };
+}
 
 function assertString(value, label, slug, { noPlaceholders = false } = {}) {
   if (typeof value !== "string" || !value.trim()) {
@@ -158,7 +187,7 @@ function assertRuntime(metadata, slug) {
 
     let url;
     try {
-      url = new URL(dependency.url);
+      url = new URL(dependency.url.trim());
     } catch {
       throw new Error(`${slug}/project.json external dependency URLs must be valid HTTP(S) URLs.`);
     }
@@ -166,7 +195,9 @@ function assertRuntime(metadata, slug) {
       throw new Error(`${slug}/project.json external dependency URLs must be valid HTTP(S) URLs.`);
     }
 
-    const key = dependency.url.trim().toLocaleLowerCase("en-US");
+    // URL normalizes protocol/host casing and default ports while preserving
+    // case-sensitive path components.
+    const key = url.href;
     if (dependencies.has(key)) {
       throw new Error(`${slug}/project.json external dependency URLs must be unique.`);
     }
@@ -191,11 +222,16 @@ function assertPortfolio(metadata, slug) {
 }
 
 export function projectRecord(slug, metadata) {
+  if (typeof slug !== "string" || !projectSlugPattern.test(slug)) {
+    throw new Error("Project folders must use lowercase letters, numbers, and single hyphens.");
+  }
+  assertObject(metadata, "top-level metadata", slug);
   assertString(metadata.title, "title", slug, { noPlaceholders: true });
   assertString(metadata.summary, "summary", slug, { noPlaceholders: true });
 
   if (metadata.description !== undefined) assertString(metadata.description, "description", slug);
   if (metadata.date !== undefined) assertDate(metadata.date, slug);
+  if (metadata.dateSource !== undefined) assertString(metadata.dateSource, "dateSource", slug);
 
   const entry = metadata.entry ?? "index.html";
   assertSafeProjectPath(entry, "entry", slug);
