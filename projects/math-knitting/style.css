@@ -275,6 +275,7 @@ h1 {
 
 #answer-input {
     flex: 1;
+    min-width: 0;
     padding: 15px;
     font-size: 1.2em;
     border: 2px solid #ddd;
