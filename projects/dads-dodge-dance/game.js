@@ -25,12 +25,13 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
 const TOSS_DURATION = reduceMotion ? 120 : 420;
 const MAX_BALLOONS = 4;
 const BUCKET_SIZE = 10;
-const MAX_FORWARD_STEP = 5;
-const CROSS_PULL = 0.02;
+const MAX_FRAME_MS = 50;
+const CROSS_RATE = 1.45;
+const WANDER_RATE = 1.65;
+const EVADE_RATE = 2.2;
 const METER_STEPS = 6;
 const RELOAD_MS = 1200;
 const NORMAL_SPLASH_POINTS = 1;
-const HEADSHOT_SPLASH_POINTS = 2;
 
 const balloonColors = [
   { fill: "#1f9ee8", deep: "#0a6fb0", border: "rgba(10, 111, 176, 0.4)" },
@@ -195,6 +196,7 @@ const state = {
   phase: "playing",
   evadeUntil: 0,
   lastMove: 0,
+  lastFrame: 0,
   moveEvery: 1500,
   crossingCooldown: false,
   aiBias: 0.5,
@@ -202,8 +204,28 @@ const state = {
   peekUntil: 0
 };
 
-let ouchTimer = 0;
-let gopherTimer = 0;
+let runId = 0;
+const runTimeouts = new Set();
+const runAnimations = new Set();
+
+function scheduleForRun(callback, delay) {
+  const scheduledRun = runId;
+  const timeout = window.setTimeout(() => {
+    runTimeouts.delete(timeout);
+    if (scheduledRun === runId) callback();
+  }, delay);
+  runTimeouts.add(timeout);
+  return timeout;
+}
+
+function clearRunWork() {
+  runId += 1;
+  runTimeouts.forEach((timeout) => window.clearTimeout(timeout));
+  runTimeouts.clear();
+  runAnimations.forEach((animation) => animation.cancel());
+  runAnimations.clear();
+  stage.querySelectorAll(".balloon, .splash, .float-note").forEach((node) => node.remove());
+}
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -233,20 +255,9 @@ function isPeekabooLevel() {
 
 function percentFromEvent(event) {
   const rect = stage.getBoundingClientRect();
-  const target = event.target instanceof Element ? event.target : null;
-  const body = target?.closest(".dad-body");
-  const bodyRect = body?.getBoundingClientRect();
-  const headHint = Boolean(target?.closest(".dad-head"));
-  const lowHint = Boolean(
-    target?.closest(".dad-leg") ||
-    (bodyRect && event.clientY > bodyRect.top + bodyRect.height * 0.52)
-  );
-
   return {
     x: clamp(((event.clientX - rect.left) / rect.width) * 100, 6, 94),
-    y: clamp(((event.clientY - rect.top) / rect.height) * 100, 13, 84),
-    headHint,
-    lowHint
+    y: clamp(((event.clientY - rect.top) / rect.height) * 100, 13, 84)
   };
 }
 
@@ -344,6 +355,7 @@ function updateControls() {
   reloadButton.hidden = !needsReload && !isReloading;
   reloadButton.disabled = isReloading;
   tossButton.disabled = isReloading || state.ammo <= 0;
+  stage.dataset.phase = state.phase;
 }
 
 function pickBalloonColor() {
@@ -392,7 +404,7 @@ function reloadBucket() {
   dadLine.textContent = "Quick refill break...";
   announce("Reloading the water balloon bucket.");
 
-  window.setTimeout(() => {
+  scheduleForRun(() => {
     state.ammo = BUCKET_SIZE;
     state.phase = "playing";
     stage.classList.remove("is-reloading");
@@ -418,21 +430,20 @@ function showFloat(text, x, y, tone = "") {
   note.style.left = `${x}%`;
   note.style.top = `${y}%`;
   stage.append(note);
-  window.setTimeout(() => note.remove(), 1000);
+  scheduleForRun(() => note.remove(), 1000);
 }
 
 function triggerGopher() {
   const gopherX = clamp(state.dad.x + (state.dad.x < 50 ? 14 : -14), 13, 87);
   const gopherY = clamp(state.dad.y + 21, 67, 81);
 
-  window.clearTimeout(gopherTimer);
   gopher.style.setProperty("--gopher-x", `${gopherX}%`);
   gopher.style.setProperty("--gopher-y", `${gopherY}%`);
   gopher.classList.remove("is-popping");
   void gopher.offsetWidth;
   gopher.classList.add("is-popping");
   showFloat("ha ha!", gopherX, Math.max(18, gopherY - 12), "gopher");
-  gopherTimer = window.setTimeout(() => gopher.classList.remove("is-popping"), 1300);
+  scheduleForRun(() => gopher.classList.remove("is-popping"), 1300);
 }
 
 function makeSplash(x, y) {
@@ -446,7 +457,7 @@ function makeSplash(x, y) {
   }
 
   stage.append(splash);
-  window.setTimeout(() => splash.remove(), 760);
+  scheduleForRun(() => splash.remove(), 760);
 }
 
 function randomSpot() {
@@ -526,13 +537,7 @@ function meterJump() {
   dad.classList.remove("is-splashed");
   void dad.offsetWidth;
   dad.classList.add("is-meter-jump");
-  window.setTimeout(() => dad.classList.remove("is-meter-jump"), 520);
-}
-
-function triggerOuchPose() {
-  window.clearTimeout(ouchTimer);
-  dad.classList.add("is-ouch");
-  ouchTimer = window.setTimeout(() => dad.classList.remove("is-ouch"), 900);
+  scheduleForRun(() => dad.classList.remove("is-meter-jump"), 520);
 }
 
 function addMeter(amount = 1) {
@@ -545,7 +550,7 @@ function addMeter(amount = 1) {
   }
 
   if (state.meter >= METER_STEPS) {
-    window.setTimeout(() => beginVictory(), 420);
+    scheduleForRun(() => beginVictory(), 420);
   }
 }
 
@@ -560,7 +565,7 @@ function completeCrossing() {
   }
 
   state.crossingCooldown = true;
-  window.setTimeout(() => {
+  scheduleForRun(() => {
     state.crossingCooldown = false;
   }, 900);
 
@@ -595,76 +600,11 @@ function rectToStage(rect, stageRect) {
   };
 }
 
-function isPointInRect(point, rect, padding = 0) {
-  return (
-    point.x >= rect.left - padding &&
-    point.x <= rect.left + rect.width + padding &&
-    point.y >= rect.top - padding &&
-    point.y <= rect.top + rect.height + padding
-  );
-}
-
-function isPointInEllipse(point, center, radiusX, radiusY) {
-  const dx = (point.x - center.x) / radiusX;
-  const dy = (point.y - center.y) / radiusY;
-  return dx * dx + dy * dy <= 1;
-}
-
-function getDadHit(point, options = {}) {
-  const specialOnly = options.specialOnly || false;
+function getDadHit(point) {
   const stageRect = stage.getBoundingClientRect();
   const dadRect = dad.getBoundingClientRect();
   const dadStageRect = rectToStage(dadRect, stageRect);
   const target = pointToStagePixels(point, stageRect);
-  const head = dad.querySelector(".dad-head");
-
-  if (head) {
-    const headRect = rectToStage(head.getBoundingClientRect(), stageRect);
-    const headPadding = Math.max(8, Math.min(stageRect.width, stageRect.height) * 0.018);
-
-    if (point.headHint || isPointInRect(target, headRect, headPadding)) {
-      return {
-        zone: "head",
-        points: HEADSHOT_SPLASH_POINTS,
-        line: "HEAD SHOT! Extra splash points!",
-        floatText: "+2 HEAD SHOT!",
-        floatTone: "headshot",
-        floatX: point.x,
-        floatY: Math.max(13, point.y - 8),
-        announcement: "HEAD SHOT! Extra splash points."
-      };
-    }
-  }
-
-  // The lower-center hit zone has no separate DOM part, so approximate it from Dad's figure box.
-  const lowCenter = {
-    x: dadStageRect.left + dadStageRect.width * 0.5,
-    y: dadStageRect.top + dadStageRect.height * 0.72
-  };
-  const lowRadiusX = Math.max(42, dadStageRect.width * 0.45);
-  const lowRadiusY = Math.max(44, dadStageRect.height * 0.26);
-  const percentLowHit =
-    Math.abs(point.x - state.dad.x) <= 12 &&
-    point.y >= state.dad.y + 2 &&
-    point.y <= state.dad.y + 28;
-
-  if (point.lowHint || percentLowHit || isPointInEllipse(target, lowCenter, lowRadiusX, lowRadiusY)) {
-    return {
-      zone: "low",
-      points: NORMAL_SPLASH_POINTS,
-      line: "Ouch!",
-      floatText: "OUCH!",
-      floatTone: "ouch",
-      floatX: point.x,
-      floatY: Math.min(82, point.y + 7),
-      announcement: "Ouch! Low splash counted."
-    };
-  }
-
-  if (specialOnly) {
-    return null;
-  }
-
   const dadCenter = {
     x: dadStageRect.left + dadStageRect.width / 2,
     y: dadStageRect.top + dadStageRect.height / 2
@@ -674,7 +614,7 @@ function getDadHit(point, options = {}) {
 
   if (distance <= radius) {
     return {
-      zone: "body",
+      zone: "splash-zone",
       points: NORMAL_SPLASH_POINTS,
       line: currentLevel().splashLine || splashLines[state.tosses % splashLines.length],
       floatText: "+1 splash",
@@ -691,14 +631,11 @@ function getDadHit(point, options = {}) {
 function handleSplash(point, hit) {
   state.splashHits += 1;
   addMeter(hit.points);
-  if (hit.zone === "low") {
-    triggerOuchPose();
-  }
   if (state.splashHits % 3 === 0) {
     triggerGopher();
   }
   dad.classList.add("is-splashed");
-  window.setTimeout(() => dad.classList.remove("is-splashed"), 520);
+  scheduleForRun(() => dad.classList.remove("is-splashed"), 520);
 
   triggerEvade(480);
   dadLine.textContent = hit.line;
@@ -721,30 +658,33 @@ function beginVictory() {
   }
 
   state.phase = "celebrate";
+  updateControls();
   const level = currentLevel();
-  dad.classList.remove("is-ouch", "is-hiding", "is-peeking");
+  dad.classList.remove("is-hiding", "is-peeking");
   dadLine.textContent = level.winLine;
   dad.classList.add("is-victory-dance");
   announce(level.winLine);
 
-  window.setTimeout(() => {
+  scheduleForRun(() => {
     dad.classList.remove("is-victory-dance");
     dad.classList.add("is-fleeing");
     dadLine.textContent = level.fleeLine;
     state.target = { x: 108, y: YARD_Y - 6 };
     state.moveEvery = 400;
 
-    window.setTimeout(() => advanceLevel(), reduceMotion ? 700 : 1400);
+    scheduleForRun(() => advanceLevel(), reduceMotion ? 350 : 1400);
   }, reduceMotion ? 500 : 1100);
 }
 
 function advanceLevel() {
+  clearRunWork();
   dad.classList.remove("is-fleeing");
   state.levelIndex = (state.levelIndex + 1) % levels.length;
   state.meter = 0;
   state.dadPoints = 0;
   state.ammo = BUCKET_SIZE;
   state.splashHits = 0;
+  state.inFlight = 0;
   state.goalSide = 1;
   state.yardLeg = 0;
   state.phase = "playing";
@@ -793,7 +733,8 @@ function tossBalloon(point = state.aim) {
   const midX = (startX + point.x) * 0.5;
   const arcLift = 24 + Math.abs(point.x - startX) * 0.18;
   const midY = clamp(Math.min(startY, point.y) - arcLift, 12, 78);
-  const aimedSpecialHit = getDadHit(point, { specialOnly: true });
+  // Snapshot hit geometry at launch so Dad moving during the arc cannot change the result.
+  const aimedHit = getDadHit(point);
 
   const animation = balloon.animate(
     [
@@ -818,13 +759,17 @@ function tossBalloon(point = state.aim) {
       easing: "cubic-bezier(0.22, 0.05, 0.22, 1)"
     }
   );
+  const tossRun = runId;
+  runAnimations.add(animation);
 
   animation.finished
     .catch(() => {})
     .then(() => {
+      runAnimations.delete(animation);
+      if (tossRun !== runId) return;
       balloon.remove();
 
-      const hit = aimedSpecialHit || getDadHit(point);
+      const hit = aimedHit;
 
       if (hit) {
         handleSplash(point, hit);
@@ -847,6 +792,7 @@ function tossBalloon(point = state.aim) {
 }
 
 function resetGame() {
+  clearRunWork();
   state.aim = { x: 50, y: 55 };
   state.dad = { x: YARD_LEFT, y: YARD_Y };
   state.target = { x: YARD_LEFT, y: YARD_Y };
@@ -864,13 +810,14 @@ function resetGame() {
   state.aiBias = 0.5;
   state.crossingCooldown = false;
   state.lastMove = 0;
+  state.lastFrame = 0;
   state.hideoutIndex = -1;
   state.peekUntil = 0;
 
-  window.clearTimeout(ouchTimer);
-  window.clearTimeout(gopherTimer);
   gopher.classList.remove("is-popping");
-  dad.classList.remove("is-victory-dance", "is-fleeing", "is-splashed", "is-meter-jump", "is-ouch", "is-hiding", "is-peeking");
+  stage.classList.remove("is-reloading");
+  bucket.classList.remove("is-refilling");
+  dad.classList.remove("is-victory-dance", "is-fleeing", "is-splashed", "is-meter-jump", "is-hiding", "is-peeking");
   renderMeter();
   renderDadPoints();
   renderAmmo();
@@ -955,6 +902,8 @@ function loop(time) {
   if (!state.lastMove) {
     state.lastMove = time;
   }
+  const elapsedSeconds = Math.min(time - (state.lastFrame || time), MAX_FRAME_MS) / 1000;
+  state.lastFrame = time;
 
   if (state.phase === "reloading") {
     window.requestAnimationFrame(loop);
@@ -969,25 +918,21 @@ function loop(time) {
 
     const evading = performance.now() < state.evadeUntil;
     const goal = goalX();
-    const wanderEase = reduceMotion ? 0.03 : 0.026;
+    const wanderEase = 1 - Math.exp(-WANDER_RATE * elapsedSeconds);
 
     if (evading) {
-      state.dad.x += (state.target.x - state.dad.x) * 0.032;
-      state.dad.y += (state.target.y - state.dad.y) * wanderEase;
+      const evadeEase = 1 - Math.exp(-EVADE_RATE * elapsedSeconds);
+      state.dad.x += (state.target.x - state.dad.x) * evadeEase;
+      state.dad.y += (state.target.y - state.dad.y) * evadeEase;
     } else {
-      const crossEase = state.ammo <= 0 ? CROSS_PULL : CROSS_PULL + 0.004;
-      const stepTowardGoal = clamp(
-        (goal - state.dad.x) * crossEase,
-        -MAX_FORWARD_STEP,
-        MAX_FORWARD_STEP
-      );
-
-      state.dad.x += stepTowardGoal;
-      state.dad.x += (state.target.x - state.dad.x) * 0.01;
+      const crossingRate = state.ammo <= 0 ? CROSS_RATE : CROSS_RATE * 1.2;
+      const crossEase = 1 - Math.exp(-crossingRate * elapsedSeconds);
+      state.dad.x += (goal - state.dad.x) * crossEase;
+      state.dad.x += (state.target.x - state.dad.x) * (1 - Math.exp(-0.62 * elapsedSeconds));
       state.dad.y += (state.target.y - state.dad.y) * wanderEase;
     }
   } else {
-    const ease = state.phase === "celebrate" ? 0.05 : 0.04;
+    const ease = 1 - Math.exp(-(state.phase === "celebrate" ? 3.1 : 2.5) * elapsedSeconds);
     state.dad.x += (state.target.x - state.dad.x) * ease;
     state.dad.y += (state.target.y - state.dad.y) * ease;
   }
