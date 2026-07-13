@@ -6,11 +6,14 @@
   "scripts": {
     "check": "node ./scripts/check.mjs",
     "test": "playwright test",
+    "test:unit": "node --test",
     "test:metadata": "node --test ./scripts/tests/project-metadata.test.mjs",
+    "smoke": "playwright test tests/project-smoke.spec.mjs",
     "snapshots": "playwright test tests/project-snapshots.spec.mjs",
+    "playwright:install": "playwright install chromium",
     "snapshots:install": "playwright install chromium"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "1.60.0"
   }
 }
