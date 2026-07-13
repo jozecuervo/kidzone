@@ -3,6 +3,18 @@ import { JANICE_SCHEMA, JANICE_MVP_RULES } from "./janice-schema.js";
 const idPattern = /^[a-z][a-zA-Z0-9]*$/;
 
 export function validatePuppet(puppet, options = {}) {
+  try {
+    return validatePuppetStructure(puppet, options);
+  } catch {
+    return {
+      valid: false,
+      errors: ["Puppet structure could not be validated because nested data is malformed."],
+      warnings: []
+    };
+  }
+}
+
+function validatePuppetStructure(puppet, options = {}) {
   const errors = [];
   const warnings = [];
   const requireMvp = options.requireMvp === true;
@@ -98,6 +110,12 @@ export function validatePuppet(puppet, options = {}) {
   const clipIds = collectIds(clips, "clip", fail);
   const moveIds = collectIds(moves, "move", fail);
 
+  for (const pointId of bodyPointIds) {
+    if (outfitPointIds.has(pointId)) {
+      fail(`Attachment point id ${pointId} must be unique across bodyPoints and outfitPoints.`);
+    }
+  }
+
   if (!jointIds.has(skeleton.rootJoint)) {
     fail("skeleton.rootJoint must reference an existing joint.");
   }
@@ -116,6 +134,11 @@ export function validatePuppet(puppet, options = {}) {
 
   if (parentlessJointCount !== 1) {
     fail("skeleton must have exactly one parentless root joint.");
+  }
+
+  const declaredRoot = joints.find((joint) => joint?.id === skeleton.rootJoint);
+  if (declaredRoot && declaredRoot.parent !== null) {
+    fail("skeleton.rootJoint must reference the parentless root joint.");
   }
 
   if (jointIds.size > 0 && jointIds.has(skeleton.rootJoint)) {
@@ -404,14 +427,16 @@ export function validatePuppetSet(puppets) {
   }
 
   for (const puppet of puppets) {
-    if (ids.has(puppet.puppetId)) {
-      errors.push(`Duplicate puppetId: ${puppet.puppetId}.`);
+    const puppetId = puppet && typeof puppet === "object" ? puppet.puppetId : undefined;
+    if (puppetId && ids.has(puppetId)) {
+      errors.push(`Duplicate puppetId: ${puppetId}.`);
     }
-    ids.add(puppet.puppetId);
+    if (puppetId) ids.add(puppetId);
 
     const result = validatePuppet(puppet, { requireMvp: true });
-    for (const error of result.errors) errors.push(`${puppet.puppetId}: ${error}`);
-    for (const warning of result.warnings) warnings.push(`${puppet.puppetId}: ${warning}`);
+    const label = puppetId ?? "invalid puppet";
+    for (const error of result.errors) errors.push(`${label}: ${error}`);
+    for (const warning of result.warnings) warnings.push(`${label}: ${warning}`);
   }
 
   if (!ids.has(JANICE_MVP_RULES.mainPuppetId)) {
@@ -495,6 +520,7 @@ function validateJointTree(rootJoint, joints, jointIds, fail) {
 
   const visiting = new Set();
   const visited = new Set();
+  const reachable = new Set();
 
   function visit(jointId) {
     if (visiting.has(jointId)) {
@@ -512,13 +538,14 @@ function validateJointTree(rootJoint, joints, jointIds, fail) {
   }
 
   visit(rootJoint);
+  for (const jointId of visited) reachable.add(jointId);
 
   for (const jointId of jointIds) {
     visit(jointId);
   }
 
   for (const jointId of jointIds) {
-    if (!visited.has(jointId)) {
+    if (!reachable.has(jointId)) {
       fail(`joint ${jointId} is not reachable from skeleton.rootJoint.`);
     }
   }
