@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "check": "node ./scripts/check.mjs",
+    "test:metadata": "node --test ./scripts/tests/project-metadata.test.mjs",
     "snapshots": "playwright test",
     "snapshots:install": "playwright install chromium"
   },

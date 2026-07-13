@@ -56,6 +56,29 @@ the entry must stay inside the project folder.
 - Keep project links and assets relative so GitHub Pages works under a repository
   path such as `/kidzone/`.
 
+## Validation Rules
+
+- `date`, when present, must be a real calendar date written as `YYYY-MM-DD`.
+- `tags`, when present, must contain nonblank strings with no duplicates after
+  trimming whitespace and ignoring letter case.
+- `interaction` must contain one or more unique values from this exact list:
+  `camera`, `file-upload`, `keyboard`, `passive`, `pointer`, and `touch`.
+  These values declare supported input modes; automated checks do not infer
+  support from source-code text.
+- Required published copy (`title`, `summary`, `ageRange`, and the three `safety`
+  strings) must be nonblank and cannot contain `TBD`, `TODO`, or `placeholder`.
+- `entry` and an optional `portfolio.preview` must be relative paths that stay
+  inside the project folder, and the referenced files must exist.
+- A `static` project must set `requiresServer` to `false` so it remains
+  publishable on GitHub Pages.
+- `networkAccess: "none"` requires an empty `externalDependencies` array.
+  `networkAccess: "declared-external-dependency"` requires at least one
+  dependency with a unique HTTP(S) URL, a name, and a reason.
+
+Optional `portfolio` metadata contains a boolean `featured`, a project-local
+`preview`, and a non-empty `technicalHighlights` string array. The generated
+index expands the preview into its repository-relative landing-page path.
+
 ## Runtime Defaults
 
 The default runtime is static HTML, CSS, and JavaScript served from the repository
