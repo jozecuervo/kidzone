@@ -6,6 +6,8 @@ class MathKnittingGame {
         this.currentAnswer = null;
         this.maxYarn = 20;
         this.stitchesPerRow = 10;
+        this.acceptingAnswer = true;
+        this.pendingTimeouts = new Set();
 
         this.elements = {
             yarnCount: document.getElementById('yarn-count'),
@@ -28,6 +30,12 @@ class MathKnittingGame {
     }
 
     init() {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            this.elements.yarnPath.querySelector('animate')?.remove();
+            this.elements.yarnPath.setAttribute('stroke-dasharray', 'none');
+            this.elements.yarnPath.style.strokeDasharray = 'none';
+        }
+
         this.generateProblem();
         this.updateDisplay();
         this.renderKnitting();
@@ -72,28 +80,39 @@ class MathKnittingGame {
 
         this.currentProblem = `${num1} ${operation} ${num2} = ?`;
         this.elements.problemText.textContent = this.currentProblem;
+        this.acceptingAnswer = true;
+        this.elements.answerInput.disabled = false;
+        this.elements.submitBtn.disabled = false;
     }
 
     checkAnswer() {
-        const userAnswer = parseInt(this.elements.answerInput.value);
+        if (!this.acceptingAnswer) return;
 
-        if (isNaN(userAnswer)) {
-            this.showFeedback('Please enter a number!', false);
+        const rawAnswer = this.elements.answerInput.value.trim();
+        const userAnswer = Number(rawAnswer);
+
+        if (rawAnswer === '' || !Number.isFinite(userAnswer) || !Number.isInteger(userAnswer)) {
+            this.showFeedback('Please enter a whole number!', false);
             return;
         }
+
+        this.acceptingAnswer = false;
+        this.elements.answerInput.disabled = true;
+        this.elements.submitBtn.disabled = true;
 
         if (userAnswer === this.currentAnswer) {
             this.yarnCount++;
             this.problemsSolved++;
             this.showFeedback('Correct! Yarn added!', true);
             this.renderKnitting();
+            this.updateDisplay();
 
             if (this.yarnCount >= this.maxYarn) {
                 this.showVictory();
                 return;
             }
 
-            setTimeout(() => {
+            this.schedule(() => {
                 this.generateProblem();
                 this.clearInput();
             }, 1000);
@@ -101,25 +120,41 @@ class MathKnittingGame {
             this.yarnCount--;
             this.showFeedback(`Wrong! The answer was ${this.currentAnswer}. Yarn removed!`, false);
             this.renderKnitting();
+            this.updateDisplay();
 
             if (this.yarnCount <= 0) {
                 this.showGameOver();
                 return;
             }
 
-            setTimeout(() => {
+            this.schedule(() => {
+                this.acceptingAnswer = true;
+                this.elements.answerInput.disabled = false;
+                this.elements.submitBtn.disabled = false;
                 this.clearInput();
             }, 1500);
         }
+    }
 
-        this.updateDisplay();
+    schedule(callback, delay) {
+        const timeout = setTimeout(() => {
+            this.pendingTimeouts.delete(timeout);
+            callback();
+        }, delay);
+        this.pendingTimeouts.add(timeout);
+        return timeout;
+    }
+
+    cancelPendingWork() {
+        this.pendingTimeouts.forEach((timeout) => clearTimeout(timeout));
+        this.pendingTimeouts.clear();
     }
 
     showFeedback(message, isCorrect) {
         this.elements.feedback.textContent = message;
         this.elements.feedback.className = 'feedback ' + (isCorrect ? 'correct' : 'incorrect');
 
-        setTimeout(() => {
+        this.schedule(() => {
             if (this.yarnCount > 0 && this.yarnCount < this.maxYarn) {
                 this.elements.feedback.textContent = '';
                 this.elements.feedback.className = 'feedback';
@@ -193,26 +228,34 @@ class MathKnittingGame {
     }
 
     showGameOver() {
+        this.cancelPendingWork();
+        this.acceptingAnswer = false;
         this.elements.finalScore.textContent = this.problemsSolved;
         this.elements.gameOver.style.display = 'block';
         this.elements.answerInput.disabled = true;
         this.elements.submitBtn.disabled = true;
+        this.elements.restartBtn.focus();
     }
 
     showVictory() {
+        this.cancelPendingWork();
+        this.acceptingAnswer = false;
         this.elements.victoryScore.textContent = this.problemsSolved;
         this.elements.victory.style.display = 'block';
         this.elements.answerInput.disabled = true;
         this.elements.submitBtn.disabled = true;
+        this.elements.newProjectBtn.focus();
         this.createConfetti();
     }
 
     createConfetti() {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
         const colors = ['#ff6b6b', '#51cf66', '#ffd43b', '#667eea', '#ee5a6f', '#4dabf7'];
         const confettiCount = 80;
 
         for (let i = 0; i < confettiCount; i++) {
-            setTimeout(() => {
+            this.schedule(() => {
                 const confetti = document.createElement('div');
                 confetti.className = 'confetti';
                 confetti.style.left = Math.random() * 100 + '%';
@@ -222,6 +265,7 @@ class MathKnittingGame {
                 confetti.style.setProperty('--confetti-color', color);
 
                 const beforeStyle = document.createElement('style');
+                beforeStyle.dataset.mathKnittingConfetti = '';
                 beforeStyle.textContent = `
                     .confetti:nth-of-type(${i})::before {
                         background: ${color};
@@ -233,7 +277,7 @@ class MathKnittingGame {
 
                 document.body.appendChild(confetti);
 
-                setTimeout(() => {
+                this.schedule(() => {
                     confetti.remove();
                     beforeStyle.remove();
                 }, 5000);
@@ -242,8 +286,10 @@ class MathKnittingGame {
     }
 
     restart() {
+        this.cancelPendingWork();
         this.yarnCount = 5;
         this.problemsSolved = 0;
+        this.acceptingAnswer = true;
         this.elements.gameOver.style.display = 'none';
         this.elements.victory.style.display = 'none';
         this.elements.answerInput.disabled = false;
@@ -252,6 +298,7 @@ class MathKnittingGame {
         this.elements.feedback.className = 'feedback';
 
         document.querySelectorAll('.confetti').forEach(c => c.remove());
+        document.querySelectorAll('style[data-math-knitting-confetti]').forEach(style => style.remove());
 
         this.generateProblem();
         this.updateDisplay();

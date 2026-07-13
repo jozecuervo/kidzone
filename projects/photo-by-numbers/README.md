@@ -57,6 +57,10 @@ The app will be available at **http://localhost:8000**
   - Automatic threshold calculation (Otsu's method)
 - Responsive design for mobile and desktop
 
+## Accessibility note
+
+Image selection, processing controls, modes, and preset colors are keyboard accessible. The canvas coloring surface still requires pointer or touch input; a keyboard coloring alternative is a planned improvement.
+
 ## Project Structure
 
 ```

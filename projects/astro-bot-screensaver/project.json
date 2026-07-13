@@ -1,7 +1,7 @@
 {
   "title": "Astro Bot Screensaver",
-  "summary": "A bouncing Astro Bot-inspired screensaver with animated dot-matrix eyes and playful motion.",
-  "description": "Watch multiple bot faces drift, blink, glow, and track the pointer with animated LED-style eyes.",
+  "summary": "An Astro Bot-inspired display with animated dot-matrix eyes and friendly robot faces.",
+  "description": "Watch seven robot faces blink, glow, and track the pointer with animated LED-style eyes. Pause at any time with the button or Space key.",
   "date": "2025-11-30",
   "dateSource": "earliest creation timestamp across project files",
   "entry": "astro.html",
@@ -14,6 +14,7 @@
   "ageRange": "6-10",
   "interaction": [
     "pointer",
+    "keyboard",
     "passive"
   ],
   "safety": {

@@ -526,6 +526,7 @@ function dismissReward() {
   state.blocked = false;
   ui.rewardOverlay.classList.add("hidden");
   updateSceneView();
+  ui.mazeView.focus();
 }
 
 function dismissScare() {
@@ -533,6 +534,7 @@ function dismissScare() {
   ui.scareOverlay.classList.add("hidden");
   updateScene(`That was just a dark-area surprise. ${availablePathText()}`);
   updateSceneView();
+  ui.mazeView.focus();
 }
 
 function showHint() {
@@ -957,7 +959,7 @@ function updateSceneView() {
   updateGuideClues(guide);
   ui.mazeView.setAttribute(
     "aria-label",
-    `Framed view of the nearby maze. Facing ${DIRECTIONS[state.facing].label}. Click an open path to walk. Searchlight footprints lead to the door: ${guide ? GUIDE_LABELS[guide.action] : "look around"}. ${state.hasKey ? "Key found." : "Dark areas may hide the key or a spooky friend. Walk onto glowing gold coins to collect them."} Arrow keys can sweep the light. Press Enter when footprints are found to follow them. ${availablePathText()}`
+    `Framed view of the nearby maze. Facing ${DIRECTIONS[state.facing].label}. Click an open path or use W, A, S, and D to walk. Searchlight footprints lead to the door: ${guide ? GUIDE_LABELS[guide.action] : "look around"}. ${state.hasKey ? "Key found." : "Dark areas may hide the key or a spooky friend. Walk onto glowing gold coins to collect them."} Arrow keys sweep the light. Press Enter when footprints are found to follow them. ${availablePathText()}`
   );
 }
 
@@ -1036,10 +1038,27 @@ function loadLevel(index) {
 
 function nextLevel() {
   loadLevel(state.levelIndex + 1);
+  ui.mazeView.focus();
 }
 
 function restartGame() {
   loadLevel(0);
+  ui.mazeView.focus();
+}
+
+function moveInDirection(directionIndex) {
+  const direction = DIRECTIONS[directionIndex];
+  const target = {
+    r: state.position.r + direction.dr,
+    c: state.position.c + direction.dc,
+  };
+
+  if (!isOpen(state.grid, target.r, target.c)) {
+    updateScene(`A wall blocks the path ${direction.label}. ${availablePathText()}`);
+    return;
+  }
+
+  applyMove(target);
 }
 
 ui.mazeView.addEventListener("pointerdown", (event) => {
@@ -1081,6 +1100,21 @@ ui.mazeView.addEventListener("keydown", (event) => {
     return;
   }
 
+  const walkKeys = {
+    w: 0,
+    d: 1,
+    s: 2,
+    a: 3,
+  };
+  const walkDirection = walkKeys[event.key.toLowerCase()];
+
+  if (walkDirection !== undefined) {
+    event.preventDefault();
+    event.stopPropagation();
+    moveInDirection(walkDirection);
+    return;
+  }
+
   const lightKeys = {
     ArrowUp: [0, -LIGHT_STEP],
     ArrowDown: [0, LIGHT_STEP],
@@ -1107,21 +1141,34 @@ ui.rewardDismiss.addEventListener("click", dismissReward);
 ui.nextLevelBtn.addEventListener("click", nextLevel);
 ui.playAgainBtn.addEventListener("click", restartGame);
 
-window.addEventListener("keydown", (event) => {
-  if (state.blocked && ui.scareOverlay.classList.contains("hidden") === false) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      dismissScare();
-    }
+function keepFocusInSingleActionDialog(event, overlay, action, dismiss) {
+  if (overlay.classList.contains("hidden")) {
     return;
   }
 
-  if (state.blocked && ui.rewardOverlay.classList.contains("hidden") === false) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      dismissReward();
-    }
+  if (event.key === "Escape" && dismiss) {
+    event.preventDefault();
+    dismiss();
+    return;
   }
+
+  if (event.key === "Tab") {
+    event.preventDefault();
+    action.focus();
+  }
+}
+
+ui.scareOverlay.addEventListener("keydown", (event) => {
+  keepFocusInSingleActionDialog(event, ui.scareOverlay, ui.scareDismiss, dismissScare);
+});
+ui.rewardOverlay.addEventListener("keydown", (event) => {
+  keepFocusInSingleActionDialog(event, ui.rewardOverlay, ui.rewardDismiss, dismissReward);
+});
+ui.winOverlay.addEventListener("keydown", (event) => {
+  keepFocusInSingleActionDialog(event, ui.winOverlay, ui.nextLevelBtn);
+});
+ui.completeOverlay.addEventListener("keydown", (event) => {
+  keepFocusInSingleActionDialog(event, ui.completeOverlay, ui.playAgainBtn);
 });
 
 loadLevel(0);

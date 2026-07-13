@@ -2,15 +2,19 @@ const canvas = document.querySelector("#game");
 const context = canvas.getContext("2d");
 const scoreLabel = document.querySelector("[data-score]");
 const resetButton = document.querySelector("[data-reset]");
+const gameRegion = document.querySelector("[data-game-region]");
+const moveButtons = document.querySelectorAll("[data-move]");
 const keys = new Set();
+const heldDirections = new Set();
 const boardInset = 32;
+const maximumFrameSeconds = 0.05;
 
 // Change these values first when you want to make the starter game your own.
 const comet = {
   x: canvas.width / 2,
   y: canvas.height / 2,
   radius: 28,
-  speed: 5
+  speed: 300
 };
 const spark = {
   x: 0,
@@ -34,21 +38,21 @@ function activeKeys(...names) {
   return names.some((name) => keys.has(name));
 }
 
-function moveComet() {
-  if (activeKeys("ArrowLeft", "a")) {
-    comet.x -= comet.speed;
+function moveComet(elapsedSeconds) {
+  if (activeKeys("ArrowLeft", "a") || heldDirections.has("left")) {
+    comet.x -= comet.speed * elapsedSeconds;
   }
 
-  if (activeKeys("ArrowRight", "d")) {
-    comet.x += comet.speed;
+  if (activeKeys("ArrowRight", "d") || heldDirections.has("right")) {
+    comet.x += comet.speed * elapsedSeconds;
   }
 
-  if (activeKeys("ArrowUp", "w")) {
-    comet.y -= comet.speed;
+  if (activeKeys("ArrowUp", "w") || heldDirections.has("up")) {
+    comet.y -= comet.speed * elapsedSeconds;
   }
 
-  if (activeKeys("ArrowDown", "s")) {
-    comet.y += comet.speed;
+  if (activeKeys("ArrowDown", "s") || heldDirections.has("down")) {
+    comet.y += comet.speed * elapsedSeconds;
   }
 
   keepInsideBoard();
@@ -144,6 +148,7 @@ function collectSpark() {
 }
 
 function resetGame() {
+  clearHeldInput();
   comet.x = canvas.width / 2;
   comet.y = canvas.height / 2;
   score = 0;
@@ -151,16 +156,33 @@ function resetGame() {
   updateScore();
 }
 
-function frame() {
-  moveComet();
+function clearHeldInput() {
+  keys.clear();
+  heldDirections.clear();
+}
+
+function updateTestState() {
+  gameRegion.dataset.cometX = Math.round(comet.x).toString();
+  gameRegion.dataset.cometY = Math.round(comet.y).toString();
+}
+
+let previousFrameTime;
+
+function frame(currentTime) {
+  const elapsedSeconds = previousFrameTime === undefined
+    ? 0
+    : Math.min((currentTime - previousFrameTime) / 1000, maximumFrameSeconds);
+  previousFrameTime = currentTime;
+  moveComet(elapsedSeconds);
   collectSpark();
+  updateTestState();
   drawBoard();
   drawSpark();
   drawComet();
   requestAnimationFrame(frame);
 }
 
-window.addEventListener("keydown", (event) => {
+gameRegion.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
 
   if (event.key.startsWith("Arrow") || ["w", "a", "s", "d"].includes(key)) {
@@ -169,8 +191,47 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-window.addEventListener("keyup", (event) => {
+gameRegion.addEventListener("keyup", (event) => {
   keys.delete(event.key.startsWith("Arrow") ? event.key : event.key.toLowerCase());
+});
+
+for (const button of moveButtons) {
+  const direction = button.dataset.move;
+
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    button.setPointerCapture(event.pointerId);
+    heldDirections.add(direction);
+  });
+
+  button.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    heldDirections.add(direction);
+  });
+
+  button.addEventListener("keyup", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      heldDirections.delete(direction);
+    }
+  });
+
+  button.addEventListener("blur", () => heldDirections.delete(direction));
+
+  for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    button.addEventListener(eventName, () => heldDirections.delete(direction));
+  }
+}
+
+window.addEventListener("blur", clearHeldInput);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    clearHeldInput();
+  }
 });
 
 resetButton.addEventListener("click", resetGame);

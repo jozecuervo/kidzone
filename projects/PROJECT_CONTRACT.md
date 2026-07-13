@@ -42,9 +42,25 @@ the entry must stay inside the project folder.
     "networkAccess": "none",
     "storesData": false,
     "externalDependencies": []
+  },
+  "portfolio": {
+    "featured": true,
+    "preview": "preview.jpg",
+    "technicalHighlights": ["Canvas rendering", "Responsive controls"]
   }
 }
 ```
+
+## Optional Portfolio Metadata
+
+Use `portfolio` for a small number of projects that demonstrate especially
+useful design or engineering ideas on the landing page. The preview stays in
+the project folder and must use a relative path. Technical highlights should be
+short, concrete phrases that a reviewer can verify in the project.
+
+Omit the entire object when a project does not need featured treatment. This
+metadata affects presentation only; it does not change the project's safety or
+runtime declarations.
 
 ## Safety Defaults
 
@@ -55,6 +71,32 @@ the entry must stay inside the project folder.
   optional servers in metadata before shipping.
 - Keep project links and assets relative so GitHub Pages works under a repository
   path such as `/kidzone/`.
+
+## Validation Rules
+
+- Project folder slugs use lowercase letters, numbers, and single hyphens.
+- `date`, when present, must be a real calendar date written as `YYYY-MM-DD`.
+- `tags`, when present, must contain nonblank strings with no duplicates after
+  trimming whitespace and ignoring letter case.
+- `interaction` must contain one or more unique values from this exact list:
+  `camera`, `file-upload`, `keyboard`, `passive`, `pointer`, and `touch`.
+  These values declare supported input modes; automated checks do not infer
+  support from source-code text.
+- Required published copy (`title`, `summary`, `ageRange`, and the three `safety`
+  strings) must be nonblank and cannot contain `TBD`, `TODO`, or `placeholder`.
+- New scaffolds declare only the passive page they initially provide. Update
+  interactions and safety notes as playable features are added.
+- `entry` and an optional `portfolio.preview` must be relative paths that resolve
+  to regular files inside the project folder; links cannot escape that folder.
+- A `static` project must set `requiresServer` to `false` so it remains
+  publishable on GitHub Pages.
+- `networkAccess: "none"` requires an empty `externalDependencies` array.
+  `networkAccess: "declared-external-dependency"` requires at least one
+  dependency with a unique HTTP(S) URL, a name, and a reason.
+
+Optional `portfolio` metadata contains a boolean `featured`, a project-local
+`preview`, and a non-empty `technicalHighlights` string array. The generated
+index expands the preview into its repository-relative landing-page path.
 
 ## Runtime Defaults
 

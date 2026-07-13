@@ -9,7 +9,8 @@ public sharing.
 ## First Playable
 
 - Ten static maze levels with increasing size and longer paths.
-- Keyboard, pointer, and touch controls inside the maze frame.
+- W, A, S, and D keyboard movement plus pointer and touch controls inside the maze frame.
+- Arrow-key searchlight controls and Enter to follow discovered footprints.
 - Clickable open paths so players can walk in any direction.
 - Searchlight footprints that lead only to the locked door.
 - Dark areas that hide the key or a vampire, witch, werewolf, or zombie.
