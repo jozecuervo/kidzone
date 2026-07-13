@@ -39,8 +39,10 @@ before editing and keep the follow-up narrowly scoped.
   affordances reachable and understandable.
 - Treat each interaction listed in `project.json` as a tested promise. Update the
   implementation, tests, or metadata when that promise changes.
-- Behavior changes need focused project-level checks; every P0/P1 fix needs a
-  regression test that demonstrates the former failure.
+- Behavior changes need focused project-level checks; every critical/high-impact
+  fix needs a regression test that demonstrates the former failure. This
+  includes privacy/safety, crashes, progression, declared-input, and stale-work
+  failures.
 
 ## Gameplay And UI Changes
 
@@ -61,8 +63,9 @@ Keep timing and teardown explicit:
 
 - Base motion on elapsed time or a fixed simulation step, not frame count.
 - Pause on page visibility loss and provide meaningful reduced-motion behavior.
-- Give timers, animation frames, listeners, and engine objects one lifecycle
-  owner; reset/restart must dispose them or invalidate every stale callback.
+- Give timers, animation frames, listeners, media streams, object URLs, pending
+  async work, and engine objects one lifecycle owner; reset/restart or replaced
+  input must dispose them or invalidate every stale callback.
 - If levels are random, make failures reproducible with a seed and verify each
   generated level is solvable.
 - For canvas or SVG games, mirror essential instructions, state, and status in
@@ -74,8 +77,9 @@ For authored levels, validate a complete route through every gate and exit. For
 generated levels, test deterministic seeds and reject unsolvable output.
 
 Treat input press and release as separate contracts. Native controls must work
-with pointer/touch and Enter/Space. Release held input even if focus moves before
-keyup, and on blur, visibility loss, reset, and phase transitions.
+with their standard keyboard behavior, including Enter/Space for button-like
+controls. Release held input even if focus moves before keyup, and on blur,
+visibility loss, pointer cancellation/loss, reset, and phase transitions.
 
 ## Validation
 
@@ -103,19 +107,22 @@ Open the target project path in a browser, check console and page errors, and
 exercise the changed behavior. In proportion to the change, cover desktop and
 mobile, keyboard and touch when declared, blur/tab-away and return, reset,
 reduced motion, and focus transitions. Screenshots verify layout and appearance;
-they do not verify behavior.
+they do not verify behavior. Exercise permission/device features from an explicit
+user action and cover denial or cancellation. State whether testing used a real
+device or mocks, and record unavailable device/browser coverage as residual risk.
 
-For lifecycle, input, progression, or phase changes, exercise at least two
-transitions in one page session: `start -> reset -> start`,
-`level -> next -> restart`, and pending action interrupted by reset when
-applicable. Confirm enabled controls, instructions, and status copy all match the
-current phase.
+For lifecycle, input, progression, or phase changes, repeat each applicable
+transition twice in one page session, such as `start -> reset -> start`,
+`level -> next -> restart`, or a pending action interrupted by reset. Confirm
+enabled controls, instructions, and status copy all match the current phase.
 
 Make assertions demonstrate the expected state change and fail against the old
 bug; avoid vacuous checks that only prove code did not throw. Before marking a
 PR ready, fetch current `origin/main`, inspect the merge diff, rerun focused and
 repository checks on the final commit, and get an independent review for changes
-to gameplay, lifecycle, input, level data, or safety.
+to gameplay, lifecycle, input, level data, or safety. The reviewer must not be the
+implementer and must inspect the final diff, challenge the tests, and replay the
+affected paths rather than relying on the author's summary.
 
 When assets change, record source/authorship and license, and review for unused
 files rather than silently carrying them forward.

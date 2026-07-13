@@ -66,13 +66,16 @@ root. External scripts and per-project servers should be rare and declared in
 
 - Every value in `interaction` is a user-facing promise. Its main path must work
   and be exercised by project tests or browser QA before publishing.
-- Behavior changes require focused checks. P0/P1 bug fixes require a regression
-  test that fails against the broken behavior.
+- Behavior changes require focused checks. Critical/high-impact fixes require a
+  regression test that fails against the broken behavior, including privacy or
+  safety failures, crashes, unwinnable/incorrect progression, broken declared
+  inputs, and stale work that changes a later session.
 - Animation and simulation must use elapsed time or a fixed step rather than
   frame count, pause when the document is hidden, and honor reduced-motion
   preferences without removing required feedback.
-- Timers, animation frames, listeners, and engine objects must have one lifecycle
-  owner. Reset or restart must dispose them or invalidate stale callbacks.
+- Timers, animation frames, listeners, media streams, object URLs, pending async
+  work, and engine objects must have one lifecycle owner. Reset, restart, or
+  replaced input must dispose them or invalidate stale callbacks.
 - Canvas and SVG projects must provide equivalent essential instructions, game
   state, and status in accessible DOM content and keep focus usable across views.
 - Random level generation must be reproducible with a deterministic seed for
@@ -82,8 +85,10 @@ root. External scripts and per-project servers should be rare and declared in
 
 Before publishing, exercise relevant desktop and mobile layouts, declared
 keyboard and touch paths, blur/tab-away and return, reduced motion, reset, focus
-transitions, and console/page errors. Screenshots verify appearance, not game
-behavior.
+transitions, and console/page errors. Permission/device flows must start from an
+explicit user action and cover denial or cancellation. Record whether coverage
+used a real device or mocks and call out untested device/browser risk.
+Screenshots verify appearance, not game behavior.
 
 Document asset authorship or source and license in the project README (or an
 adjacent credits file). Remove unused assets or state why they are retained.
