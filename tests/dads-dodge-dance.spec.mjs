@@ -43,6 +43,7 @@ test.describe("Dad's Dodge Dance lifecycle", () => {
       await page.waitForTimeout(470);
     }
     await expect(page.locator("#stage")).toHaveAttribute("data-phase", "celebrate");
+    await expect(page.getByRole("button", { name: "Toss balloon" })).toBeDisabled();
     await page.getByRole("button", { name: "Reset" }).click();
     await page.waitForTimeout(1700);
 
@@ -50,6 +51,7 @@ test.describe("Dad's Dodge Dance lifecycle", () => {
     await expect(page.locator("#splash-meter")).toHaveAttribute("aria-valuenow", "0");
     await expect(page.locator("#stage")).toHaveAttribute("data-phase", "playing");
     await expect(page.locator("#dad")).not.toHaveClass(/is-victory-dance|is-fleeing/);
+    await expect(page.locator("#meter-caption")).toContainText("agreed splash zone");
   });
 
   test("keyboard aim retains stage focus and safety copy avoids body rewards", async ({ page }) => {

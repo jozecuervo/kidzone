@@ -355,7 +355,7 @@ function updateControls() {
   tossButton.hidden = needsReload || isReloading;
   reloadButton.hidden = !needsReload && !isReloading;
   reloadButton.disabled = isReloading;
-  tossButton.disabled = isReloading || state.ammo <= 0;
+  tossButton.disabled = state.phase !== "playing" || state.ammo <= 0;
   stage.dataset.phase = state.phase;
 }
 
@@ -386,8 +386,8 @@ function applyLevel(announce = true) {
   if (announce) {
     dadLine.textContent = level.startLine;
     meterCaption.textContent = level.peekaboo
-      ? "Catch Dad when he pops out from the yard hideouts."
-      : "Soak Dad before he crosses the yard too many times.";
+      ? "Land a playful splash when Dad pops out from the yard hideouts."
+      : "Fill the meter while Dad crosses the agreed splash zone.";
   }
 
   renderLevelPanel();
