@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "check": "node ./scripts/check.mjs",
-    "snapshots": "playwright test",
+    "test": "playwright test",
+    "snapshots": "playwright test tests/project-snapshots.spec.mjs",
     "snapshots:install": "playwright install chromium"
   },
   "devDependencies": {

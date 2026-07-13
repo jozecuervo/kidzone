@@ -1,15 +1,57 @@
 # Kidzone
 
-Kidzone is a small open-source playground for kids who want to make web games,
-creative tools, and playful experiments with help from a parent or trusted
-adult.
+Kidzone is an open-source collection of browser games and creative tools built
+by José for kids and their trusted adults. It is also a working product and
+engineering portfolio: every project is designed around real constraints such
+as privacy, accessible input, static deployment, and understandable code.
+
+**[Explore Kidzone](https://jozecuervo.github.io/kidzone/)**
+
+## What This Repository Demonstrates
+
+- Product decisions that favor active creation over attention traps.
+- Local-first browser experiences with explicit safety and privacy metadata.
+- A metadata-driven landing page generated from self-contained projects.
+- Plain HTML, CSS, and JavaScript that deploy directly to GitHub Pages.
+- Automated checks for stale metadata, JavaScript syntax, undeclared external
+  URLs, and incomplete safety declarations.
+
+## Selected Work
+
+| Project | Product idea | Technical focus |
+| --- | --- | --- |
+| [JANICE Puppet Workshop](./projects/janice-puppet-workshop/) | Build and pose expressive digital puppets without scores or judgment. | Declarative schemas, runtime validation, accessible controls |
+| [Photo by Numbers](./projects/photo-by-numbers/) | Turn a local photo into an interactive coloring page. | Browser image processing, pluggable algorithms, camera permissions |
+| [Haunted Maze Walk](./projects/haunted-maze/) | Explore a forgiving ten-level maze without timers or losing. | Level progression, multi-input controls, contextual hints |
+
+## Architecture
+
+Each mini-project owns its HTML entry point, assets, logic, and `project.json`.
+The metadata contract records age fit, interactions, safety decisions, storage,
+network access, dependencies, and optional portfolio highlights. A repository
+script validates that contract and generates the landing-page project index.
+
+```text
+project.json files
+        |
+        v
+scripts/update-project-index.mjs
+        |
+        v
+projects/index.json --> landing.js --> project shelf
+```
+
+This keeps projects independently understandable while giving the collection a
+consistent publishing and review workflow.
+
+## Product Principles
 
 The projects are meant to be simple enough to open, read, change, and share.
 Most of them use plain HTML, CSS, and JavaScript, so a first contribution can be
 as small as changing a color, adding a level, editing some text, or inventing a
 new rule.
 
-## For Coding Kids
+### For Coding Kids
 
 Welcome. This is a place to make things.
 
@@ -24,7 +66,7 @@ Good first ideas:
 Try to keep your project kind, clear, and fun to explore. A good Kidzone project
 helps someone make, solve, decorate, experiment, or learn.
 
-## For Parents And Helpers
+### For Parents And Helpers
 
 Kidzone is designed for parent-assisted coding. The repo favors:
 

@@ -30,5 +30,14 @@
     "networkAccess": "none",
     "storesData": false,
     "externalDependencies": []
+  },
+  "portfolio": {
+    "featured": true,
+    "preview": "preview.jpg",
+    "technicalHighlights": [
+      "Validated ten-level progression",
+      "Pointer, touch, and keyboard input",
+      "Forgiving hint system"
+    ]
   }
 }

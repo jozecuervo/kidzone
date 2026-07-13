@@ -92,6 +92,21 @@ function assertRuntime(metadata, slug) {
   }
 }
 
+function assertPortfolio(metadata, slug) {
+  if (metadata.portfolio === undefined) {
+    return;
+  }
+
+  assertObject(metadata.portfolio, "portfolio", slug);
+  assertBoolean(metadata.portfolio.featured, "portfolio.featured", slug);
+  assertSafeEntry(metadata.portfolio.preview, slug);
+  assertStringArray(
+    metadata.portfolio.technicalHighlights,
+    "portfolio.technicalHighlights",
+    slug
+  );
+}
+
 function projectRecord(slug, metadata) {
   assertString(metadata.title, "title", slug);
   assertString(metadata.summary, "summary", slug);
@@ -125,6 +140,15 @@ function projectRecord(slug, metadata) {
 
   assertSafety(metadata, slug);
   assertRuntime(metadata, slug);
+  assertPortfolio(metadata, slug);
+
+  const portfolio = metadata.portfolio
+    ? {
+        featured: metadata.portfolio.featured,
+        preview: `./projects/${slug}/${metadata.portfolio.preview}`,
+        technicalHighlights: metadata.portfolio.technicalHighlights
+      }
+    : null;
 
   return {
     slug,
@@ -144,7 +168,8 @@ function projectRecord(slug, metadata) {
     ageRange: metadata.ageRange,
     interaction: metadata.interaction,
     safety: metadata.safety,
-    runtime: metadata.runtime
+    runtime: metadata.runtime,
+    portfolio
   };
 }
 
@@ -154,6 +179,10 @@ async function readProject(directory) {
   const entry = metadata.entry ?? "index.html";
 
   await access(join(projectsRoot, directory.name, entry));
+
+  if (metadata.portfolio?.preview) {
+    await access(join(projectsRoot, directory.name, metadata.portfolio.preview));
+  }
 
   return projectRecord(directory.name, metadata);
 }
