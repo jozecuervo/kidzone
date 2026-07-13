@@ -105,9 +105,19 @@ Architect review:
 - Game state: what is stored, whether it stays local, and whether persistence is needed at all
 - Assets: generated, hand-coded, searched, or repo-local; include licensing/privacy considerations when relevant
 - Technical risks: mobile layout, performance, canvas/SVG/DOM choice, input handling, audio autoplay limits, browser support
+- Runtime lifecycle: one owner for timers, animation frames, listeners, and
+  engine objects; reset invalidates old work; motion uses elapsed time or a fixed
+  step and pauses while hidden
+- Accessible state: DOM instructions/status for canvas or SVG gameplay, planned
+  focus movement, and a reduced-motion behavior that preserves game meaning
+- Random generation: a deterministic seed for tests/debugging and a solvability
+  check before a generated level is offered
 - Project contract: age range, interactions, safety/privacy notes, storage,
   network access, and dependency declarations for `project.json`
-- Validation plan: exact local commands or browser checks to run before calling the game done
+- Validation plan: project-level behavior tests plus exact local commands and
+  browser paths. Exercise every interaction declared in metadata on desktop and
+  mobile, including keyboard, touch, blur/return, reset, reduced motion, and
+  console/page errors where applicable. Screenshots verify appearance only.
 
 Ask for approval or changes after this review for medium- and high-risk projects.
 If the project is low risk and the user has already explicitly asked to build,
@@ -123,5 +133,9 @@ After the review is approved, follow the repo's Kidzone conventions:
 - Use `projects/_template/` or `node ./scripts/new-project.mjs` when the repo state allows it.
 - Run `node ./scripts/update-project-index.mjs` after metadata changes when possible.
 - Run `node ./scripts/check.mjs` before considering the work done when possible.
+- Add focused project tests for the core loop, win/progress rules, reset, and
+  failure-prone state transitions. A P0/P1 fix always needs a regression test.
+- Document asset authorship/source and license, then remove unused assets or
+  explain why they remain.
 
 If existing unrelated project folders or dirty worktree state block index/check scripts, report that clearly and keep the new game's files correct without modifying unrelated work.

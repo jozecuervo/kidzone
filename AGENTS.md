@@ -20,6 +20,29 @@ When product details are missing, favor a static mini-project that can publish
 directly from GitHub Pages without a build step. Add shared infrastructure only
 after more than one project clearly needs it.
 
+## Game Quality Contract
+
+- Treat every interaction declared in `project.json` as a tested promise. Do not
+  advertise pointer, touch, keyboard, upload, camera, or other input unless its
+  main path works and is verified.
+- Behavior changes need focused checks and project-level regression tests. Every
+  P0/P1 bug fix must include a test that fails without the fix.
+- Use elapsed time or a fixed simulation step for motion; do not tie game speed
+  to display refresh rate. Pause cleanly when the page is hidden and honor
+  `prefers-reduced-motion` without hiding required state or controls.
+- Give timers, animation frames, listeners, and engine objects one lifecycle
+  owner. Reset/restart must invalidate old callbacks and dispose old state.
+- Keep canvas and SVG experiences operable and understandable without vision:
+  expose meaningful state, instructions, and status in accessible DOM content,
+  and manage focus when views or dialogs change.
+- For random levels, support a deterministic seed for debugging/tests and verify
+  generated levels are solvable before play.
+- Browser QA must cover desktop and mobile layouts, keyboard and touch when
+  declared, blur/tab-away and return, reduced motion, reset/restart, and console
+  or page errors. Screenshots are visual evidence, not behavioral verification.
+- Record asset source/license or authorship, and remove or explicitly justify
+  unused assets before shipping.
+
 ## Agent Skills
 
 - Use `skills/kidzone-new-game/` when a user wants to create or brainstorm a

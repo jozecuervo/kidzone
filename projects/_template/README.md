@@ -16,3 +16,17 @@ GitHub Pages even when Kidzone is published below a repository path.
 Before publishing, update `project.json` to follow
 `projects/PROJECT_CONTRACT.md`: age fit, interactions, safety/privacy notes,
 storage, network access, and dependencies should all be explicit.
+
+Add project-level tests for the core loop and reset. Treat each interaction in
+`project.json` as a tested promise, and add a regression test for every P0/P1
+fix. Browser QA should exercise relevant desktop/mobile, keyboard/touch,
+blur/return, reduced-motion, focus, reset, and console-error paths; screenshots
+only verify appearance.
+
+For animation, use elapsed time or a fixed step, pause while the page is hidden,
+and give timers, animation frames, listeners, and engine objects one lifecycle
+owner so reset cannot leave stale work behind. Expose essential canvas/SVG state
+in accessible DOM content. Make random levels seedable and verify solvability.
+
+List asset authorship/source and license here, and remove or explain unused
+assets before publishing.

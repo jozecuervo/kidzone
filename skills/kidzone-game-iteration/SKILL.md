@@ -36,6 +36,10 @@ before editing and keep the follow-up narrowly scoped.
   update `project.json` and refresh `projects/index.json`.
 - Prefer visible, forgiving feedback over pressure loops. Keep reset/reload/help
   affordances reachable and understandable.
+- Treat each interaction listed in `project.json` as a tested promise. Update the
+  implementation, tests, or metadata when that promise changes.
+- Behavior changes need focused project-level checks; every P0/P1 fix needs a
+  regression test that demonstrates the former failure.
 
 ## Gameplay And UI Changes
 
@@ -51,6 +55,17 @@ For new mechanics, update the full loop rather than only the code path:
 For animated or timing-sensitive behavior, verify the real interaction in a
 browser. DOM checks are helpful, but do not replace at least one live gameplay
 path for the feature being changed.
+
+Keep timing and teardown explicit:
+
+- Base motion on elapsed time or a fixed simulation step, not frame count.
+- Pause on page visibility loss and provide meaningful reduced-motion behavior.
+- Give timers, animation frames, listeners, and engine objects one lifecycle
+  owner; reset/restart must dispose them or invalidate every stale callback.
+- If levels are random, make failures reproducible with a seed and verify each
+  generated level is solvable.
+- For canvas or SVG games, mirror essential instructions, state, and status in
+  accessible DOM content and restore focus after view/dialog changes.
 
 ## Validation
 
@@ -74,8 +89,14 @@ If the default port is busy, use a nearby port:
 PORT=4174 node ./server.mjs
 ```
 
-Open the target project path in a browser, check the console, and exercise the
-changed behavior. Try a narrow viewport when layout or touch controls changed.
+Open the target project path in a browser, check console and page errors, and
+exercise the changed behavior. In proportion to the change, cover desktop and
+mobile, keyboard and touch when declared, blur/tab-away and return, reset,
+reduced motion, and focus transitions. Screenshots verify layout and appearance;
+they do not verify behavior.
+
+When assets change, record source/authorship and license, and review for unused
+files rather than silently carrying them forward.
 Stop the preview server before handing off if the user asks to shut down or the
 server is no longer needed.
 
