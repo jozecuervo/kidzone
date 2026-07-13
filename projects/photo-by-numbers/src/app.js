@@ -289,6 +289,8 @@ class PhotoByNumbers {
                 if (loadId === this.imageLoadId) {
                     this.loadImage(img, objectUrl);
                     this.stopWebcam();
+                } else {
+                    this.revokeObjectUrl(objectUrl);
                 }
             };
             img.onerror = () => this.revokeObjectUrl(objectUrl);
@@ -303,7 +305,11 @@ class PhotoByNumbers {
             const loadId = ++this.imageLoadId;
             let objectUrl;
             img.onload = () => {
-                if (loadId === this.imageLoadId) this.loadImage(img, objectUrl);
+                if (loadId === this.imageLoadId) {
+                    this.loadImage(img, objectUrl);
+                } else {
+                    this.revokeObjectUrl(objectUrl);
+                }
             };
             img.onerror = () => {
                 this.revokeObjectUrl(objectUrl);
@@ -316,6 +322,7 @@ class PhotoByNumbers {
     }
 
     loadSampleImage() {
+        this.revokeObjectUrl();
         const sampleCanvas = document.createElement('canvas');
         sampleCanvas.width = 640;
         sampleCanvas.height = 420;

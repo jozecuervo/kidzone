@@ -32,6 +32,22 @@ test('camera denial gives a recoverable status message', async ({ page }) => {
   await expect(page.getByRole('status')).toContainText('Camera access was not available');
 });
 
+test('choosing the sample releases a pending uploaded image', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.revokedImageUrls = [];
+    URL.createObjectURL = () => 'blob:pending-upload';
+    URL.revokeObjectURL = (url) => window.revokedImageUrls.push(url);
+  });
+  await page.goto(projectUrl);
+  await page.setInputFiles('#fileUpload', {
+    name: 'pending.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('not-yet-decoded')
+  });
+  await page.getByRole('button', { name: 'Try Sample' }).click();
+  await expect.poll(() => page.evaluate(() => window.revokedImageUrls)).toContain('blob:pending-upload');
+});
+
 test('page exit stops an active camera stream', async ({ page }) => {
   await page.addInitScript(() => {
     window.cameraTrackStops = 0;
