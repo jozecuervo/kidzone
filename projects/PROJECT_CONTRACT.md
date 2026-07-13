@@ -42,9 +42,25 @@ the entry must stay inside the project folder.
     "networkAccess": "none",
     "storesData": false,
     "externalDependencies": []
+  },
+  "portfolio": {
+    "featured": true,
+    "preview": "preview.jpg",
+    "technicalHighlights": ["Canvas rendering", "Responsive controls"]
   }
 }
 ```
+
+## Optional Portfolio Metadata
+
+Use `portfolio` for a small number of projects that demonstrate especially
+useful design or engineering ideas on the landing page. The preview stays in
+the project folder and must use a relative path. Technical highlights should be
+short, concrete phrases that a reviewer can verify in the project.
+
+Omit the entire object when a project does not need featured treatment. This
+metadata affects presentation only; it does not change the project's safety or
+runtime declarations.
 
 ## Safety Defaults
 
@@ -56,8 +72,65 @@ the entry must stay inside the project folder.
 - Keep project links and assets relative so GitHub Pages works under a repository
   path such as `/kidzone/`.
 
+## Validation Rules
+
+- Project folder slugs use lowercase letters, numbers, and single hyphens.
+- `date`, when present, must be a real calendar date written as `YYYY-MM-DD`.
+- `tags`, when present, must contain nonblank strings with no duplicates after
+  trimming whitespace and ignoring letter case.
+- `interaction` must contain one or more unique values from this exact list:
+  `camera`, `file-upload`, `keyboard`, `passive`, `pointer`, and `touch`.
+  These values declare supported input modes; automated checks do not infer
+  support from source-code text.
+- Required published copy (`title`, `summary`, `ageRange`, and the three `safety`
+  strings) must be nonblank and cannot contain `TBD`, `TODO`, or `placeholder`.
+- New scaffolds declare only the passive page they initially provide. Update
+  interactions and safety notes as playable features are added.
+- `entry` and an optional `portfolio.preview` must be relative paths that resolve
+  to regular files inside the project folder; links cannot escape that folder.
+- A `static` project must set `requiresServer` to `false` so it remains
+  publishable on GitHub Pages.
+- `networkAccess: "none"` requires an empty `externalDependencies` array.
+  `networkAccess: "declared-external-dependency"` requires at least one
+  dependency with a unique HTTP(S) URL, a name, and a reason.
+
+Optional `portfolio` metadata contains a boolean `featured`, a project-local
+`preview`, and a non-empty `technicalHighlights` string array. The generated
+index expands the preview into its repository-relative landing-page path.
+
 ## Runtime Defaults
 
 The default runtime is static HTML, CSS, and JavaScript served from the repository
 root. External scripts and per-project servers should be rare and declared in
 `runtime` with a reason.
+
+## Interaction And Behavior Contract
+
+- Every value in `interaction` is a user-facing promise. Its main path must work
+  and be exercised by project tests or browser QA before publishing.
+- Behavior changes require focused checks. Critical/high-impact fixes require a
+  regression test that fails against the broken behavior, including privacy or
+  safety failures, crashes, unwinnable/incorrect progression, broken declared
+  inputs, and stale work that changes a later session.
+- Animation and simulation must use elapsed time or a fixed step rather than
+  frame count, pause when the document is hidden, and honor reduced-motion
+  preferences without removing required feedback.
+- Timers, animation frames, listeners, media streams, object URLs, pending async
+  work, and engine objects must have one lifecycle owner. Reset, restart, or
+  replaced input must dispose them or invalidate stale callbacks.
+- Canvas and SVG projects must provide equivalent essential instructions, game
+  state, and status in accessible DOM content and keep focus usable across views.
+- Random level generation must be reproducible with a deterministic seed for
+  debugging/tests and reject or repair unsolvable levels before play.
+
+## Verification And Assets
+
+Before publishing, exercise relevant desktop and mobile layouts, declared
+keyboard and touch paths, blur/tab-away and return, reduced motion, reset, focus
+transitions, and console/page errors. Permission/device flows must start from an
+explicit user action and cover denial or cancellation. Record whether coverage
+used a real device or mocks and call out untested device/browser risk.
+Screenshots verify appearance, not game behavior.
+
+Document asset authorship or source and license in the project README (or an
+adjacent credits file). Remove unused assets or state why they are retained.

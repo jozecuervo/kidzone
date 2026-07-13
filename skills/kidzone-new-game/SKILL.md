@@ -67,6 +67,8 @@ Turn the user's answers into a short Game Brief before implementation:
 - Core loop: what the player repeatedly does and why it changes
 - Main interaction: keyboard, mouse, touch, or mixed
 - Progress rule: win, complete, collect, discover, or open-ended creation
+- Core invariants: exact progress/win gate, required collectibles, legal phases,
+  damage/loss rule if any, and the state produced by reset
 - Safety and privacy boundaries
 - Accessibility notes for kids
 - Visual/audio mood, using static assets only when helpful
@@ -105,9 +107,27 @@ Architect review:
 - Game state: what is stored, whether it stays local, and whether persistence is needed at all
 - Assets: generated, hand-coded, searched, or repo-local; include licensing/privacy considerations when relevant
 - Technical risks: mobile layout, performance, canvas/SVG/DOM choice, input handling, audio autoplay limits, browser support
+- Runtime lifecycle: one owner for timers, animation frames, listeners, and
+  browser resources (including media streams, object URLs, pending async work),
+  and engine objects; reset or replaced input invalidates old work; motion uses
+  elapsed time or a fixed step and pauses while hidden
+- Accessible state: DOM instructions/status for canvas or SVG gameplay, planned
+  focus movement, and a reduced-motion behavior that preserves game meaning
+- Random generation: a deterministic seed for tests/debugging and a solvability
+  check before a generated level is offered
+- Level proof: a complete route/state validation for every authored level,
+  including collectibles, gates, and exit requirements
+- Input lifecycle: standard keyboard behavior (including Enter/Space for
+  button-like controls), pointer/touch behavior, plus release on focus change,
+  blur, visibility loss, pointer cancellation/loss, reset, and phase changes
 - Project contract: age range, interactions, safety/privacy notes, storage,
   network access, and dependency declarations for `project.json`
-- Validation plan: exact local commands or browser checks to run before calling the game done
+- Validation plan: project-level behavior tests plus exact local commands and
+  browser paths. Exercise every interaction declared in metadata on desktop and
+  mobile, including keyboard, touch, blur/return, reset, reduced motion, and
+  console/page errors where applicable. For permission/device features, include
+  denial/cancel and distinguish real-device coverage from mocks. Screenshots
+  verify appearance only.
 
 Ask for approval or changes after this review for medium- and high-risk projects.
 If the project is low risk and the user has already explicitly asked to build,
@@ -123,5 +143,15 @@ After the review is approved, follow the repo's Kidzone conventions:
 - Use `projects/_template/` or `node ./scripts/new-project.mjs` when the repo state allows it.
 - Run `node ./scripts/update-project-index.mjs` after metadata changes when possible.
 - Run `node ./scripts/check.mjs` before considering the work done when possible.
+- Add focused project tests for the core loop, win/progress rules, reset, and
+  failure-prone state transitions. Every critical/high-impact fix needs a
+  regression test.
+- Repeat each applicable sequence twice in one page session, such as
+  `start -> reset -> start`, `level -> next -> restart`, or a pending action
+  interrupted by reset.
+- Make assertions prove expected state changes; do not accept a no-throw check
+  or screenshot as proof of gameplay correctness.
+- Document asset authorship/source and license, then remove unused assets or
+  explain why they remain.
 
 If existing unrelated project folders or dirty worktree state block index/check scripts, report that clearly and keep the new game's files correct without modifying unrelated work.

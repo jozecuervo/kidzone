@@ -1,5 +1,6 @@
 const projectGrid = document.querySelector("[data-project-grid]");
 const projectCount = document.querySelector("[data-project-count]");
+const featuredGrid = document.querySelector("[data-featured-grid]");
 
 function projectTag(label) {
   const tag = document.createElement("span");
@@ -71,7 +72,7 @@ function projectCard(project) {
 
   link.href = project.href;
   title.textContent = project.title;
-  description.textContent = project.description ?? project.summary;
+  description.textContent = project.summary ?? project.description;
   cta.textContent = project.cta ?? "Open project";
 
   if (project.date) {
@@ -97,6 +98,49 @@ function projectCard(project) {
   top.append(meta, title, description, safety);
   link.append(top, cta);
   card.append(link);
+
+  return card;
+}
+
+function featuredProjectCard(project) {
+  const card = document.createElement("article");
+  const previewLink = document.createElement("a");
+  const preview = document.createElement("img");
+  const body = document.createElement("div");
+  const number = document.createElement("span");
+  const title = document.createElement("h3");
+  const description = document.createElement("p");
+  const highlights = document.createElement("ul");
+  const cta = document.createElement("a");
+
+  card.className = "featured-card";
+  previewLink.className = "featured-preview";
+  body.className = "featured-body";
+  number.className = "featured-number";
+  highlights.className = "featured-highlights";
+  cta.className = "featured-cta";
+
+  previewLink.href = project.href;
+  preview.src = project.portfolio.preview;
+  preview.alt = `Preview of ${project.title}`;
+  preview.loading = "lazy";
+  preview.width = 960;
+  preview.height = 600;
+  number.textContent = String(project.featuredIndex + 1).padStart(2, "0");
+  title.textContent = project.title;
+  description.textContent = project.summary;
+  cta.href = project.href;
+  cta.textContent = `${project.cta} →`;
+
+  for (const highlight of project.portfolio.technicalHighlights) {
+    const item = document.createElement("li");
+    item.textContent = highlight;
+    highlights.append(item);
+  }
+
+  previewLink.append(preview);
+  body.append(number, title, description, highlights, cta);
+  card.append(previewLink, body);
 
   return card;
 }
@@ -138,10 +182,16 @@ async function loadProjects() {
     }
 
     const cards = projects.map(projectCard);
+    const featuredCards = projects
+      .filter((project) => project.portfolio?.featured)
+      .map((project, featuredIndex) =>
+        featuredProjectCard({ ...project, featuredIndex })
+      );
 
     projectCount.textContent =
       projects.length === 1 ? "1 project ready" : `${projects.length} projects ready`;
     projectGrid.replaceChildren(...cards);
+    featuredGrid.replaceChildren(...featuredCards);
   } catch (error) {
     console.error(error);
     projectCount.textContent = "Index needs refresh";

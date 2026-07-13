@@ -1,161 +1,58 @@
-import { access, readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { projectRecord } from "./project-metadata.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const kidzoneRoot = dirname(scriptDir);
 const projectsRoot = join(kidzoneRoot, "projects");
 const indexPath = join(projectsRoot, "index.json");
-const runtimeTypes = new Set(["static"]);
-const networkAccessModes = new Set(["none", "declared-external-dependency"]);
 
-function assertString(value, label, slug) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${slug}/project.json needs a non-empty ${label}.`);
-  }
-}
+export async function assertProjectFile(projectRoot, path, label, slug = basename(projectRoot)) {
+  const resolvedRoot = await realpath(projectRoot);
+  let resolvedPath;
 
-function assertBoolean(value, label, slug) {
-  if (typeof value !== "boolean") {
-    throw new Error(`${slug}/project.json needs a boolean ${label}.`);
-  }
-}
-
-function assertObject(value, label, slug) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${slug}/project.json needs a ${label} object.`);
-  }
-}
-
-function assertStringArray(value, label, slug) {
-  if (!Array.isArray(value) || !value.length) {
-    throw new Error(`${slug}/project.json needs a non-empty ${label} array.`);
+  let details;
+  try {
+    resolvedPath = await realpath(join(resolvedRoot, path));
+    details = await stat(resolvedPath);
+  } catch {
+    throw new Error(`${slug}/project.json ${label} does not exist: ${path}`);
   }
 
-  if (!value.every((item) => typeof item === "string" && item.trim())) {
-    throw new Error(`${slug}/project.json ${label} must contain strings.`);
-  }
-}
-
-function assertSafeEntry(entry, slug) {
-  assertString(entry, "entry", slug);
-
-  if (entry.startsWith("/") || entry.split("/").includes("..")) {
-    throw new Error(`${slug}/project.json entry must stay inside the project folder.`);
-  }
-}
-
-function assertSafety(metadata, slug) {
-  assertString(metadata.ageRange, "ageRange", slug);
-  assertStringArray(metadata.interaction, "interaction", slug);
-  assertObject(metadata.safety, "safety", slug);
-  assertString(metadata.safety.privacy, "safety.privacy", slug);
-  assertString(metadata.safety.adultHelp, "safety.adultHelp", slug);
-  assertString(metadata.safety.notes, "safety.notes", slug);
-}
-
-function assertRuntime(metadata, slug) {
-  assertObject(metadata.runtime, "runtime", slug);
-  assertString(metadata.runtime.type, "runtime.type", slug);
-
-  if (!runtimeTypes.has(metadata.runtime.type)) {
-    throw new Error(`${slug}/project.json runtime.type must be one of: ${[...runtimeTypes].join(", ")}.`);
-  }
-
-  assertBoolean(metadata.runtime.requiresServer, "runtime.requiresServer", slug);
-  assertString(metadata.runtime.networkAccess, "runtime.networkAccess", slug);
-
-  if (!networkAccessModes.has(metadata.runtime.networkAccess)) {
-    throw new Error(
-      `${slug}/project.json runtime.networkAccess must be one of: ${[...networkAccessModes].join(", ")}.`
-    );
-  }
-
-  assertBoolean(metadata.runtime.storesData, "runtime.storesData", slug);
-
-  if (!Array.isArray(metadata.runtime.externalDependencies)) {
-    throw new Error(`${slug}/project.json runtime.externalDependencies must be an array.`);
-  }
-
-  for (const dependency of metadata.runtime.externalDependencies) {
-    assertObject(dependency, "runtime.externalDependencies item", slug);
-    assertString(dependency.name, "runtime.externalDependencies[].name", slug);
-    assertString(dependency.url, "runtime.externalDependencies[].url", slug);
-    assertString(dependency.reason, "runtime.externalDependencies[].reason", slug);
-  }
-
+  const projectRelativePath = relative(resolvedRoot, resolvedPath);
   if (
-    metadata.runtime.networkAccess === "none" &&
-    metadata.runtime.externalDependencies.length
+    projectRelativePath === ".." ||
+    projectRelativePath.startsWith(`..${sep}`) ||
+    isAbsolute(projectRelativePath)
   ) {
-    throw new Error(`${slug}/project.json cannot list external dependencies when networkAccess is none.`);
-  }
-}
-
-function projectRecord(slug, metadata) {
-  assertString(metadata.title, "title", slug);
-  assertString(metadata.summary, "summary", slug);
-
-  if (metadata.description !== undefined) {
-    assertString(metadata.description, "description", slug);
+    throw new Error(`${slug}/project.json ${label} must stay inside the project folder: ${path}`);
   }
 
-  if (metadata.date !== undefined) {
-    assertString(metadata.date, "date", slug);
+  if (!details.isFile()) {
+    throw new Error(`${slug}/project.json ${label} must refer to a file: ${path}`);
   }
-
-  const entry = metadata.entry ?? "index.html";
-
-  assertSafeEntry(entry, slug);
-
-  if (metadata.cta !== undefined) {
-    assertString(metadata.cta, "cta", slug);
-  }
-
-  if (
-    metadata.tags !== undefined &&
-    (!Array.isArray(metadata.tags) || !metadata.tags.every((tag) => typeof tag === "string"))
-  ) {
-    throw new Error(`${slug}/project.json tags must be strings.`);
-  }
-
-  if (metadata.order !== undefined && !Number.isFinite(metadata.order)) {
-    throw new Error(`${slug}/project.json order must be a number.`);
-  }
-
-  assertSafety(metadata, slug);
-  assertRuntime(metadata, slug);
-
-  return {
-    slug,
-    title: metadata.title,
-    description: metadata.description ?? metadata.summary,
-    date: metadata.date ?? null,
-    dateSource: metadata.dateSource ?? "project metadata",
-    summary: metadata.summary,
-    href:
-      entry === "index.html"
-        ? `./projects/${slug}/`
-        : `./projects/${slug}/${entry}`,
-    entry,
-    cta: metadata.cta ?? "Open project",
-    tags: metadata.tags ?? [],
-    order: metadata.order ?? 999,
-    ageRange: metadata.ageRange,
-    interaction: metadata.interaction,
-    safety: metadata.safety,
-    runtime: metadata.runtime
-  };
 }
 
 async function readProject(directory) {
   const metadataPath = join(projectsRoot, directory.name, "project.json");
-  const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-  const entry = metadata.entry ?? "index.html";
+  let metadata;
+  try {
+    metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+  } catch (error) {
+    throw new Error(`${directory.name}/project.json must contain valid JSON: ${error.message}`, {
+      cause: error
+    });
+  }
+  const record = projectRecord(directory.name, metadata);
+  const projectRoot = join(projectsRoot, directory.name);
 
-  await access(join(projectsRoot, directory.name, entry));
+  await assertProjectFile(projectRoot, record.entry, "entry", directory.name);
+  if (metadata.portfolio !== undefined) {
+    await assertProjectFile(projectRoot, metadata.portfolio.preview, "portfolio.preview", directory.name);
+  }
 
-  return projectRecord(directory.name, metadata);
+  return record;
 }
 
 export async function projectIndex() {

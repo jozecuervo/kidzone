@@ -1,6 +1,7 @@
 import { access, cp, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scaffoldProjectMetadata } from "./project-metadata.mjs";
 import { updateProjectIndex } from "./update-project-index.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -72,31 +73,7 @@ if (!slug) {
     await writeFile(
       join(projectRoot, "project.json"),
       `${JSON.stringify(
-        {
-          title,
-          summary: "A new Kidzone mini-project ready for its first idea.",
-          description: "A new Kidzone mini-project ready for its first idea.",
-          date: new Date().toISOString().slice(0, 10),
-          dateSource: "generated when the project was scaffolded",
-          entry: "index.html",
-          cta: "Open project",
-          tags: ["new"],
-          order: 999,
-          ageRange: "TBD",
-          interaction: ["pointer", "touch", "keyboard"],
-          safety: {
-            privacy: "Local-only play with no accounts, chat, sharing, or saved data.",
-            adultHelp: "TBD before publishing.",
-            notes: "TBD before publishing."
-          },
-          runtime: {
-            type: "static",
-            requiresServer: false,
-            networkAccess: "none",
-            storesData: false,
-            externalDependencies: []
-          }
-        },
+        scaffoldProjectMetadata(title),
         null,
         2
       )}\n`,

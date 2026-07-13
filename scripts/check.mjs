@@ -124,5 +124,8 @@ for (const file of await javascriptFiles(repoRoot)) {
 
 await checkProjectIndex();
 await checkProjectRiskDeclarations();
+execFileSync(process.execPath, ["--test", join(repoRoot, "scripts/tests/project-metadata.test.mjs")], {
+  stdio: "inherit"
+});
 
 console.log("Kidzone checks passed.");
