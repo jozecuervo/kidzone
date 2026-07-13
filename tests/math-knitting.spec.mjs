@@ -97,3 +97,19 @@ test.describe('mobile layout', () => {
     await expect(page.locator('#problems-solved')).toHaveText('1');
   });
 });
+
+test.describe('reduced motion', () => {
+  test.use({ reducedMotion: 'reduce' });
+
+  test('keeps the yarn still and skips celebration confetti', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(projectPath);
+
+    await expect(page.locator('#yarn-path animate')).toHaveCount(0);
+    await page.evaluate(() => game.showVictory());
+    await page.waitForTimeout(100);
+
+    await expect(page.locator('.confetti')).toHaveCount(0);
+    await expect(page.locator('#new-project-btn')).toBeFocused();
+  });
+});

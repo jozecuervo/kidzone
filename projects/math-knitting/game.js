@@ -30,6 +30,12 @@ class MathKnittingGame {
     }
 
     init() {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            this.elements.yarnPath.querySelector('animate')?.remove();
+            this.elements.yarnPath.setAttribute('stroke-dasharray', 'none');
+            this.elements.yarnPath.style.strokeDasharray = 'none';
+        }
+
         this.generateProblem();
         this.updateDisplay();
         this.renderKnitting();
@@ -243,6 +249,8 @@ class MathKnittingGame {
     }
 
     createConfetti() {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
         const colors = ['#ff6b6b', '#51cf66', '#ffd43b', '#667eea', '#ee5a6f', '#4dabf7'];
         const confettiCount = 80;
 
