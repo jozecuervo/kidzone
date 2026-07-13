@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Astro Bot Screensaver</title>
 <style>
   * {
@@ -15,7 +16,37 @@
     background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a1a 100%);
     overflow: hidden;
     position: relative;
+    font-family: system-ui, sans-serif;
+    color: white;
   }
+
+  .controls {
+    position: fixed;
+    z-index: 200;
+    top: 1rem;
+    left: 1rem;
+    max-width: min(28rem, calc(100vw - 2rem));
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+    background: rgb(5 10 30 / 78%);
+    backdrop-filter: blur(8px);
+  }
+
+  h1 { font-size: clamp(1rem, 4vw, 1.35rem); }
+  .instructions { margin-top: 0.25rem; font-size: 0.9rem; line-height: 1.35; }
+  #pauseButton {
+    margin-top: 0.6rem;
+    padding: 0.45rem 0.8rem;
+    border: 2px solid #8de5ff;
+    border-radius: 999px;
+    background: #10295c;
+    color: white;
+    font: inherit;
+    cursor: pointer;
+  }
+  #pauseButton:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+
+  .scene { position: absolute; inset: 0; overflow: hidden; }
 
   .astro-bot {
     position: absolute;
@@ -42,7 +73,15 @@
 </head>
 <body>
 
+<header class="controls">
+  <h1>Astro Bot-inspired eye display</h1>
+  <p class="instructions">Move your pointer to guide the eyes. Press Space or use the button to pause and resume.</p>
+  <button id="pauseButton" type="button" aria-pressed="false">Pause animation</button>
+  <p id="status" role="status" aria-live="polite"></p>
+</header>
+
 <!-- Bot containers - will be populated by JavaScript -->
+<main class="scene" aria-label="Seven friendly robot faces with animated dot-matrix eyes">
 <div class="astro-bot" id="astroBot1"></div>
 <div class="astro-bot" id="astroBot2"></div>
 <div class="astro-bot" id="astroBot3"></div>
@@ -50,6 +89,7 @@
 <div class="astro-bot" id="astroBot5"></div>
 <div class="astro-bot" id="astroBot6"></div>
 <div class="astro-bot" id="astroBot7"></div>
+</main>
 
 <script>
 /**
@@ -168,11 +208,9 @@ class AstroBotScreen {
     /** @type {boolean} Whether the animation loop is running */
     this.isRunning = false;
     
-    // Bound event handlers for cleanup
-    /** @private */
-    this.boundResize = this.resize.bind(this);
-    /** @private */
-    this.boundMouseMove = this.handleMouseMove.bind(this);
+    this.nextBlinkAt = 2500 + Math.random() * 4000;
+    this.blinkStartedAt = 0;
+    this.blinkDuration = 500;
   }
 
   /**
@@ -182,11 +220,7 @@ class AstroBotScreen {
    */
   init() {
     this.resize();
-    window.addEventListener('resize', this.boundResize);
-    document.addEventListener('mousemove', this.boundMouseMove);
     this.isRunning = true;
-    this.updateEyePosition();
-    this.scheduleBlink();
     this.draw();
   }
 
@@ -197,8 +231,6 @@ class AstroBotScreen {
    */
   destroy() {
     this.isRunning = false;
-    window.removeEventListener('resize', this.boundResize);
-    document.removeEventListener('mousemove', this.boundMouseMove);
   }
 
   /**
@@ -431,7 +463,6 @@ class AstroBotScreen {
     });
     ctx.globalCompositeOperation = 'source-over';
 
-    requestAnimationFrame(() => this.draw());
   }
 
   /**
@@ -441,22 +472,22 @@ class AstroBotScreen {
    * @private
    * @returns {void}
    */
-  updateEyePosition() {
+  updateEyePosition(deltaMs) {
     if (!this.isRunning) return;
 
     // Subtle whole-eye movement (slower, smaller range)
     const targetX = (this.mouseX - 0.5) * 20;
     const targetY = (this.mouseY - 0.5) * 15;
-    this.eyeOffsetX += (targetX - this.eyeOffsetX) * 0.08;
-    this.eyeOffsetY += (targetY - this.eyeOffsetY) * 0.08;
+    const eyeEase = 1 - Math.pow(1 - 0.08, deltaMs / (1000 / 60));
+    this.eyeOffsetX += (targetX - this.eyeOffsetX) * eyeEase;
+    this.eyeOffsetY += (targetY - this.eyeOffsetY) * eyeEase;
 
     // Faster pupil/highlight tracking
     const pupilTargetX = (this.mouseX - 0.5) * 2;
     const pupilTargetY = (this.mouseY - 0.5) * 2;
-    this.pupilOffsetX += (pupilTargetX - this.pupilOffsetX) * 0.15;
-    this.pupilOffsetY += (pupilTargetY - this.pupilOffsetY) * 0.15;
-
-    requestAnimationFrame(() => this.updateEyePosition());
+    const pupilEase = 1 - Math.pow(1 - 0.15, deltaMs / (1000 / 60));
+    this.pupilOffsetX += (pupilTargetX - this.pupilOffsetX) * pupilEase;
+    this.pupilOffsetY += (pupilTargetY - this.pupilOffsetY) * pupilEase;
   }
 
   /**
@@ -471,69 +502,10 @@ class AstroBotScreen {
    * 
    * @returns {void}
    */
-  blink() {
+  blink(now) {
     if (this.isBlinking) return;
     this.isBlinking = true;
-    this.blinkProgress = 0;
-    this.scanLineProgress = 0;
-
-    const closeSpeed = 0.08;
-    const openSpeed = 0.07;
-    const scanLineSpeed = 0.12;
-    const betweenBlinks = 100;
-
-    // 25% chance of double blink
-    const isDoubleBlink = Math.random() < 0.25;
-    const maxBlinks = isDoubleBlink ? 2 : 1;
-    let blinkCount = 0;
-
-    const blinkClose = () => {
-      if (!this.isRunning) return;
-      this.blinkProgress += closeSpeed;
-      if (this.blinkProgress >= 1) {
-        this.blinkProgress = 1;
-        this.isShowingScanLine = true;
-        this.scanLineProgress = 0;
-        expandScanLine();
-      } else {
-        requestAnimationFrame(blinkClose);
-      }
-    };
-
-    const expandScanLine = () => {
-      if (!this.isRunning) return;
-      this.scanLineProgress += scanLineSpeed;
-      if (this.scanLineProgress >= 1) {
-        this.scanLineProgress = 1;
-        setTimeout(() => {
-          this.isShowingScanLine = false;
-          this.scanLineProgress = 0;
-          blinkOpen();
-        }, 30);
-      } else {
-        requestAnimationFrame(expandScanLine);
-      }
-    };
-
-    const blinkOpen = () => {
-      if (!this.isRunning) return;
-      this.blinkProgress -= openSpeed;
-      if (this.blinkProgress <= 0) {
-        this.blinkProgress = 0;
-        blinkCount++;
-        if (blinkCount < maxBlinks) {
-          setTimeout(blinkClose, betweenBlinks);
-        } else {
-          this.isBlinking = false;
-          // 40% chance to switch to happy expression
-          this.isHappy = Math.random() < 0.4;
-        }
-      } else {
-        requestAnimationFrame(blinkOpen);
-      }
-    };
-
-    blinkClose();
+    this.blinkStartedAt = now;
   }
 
   /**
@@ -542,13 +514,24 @@ class AstroBotScreen {
    * @private
    * @returns {void}
    */
-  scheduleBlink() {
+  update(now, deltaMs) {
     if (!this.isRunning) return;
-    const delay = 2500 + Math.random() * 4000;
-    setTimeout(() => {
-      this.blink();
-      this.scheduleBlink();
-    }, delay);
+    this.updateEyePosition(deltaMs);
+    if (!this.isBlinking && now >= this.nextBlinkAt) this.blink(now);
+    if (this.isBlinking) {
+      const progress = Math.min(1, (now - this.blinkStartedAt) / this.blinkDuration);
+      this.blinkProgress = Math.sin(progress * Math.PI);
+      this.isShowingScanLine = progress > 0.42 && progress < 0.58;
+      this.scanLineProgress = this.isShowingScanLine ? (progress - 0.42) / 0.16 : 0;
+      if (progress >= 1) {
+        this.isBlinking = false;
+        this.blinkProgress = 0;
+        this.isShowingScanLine = false;
+        this.isHappy = Math.random() < 0.4;
+        this.nextBlinkAt = now + 2500 + Math.random() * 4000;
+      }
+    }
+    this.draw();
   }
 }
 
@@ -745,6 +728,97 @@ botConfigs.forEach((config, index) => {
   const bot = new AstroBot(container, { size: config.size });
   bots.push(bot);
 });
+
+// One page owner coordinates input, resizing, visibility, and animation for all
+// seven canvases. This avoids multiplying global listeners and frame callbacks.
+const pauseButton = document.getElementById('pauseButton');
+const status = document.getElementById('status');
+const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+let userPaused = false;
+let hidden = document.hidden;
+let reducedMotion = motionPreference.matches;
+let animationFrame = 0;
+let lastTimestamp = 0;
+let activeTime = 0;
+let frameCount = 0;
+
+function isPaused() { return userPaused || hidden || reducedMotion; }
+function renderStaticFrame() { bots.forEach((bot) => bot.screen.draw()); }
+
+function updatePauseUi(announce = false) {
+  const paused = isPaused();
+  pauseButton.setAttribute('aria-pressed', String(userPaused));
+  pauseButton.textContent = userPaused ? 'Resume animation' : 'Pause animation';
+  if (announce) status.textContent = reducedMotion
+    ? 'Animation is limited by your reduced motion setting.'
+    : paused ? 'Animation paused.' : 'Animation resumed.';
+}
+
+function frame(timestamp) {
+  animationFrame = 0;
+  if (isPaused()) return;
+  const delta = lastTimestamp ? Math.min(50, timestamp - lastTimestamp) : 1000 / 60;
+  lastTimestamp = timestamp;
+  activeTime += delta;
+  frameCount += 1;
+  bots.forEach((bot) => bot.screen.update(activeTime, delta));
+  animationFrame = requestAnimationFrame(frame);
+}
+
+function startAnimation() {
+  if (isPaused() || animationFrame) return;
+  lastTimestamp = 0;
+  animationFrame = requestAnimationFrame(frame);
+}
+
+function stopAnimation() {
+  if (animationFrame) cancelAnimationFrame(animationFrame);
+  animationFrame = 0;
+  lastTimestamp = 0;
+}
+
+function syncAnimation(announce = false) {
+  if (isPaused()) { stopAnimation(); renderStaticFrame(); } else { startAnimation(); }
+  updatePauseUi(announce);
+}
+
+function handlePointerMove(event) {
+  bots.forEach((bot) => bot.screen.handleMouseMove(event));
+  if (reducedMotion) renderStaticFrame();
+}
+
+function handleResize() {
+  bots.forEach((bot) => bot.screen.resize());
+  renderStaticFrame();
+}
+
+function togglePause() { userPaused = !userPaused; syncAnimation(true); }
+
+pauseButton.addEventListener('click', togglePause);
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'Space' && event.target === document.body) {
+    event.preventDefault();
+    togglePause();
+  }
+});
+document.addEventListener('pointermove', handlePointerMove, { passive: true });
+window.addEventListener('resize', handleResize);
+document.addEventListener('visibilitychange', () => { hidden = document.hidden; syncAnimation(); });
+motionPreference.addEventListener('change', (event) => {
+  reducedMotion = event.matches;
+  syncAnimation(true);
+});
+
+// A read-only hook makes lifecycle behavior observable in browser tests.
+window.__astroDebug = {
+  get state() {
+    return { botCount: bots.length, schedulerCount: animationFrame ? 1 : 0,
+      pageListenerCount: 6, frameCount, paused: isPaused(), reducedMotion };
+  },
+  setHiddenForTest(value) { hidden = value; syncAnimation(); }
+};
+
+syncAnimation();
 </script>
 
 </body>
