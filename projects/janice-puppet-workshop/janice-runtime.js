@@ -34,6 +34,9 @@ export function animatedClipAt(clip, elapsedMs = 0) {
 
   return {
     ...clip,
+    // jointTurns is normalized below to include the held pose. Clearing the
+    // source map keeps worldTransforms from composing the hold a second time.
+    holdTurns: undefined,
     rootMotion: {
       x: rootMotion.x + travelMotion.x * travelSwing * travelDirection,
       y: rootMotion.y + travelMotion.y * travelSwing + bounce * bounceAmount
