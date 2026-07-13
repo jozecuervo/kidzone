@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "check": "node ./scripts/check.mjs",
-    "snapshots": "playwright test",
-    "snapshots:install": "playwright install chromium"
+    "smoke": "playwright test tests/project-smoke.spec.mjs",
+    "snapshots": "playwright test tests/project-snapshots.spec.mjs",
+    "playwright:install": "playwright install chromium"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0"

@@ -15,4 +15,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24.x
+          cache: npm
+      - run: npm ci
       - run: node ./scripts/check.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run smoke
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-artifacts
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
