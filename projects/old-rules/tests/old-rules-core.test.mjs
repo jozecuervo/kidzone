@@ -10,6 +10,13 @@ const context = {};
 vm.runInNewContext(source, context);
 const core = context.OldRulesCore;
 
+const gameHtml = await readFile(join(projectRoot, "old-rules-game.html"), "utf8");
+const levelsSource = gameHtml.match(/const levels = (\[[\s\S]*?\n        \]);\n\n        \/\/ Player class/);
+assert.ok(levelsSource, "level definitions should remain readable by the regression tests");
+const levelContext = {};
+vm.runInNewContext(`levels = ${levelsSource[1]}`, levelContext);
+const levels = levelContext.levels;
+
 function test(name, run) {
     try {
         run();
@@ -38,7 +45,10 @@ test("players and pursuers share collision-safe axis movement", () => {
 
     assert.equal(player.x, 10);
     assert.equal(pursuer.x, 60);
-    assert.equal(core.rectsOverlap(player, pursuer), false);
+    assert.equal(core.rectsOverlap(
+        { x: player.x, y: player.y, w: player.width, h: player.height },
+        { x: pursuer.x, y: pursuer.y, w: pursuer.width, h: pursuer.height }
+    ), false);
 });
 
 test("open doors stop blocking the shared collision path", () => {
@@ -78,4 +88,50 @@ test("transition cleanup cancels stale callbacks, animation, and held input", ()
     assert.equal(staleCallbackRan, false);
     assert.deepEqual(cancelledFrames, [42]);
     assert.deepEqual(heldInput, {});
+});
+
+test("every level has a playable route through its keys, doors, and exit", () => {
+    const step = 5;
+    const playerSize = 30;
+
+    for (const level of levels) {
+        const start = level.playerStart[0];
+        const queue = [{ x: start.x, y: start.y, keyMask: 0 }];
+        const visited = new Set([`${start.x},${start.y},0`]);
+        let reachedExit = false;
+
+        for (let index = 0; index < queue.length && !reachedExit; index += 1) {
+            const position = queue[index];
+            let keyMask = position.keyMask;
+            for (let keyIndex = 0; keyIndex < level.keys.length; keyIndex += 1) {
+                const key = level.keys[keyIndex];
+                if (Math.hypot(position.x + playerSize / 2 - key.x, position.y + playerSize / 2 - key.y) < 25) {
+                    keyMask |= 1 << keyIndex;
+                }
+            }
+
+            const collectedKeys = keyMask.toString(2).replaceAll("0", "").length;
+            const doors = level.doors.map((door) => ({
+                ...door,
+                open: collectedKeys >= door.keysNeeded
+            }));
+            const obstacles = core.blockingRects(level.walls, level.furniture, doors);
+            const playerRect = { x: position.x, y: position.y, w: playerSize, h: playerSize };
+            if (core.canUseExit(collectedKeys, level.keys.length, doors) && core.rectsOverlap(playerRect, level.exit)) {
+                reachedExit = true;
+                break;
+            }
+
+            for (const [dx, dy] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+                const next = { x: position.x + dx, y: position.y + dy };
+                const stateKey = `${next.x},${next.y},${keyMask}`;
+                const nextRect = { x: next.x, y: next.y, w: playerSize, h: playerSize };
+                if (visited.has(stateKey) || obstacles.some((obstacle) => core.rectsOverlap(nextRect, obstacle))) continue;
+                visited.add(stateKey);
+                queue.push({ ...next, keyMask });
+            }
+        }
+
+        assert.equal(reachedExit, true, `${level.name} should be completable`);
+    }
 });
