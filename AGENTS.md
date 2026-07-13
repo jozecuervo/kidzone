@@ -20,6 +20,60 @@ When product details are missing, favor a static mini-project that can publish
 directly from GitHub Pages without a build step. Add shared infrastructure only
 after more than one project clearly needs it.
 
+## Game Quality Contract
+
+- Treat every interaction declared in `project.json` as a tested promise. Do not
+  advertise pointer, touch, keyboard, upload, camera, or other input unless its
+  main path works and is verified.
+- Behavior changes need focused checks and project-level regression tests. Every
+  critical/high-impact fix must include a test that fails without it. This
+  includes privacy or safety failures, crashes, unwinnable/incorrect progression,
+  broken declared inputs, and stale work that changes a later game session.
+- Use elapsed time or a fixed simulation step for motion; do not tie game speed
+  to display refresh rate. Pause cleanly when the page is hidden and honor
+  `prefers-reduced-motion` without hiding required state or controls.
+- Give timers, animation frames, listeners, media streams, object URLs, pending
+  async work, and engine objects one lifecycle owner. Reset/restart and replaced
+  input must invalidate stale callbacks and dispose owned resources.
+- Keep canvas and SVG experiences operable and understandable without vision:
+  expose meaningful state, instructions, and status in accessible DOM content,
+  and manage focus when views or dialogs change.
+- For random levels, support a deterministic seed for debugging/tests and verify
+  generated levels are solvable before play.
+- Browser QA must cover desktop and mobile layouts, keyboard and touch when
+  declared, blur/tab-away and return, reduced motion, reset/restart, and console
+  or page errors. Exercise permission/device flows from explicit user actions,
+  including denial or cancellation. Distinguish real-device checks from mocks
+  and record untested device/browser risk. Screenshots are visual evidence, not
+  behavioral verification.
+- Record asset source/license or authorship, and remove or explicitly justify
+  unused assets before shipping.
+
+## Game Change Definition Of Done
+
+Before marking a game pull request ready:
+
+- State the core invariants in the PR or tests: exact win/progress gate,
+  damage/loss rule, required collectibles, legal phases, and reset result.
+- Prove every authored level is completable. Use a route/state solver for gated
+  levels; use deterministic seeds plus solvability checks for generated levels.
+- Exercise every declared input on a meaningful path. Native controls must work
+  with their standard keyboard behavior, including Enter/Space for button-like
+  controls. Held input must release after focus changes, blur, visibility loss,
+  pointer cancellation/loss, reset, and phase changes.
+- Repeat each applicable transition sequence twice in one page session, such as
+  `start -> reset -> start`, `level -> next -> restart`, or a pending action
+  interrupted by reset.
+- Derive enabled controls, instructions, and status copy from the current game
+  phase so visible UI cannot contradict accepted behavior.
+- Make regression assertions prove the intended state changed. Avoid tests that
+  pass merely because code ran without throwing or because a fixture was empty.
+- Fetch and compare against current `origin/main`, rerun focused and repository
+  checks on the final commit, and require an independent review for gameplay,
+  lifecycle, input, level-data, or safety changes. The reviewer must not be the
+  implementer and must inspect the final diff, challenge the tests, and replay
+  the affected paths; record any unavailable device/browser coverage as risk.
+
 ## Agent Skills
 
 - Use `skills/kidzone-new-game/` when a user wants to create or brainstorm a
