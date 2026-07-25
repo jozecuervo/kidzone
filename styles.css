@@ -263,6 +263,59 @@ main {
   font-weight: 750;
 }
 
+footer {
+  margin-top: 4rem;
+  border-top: 4px solid var(--line);
+  background: var(--cloud);
+}
+
+.footer-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  width: min(72rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.footer-content p {
+  margin-bottom: 0.5rem;
+}
+
+.footer-content strong {
+  font-weight: 800;
+}
+
+.footer-links ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.footer-links li {
+  margin-bottom: 0.5rem;
+}
+
+.footer-links a {
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.footer-bottom {
+  text-align: center;
+  padding: 1rem;
+  border-top: 2px solid var(--line);
+  font-size: 0.9rem;
+  color: #5a6f7d;
+}
+
+.footer-bottom a {
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
 @media (max-width: 42rem) {
   .hero h1 {
     font-size: 3.4rem;
@@ -287,5 +340,9 @@ main {
 
   .project-card h3 {
     font-size: 1.7rem;
+  }
+
+  .footer-content {
+    grid-template-columns: 1fr;
   }
 }
