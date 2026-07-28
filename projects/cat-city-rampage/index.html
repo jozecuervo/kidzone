@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#ff6b6b">
+    <title>Cat City Rampage</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="game-wrapper">
+      <div class="game-header">
+        <a href="../../" class="back-link">← Back to Kidzone</a>
+        <h1>Cat City Rampage</h1>
+        <p class="subtitle">Two cats, one building, and a yarn ball at the top!</p>
+      </div>
+
+      <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+      <div class="game-status" id="gameStatus" aria-live="polite">
+        <p id="statusText">Player 1 or 2 reaches the yarn first to win!</p>
+        <button id="resetButton" class="reset-btn">Play Again</button>
+      </div>
+
+      <div class="controls">
+        <div class="control-group">
+          <h3>Player 1 (Red Cat 🐱)</h3>
+          <p><kbd>W</kbd><kbd>A</kbd><kbd>D</kbd> to move · <kbd>Space</kbd> to destroy</p>
+        </div>
+        <div class="control-group">
+          <h3>Player 2 (Blue Cat 🐱)</h3>
+          <p><kbd>↑</kbd><kbd>←</kbd><kbd>→</kbd> to move · <kbd>Enter</kbd> to destroy</p>
+        </div>
+        <p class="mobile-note">On touch: tap and drag to move, tap again to destroy</p>
+      </div>
+    </div>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
