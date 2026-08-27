@@ -1,215 +1,232 @@
-// Cat City Rampage - Two cats race to grab the yarn at the top
+// Cat City Rampage - Two cats race to grab the yarn at the top.
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const statusText = document.getElementById('statusText');
-const resetButton = document.getElementById('resetButton');
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas?.getContext("2d");
+const statusText = document.getElementById("statusText");
+const resetButton = document.getElementById("resetButton");
+const touchButtons = document.querySelectorAll("[data-player][data-control]");
 
-// Game constants
+if (!canvas || !ctx || !statusText || !resetButton) {
+  throw new Error("Cat City Rampage is missing required page elements.");
+}
+
 const STEP_MS = 1000 / 60;
-const GRAVITY = 0.6;
-const MOVE_SPEED = 5;
-const JUMP_FORCE = 15;
-const DESTROY_RADIUS = 40;
+const MAX_ACCUMULATED_MS = 120;
+const GRAVITY = 1800;
+const MOVE_SPEED = 250;
+const JUMP_FORCE = 690;
+const DESTROY_RADIUS = 48;
 const BRICK_SIZE = 20;
 const PLAYER_SIZE = 30;
-const YARN_Y = 40;
+const YARN_Y = 42;
+const GROUND_HEIGHT = 22;
+const GROUND_Y = canvas.height - GROUND_HEIGHT;
 
-// Game state
 const game = {
   running: true,
   won: null,
-  score1: 0,
-  score2: 0
+  paused: document.hidden
 };
 
-// Player 1 (Red, WASD + Space)
-const player1 = {
-  x: 150,
-  y: canvas.height - 100,
-  vx: 0,
-  vy: 0,
-  width: PLAYER_SIZE,
-  height: PLAYER_SIZE,
-  speed: MOVE_SPEED,
-  onGround: false,
-  color: '#ff6b6b',
-  number: 1,
-  keys: { left: false, right: false, jump: false, destroy: false }
-};
+function makePlayer(number, x, color) {
+  return {
+    x,
+    y: GROUND_Y - PLAYER_SIZE,
+    vx: 0,
+    vy: 0,
+    width: PLAYER_SIZE,
+    height: PLAYER_SIZE,
+    onGround: false,
+    color,
+    number,
+    smashed: 0,
+    keys: { left: false, right: false, jump: false, destroy: false },
+    previousDestroy: false
+  };
+}
 
-// Player 2 (Blue, Arrows + Enter)
-const player2 = {
-  x: canvas.width - 150,
-  y: canvas.height - 100,
-  vx: 0,
-  vy: 0,
-  width: PLAYER_SIZE,
-  height: PLAYER_SIZE,
-  speed: MOVE_SPEED,
-  onGround: false,
-  color: '#4ecdc4',
-  number: 2,
-  keys: { left: false, right: false, jump: false, destroy: false }
-};
-
-// Building bricks - grid of destructible blocks
+const player1 = makePlayer(1, 130, "#ff6b6b");
+const player2 = makePlayer(2, canvas.width - 160, "#4ecdc4");
 let bricks = [];
+let animationFrame = null;
+let lastTime = performance.now();
+let accumulatedTime = 0;
 
 function initBricks() {
   bricks = [];
-  const cols = Math.floor(canvas.width / BRICK_SIZE);
-  const rows = Math.floor(canvas.height / BRICK_SIZE);
+  const rows = [520, 440, 360, 280, 200, 120];
+  const gaps = [6, 27, 13, 23, 9, 18];
 
-  for (let row = 0; row < rows - 3; row++) {
-    for (let col = 0; col < cols; col++) {
-      bricks.push({
-        x: col * BRICK_SIZE,
-        y: row * BRICK_SIZE + 100,
-        width: BRICK_SIZE,
-        height: BRICK_SIZE,
-        health: 1
-      });
+  for (let index = 0; index < rows.length; index += 1) {
+    const y = rows[index];
+    const gap = gaps[index];
+
+    for (let col = 3; col < 37; col += 1) {
+      if (col >= gap && col <= gap + 2) continue;
+      bricks.push(makeBrick(col * BRICK_SIZE, y));
+
+      if (index < rows.length - 1 && col % 7 === index % 3) {
+        bricks.push(makeBrick(col * BRICK_SIZE, y - BRICK_SIZE));
+      }
     }
   }
 }
 
-// Input handling
-document.addEventListener('keydown', (e) => {
-  // Player 1: WASD + Space
-  if (e.key.toLowerCase() === 'w') player1.keys.jump = true;
-  if (e.key.toLowerCase() === 'a') player1.keys.left = true;
-  if (e.key.toLowerCase() === 'd') player1.keys.right = true;
-  if (e.key === ' ') { player1.keys.destroy = true; e.preventDefault(); }
+function makeBrick(x, y) {
+  return {
+    x,
+    y,
+    width: BRICK_SIZE,
+    height: BRICK_SIZE
+  };
+}
 
-  // Player 2: Arrows + Enter
-  if (e.key === 'ArrowUp') { player2.keys.jump = true; e.preventDefault(); }
-  if (e.key === 'ArrowLeft') player2.keys.left = true;
-  if (e.key === 'ArrowRight') player2.keys.right = true;
-  if (e.key === 'Enter') { player2.keys.destroy = true; e.preventDefault(); }
-});
+function clearHeldInput() {
+  [player1, player2].forEach((player) => {
+    Object.keys(player.keys).forEach((key) => {
+      player.keys[key] = false;
+    });
+    player.previousDestroy = false;
+  });
 
-document.addEventListener('keyup', (e) => {
-  if (e.key.toLowerCase() === 'w') player1.keys.jump = false;
-  if (e.key.toLowerCase() === 'a') player1.keys.left = false;
-  if (e.key.toLowerCase() === 'd') player1.keys.right = false;
-  if (e.key === ' ') { player1.keys.destroy = false; e.preventDefault(); }
+  touchButtons.forEach((button) => button.setAttribute("aria-pressed", "false"));
+}
 
-  if (e.key === 'ArrowUp') { player2.keys.jump = false; e.preventDefault(); }
-  if (e.key === 'ArrowLeft') player2.keys.left = false;
-  if (e.key === 'ArrowRight') player2.keys.right = false;
-  if (e.key === 'Enter') { player2.keys.destroy = false; e.preventDefault(); }
-});
+function setControl(playerNumber, control, pressed) {
+  const player = playerNumber === "1" ? player1 : player2;
+  if (!player || !(control in player.keys)) return;
+  player.keys[control] = pressed;
+}
 
-// Touch controls for mobile
-let touchState = { active: false, startX: 0, currentX: 0, startTime: 0 };
+function handleKey(event, pressed) {
+  const key = event.key.toLowerCase();
+  let handled = true;
 
-canvas.addEventListener('touchstart', (e) => {
-  const touch = e.touches[0];
-  touchState.active = true;
-  touchState.startX = touch.clientX;
-  touchState.currentX = touch.clientX;
-  touchState.startTime = Date.now();
-});
+  if (key === "w") player1.keys.jump = pressed;
+  else if (key === "a") player1.keys.left = pressed;
+  else if (key === "d") player1.keys.right = pressed;
+  else if (event.key === " ") player1.keys.destroy = pressed;
+  else if (event.key === "ArrowUp") player2.keys.jump = pressed;
+  else if (event.key === "ArrowLeft") player2.keys.left = pressed;
+  else if (event.key === "ArrowRight") player2.keys.right = pressed;
+  else if (event.key === "Enter") player2.keys.destroy = pressed;
+  else handled = false;
 
-canvas.addEventListener('touchmove', (e) => {
-  const touch = e.touches[0];
-  touchState.currentX = touch.clientX;
-});
+  if (handled) event.preventDefault();
+}
 
-canvas.addEventListener('touchend', (e) => {
-  if (!touchState.active) return;
+document.addEventListener("keydown", (event) => handleKey(event, true));
+document.addEventListener("keyup", (event) => handleKey(event, false));
 
-  const moveDistance = touchState.currentX - touchState.startX;
-  const tapDuration = Date.now() - touchState.startTime;
+touchButtons.forEach((button) => {
+  const press = (event) => {
+    event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
+    button.setAttribute("aria-pressed", "true");
+    setControl(button.dataset.player, button.dataset.control, true);
+  };
 
-  // Tap to destroy, drag to move
-  if (Math.abs(moveDistance) < 20 && tapDuration < 200) {
-    // Quick tap - destroy
-    player1.keys.destroy = true;
-    setTimeout(() => { player1.keys.destroy = false; }, 100);
-  } else if (moveDistance < -30) {
-    // Drag left
-    player1.keys.left = true;
-    setTimeout(() => { player1.keys.left = false; }, 100);
-  } else if (moveDistance > 30) {
-    // Drag right
-    player1.keys.right = true;
-    setTimeout(() => { player1.keys.right = false; }, 100);
-  }
+  const release = (event) => {
+    event.preventDefault();
+    button.releasePointerCapture?.(event.pointerId);
+    button.setAttribute("aria-pressed", "false");
+    setControl(button.dataset.player, button.dataset.control, false);
+  };
 
-  touchState.active = false;
+  button.addEventListener("pointerdown", press);
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointercancel", release);
+  button.addEventListener("lostpointercapture", () => {
+    button.setAttribute("aria-pressed", "false");
+    setControl(button.dataset.player, button.dataset.control, false);
+  });
 });
 
 function updatePlayer(player, dt) {
-  // Movement
-  if (player.keys.left) player.vx = -player.speed;
-  else if (player.keys.right) player.vx = player.speed;
-  else player.vx *= 0.9;
+  if (player.keys.destroy && !player.previousDestroy) {
+    smashBricks(player);
+  }
+  player.previousDestroy = player.keys.destroy;
 
-  // Jumping
+  if (player.keys.left && !player.keys.right) player.vx = -MOVE_SPEED;
+  else if (player.keys.right && !player.keys.left) player.vx = MOVE_SPEED;
+  else player.vx = approach(player.vx, 0, MOVE_SPEED * 5 * dt);
+
   if (player.keys.jump && player.onGround) {
     player.vy = -JUMP_FORCE;
     player.onGround = false;
   }
 
-  // Apply gravity
-  player.vy += GRAVITY;
-  player.vy = Math.min(player.vy, 20); // Terminal velocity
+  player.vy = Math.min(player.vy + GRAVITY * dt, 900);
+  moveHorizontally(player, dt);
+  moveVertically(player, dt);
 
-  // Apply velocity
-  player.x += player.vx * dt;
-  player.y += player.vy * dt;
-
-  // Boundaries
   player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
 
-  // Collision with bricks
-  player.onGround = false;
-  bricks.forEach((brick) => {
-    if (colliding(player, brick)) {
-      // Landing on top
-      if (player.vy > 0 && player.y + player.height - player.vy * dt <= brick.y + 5) {
-        player.y = brick.y - player.height;
-        player.vy = 0;
-        player.onGround = true;
-      }
-      // Hitting bottom
-      else if (player.vy < 0 && player.y - player.vy * dt >= brick.y + brick.height - 5) {
-        player.y = brick.y + brick.height;
-        player.vy = 0;
-      }
-      // Side collisions
-      else if (player.vx > 0) {
-        player.x = brick.x - player.width;
-      } else if (player.vx < 0) {
-        player.x = brick.x + brick.width;
-      }
-    }
-  });
+  if (player.y > canvas.height + 80) {
+    placePlayerAtStart(player);
+  }
 
-  // Fall off bottom
-  if (player.y > canvas.height) {
-    player.y = canvas.height - 100;
+  return player.y <= YARN_Y;
+}
+
+function moveHorizontally(player, dt) {
+  player.x += player.vx * dt;
+
+  for (const brick of bricks) {
+    if (!colliding(player, brick)) continue;
+
+    if (player.vx > 0) player.x = brick.x - player.width;
+    else if (player.vx < 0) player.x = brick.x + brick.width;
+    player.vx = 0;
+  }
+}
+
+function moveVertically(player, dt) {
+  player.y += player.vy * dt;
+  player.onGround = false;
+
+  for (const brick of bricks) {
+    if (!colliding(player, brick)) continue;
+
+    if (player.vy > 0) {
+      player.y = brick.y - player.height;
+      player.onGround = true;
+    } else if (player.vy < 0) {
+      player.y = brick.y + brick.height;
+    }
+    player.vy = 0;
+  }
+
+  if (player.y + player.height >= GROUND_Y) {
+    player.y = GROUND_Y - player.height;
     player.vy = 0;
     player.onGround = true;
   }
+}
 
-  // Destroy bricks
-  if (player.keys.destroy) {
-    bricks = bricks.filter((brick) => {
-      const dx = brick.x + brick.width / 2 - (player.x + player.width / 2);
-      const dy = brick.y + brick.height / 2 - (player.y + player.height / 2);
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      return dist > DESTROY_RADIUS;
-    });
-  }
+function smashBricks(player) {
+  let removed = 0;
+  const centerX = player.x + player.width / 2;
+  const centerY = player.y + player.height / 2;
 
-  // Check if reached yarn at top
-  if (player.y < YARN_Y) {
-    return true;
-  }
-  return false;
+  bricks = bricks.filter((brick) => {
+    const dx = brick.x + brick.width / 2 - centerX;
+    const dy = brick.y + brick.height / 2 - centerY;
+    const shouldRemove = Math.hypot(dx, dy) <= DESTROY_RADIUS;
+
+    if (shouldRemove) removed += 1;
+    return !shouldRemove;
+  });
+
+  player.smashed += removed;
+  updateStatus();
+}
+
+function approach(value, target, amount) {
+  if (value < target) return Math.min(target, value + amount);
+  if (value > target) return Math.max(target, value - amount);
+  return target;
 }
 
 function colliding(rect1, rect2) {
@@ -220,116 +237,185 @@ function colliding(rect1, rect2) {
 }
 
 function update(dt) {
-  if (!game.running) return;
+  if (!game.running || game.paused) return;
 
   const p1Won = updatePlayer(player1, dt);
   const p2Won = updatePlayer(player2, dt);
 
-  if (p1Won && !game.won) {
-    game.won = 1;
-    game.running = false;
-    statusText.textContent = '🎉 Player 1 (Red) Grabbed the Yarn!';
-  } else if (p2Won && !game.won) {
-    game.won = 2;
-    game.running = false;
-    statusText.textContent = '🎉 Player 2 (Blue) Grabbed the Yarn!';
-  }
+  if (p1Won && !game.won) finishGame(player1);
+  else if (p2Won && !game.won) finishGame(player2);
+}
+
+function finishGame(player) {
+  game.won = player.number;
+  game.running = false;
+  clearHeldInput();
+  statusText.textContent = `Player ${player.number} grabbed the yarn!`;
+  resetButton.focus();
+}
+
+function updateStatus() {
+  if (game.won) return;
+  statusText.textContent = `Red smashed ${player1.smashed}. Blue smashed ${player2.smashed}. First cat to the yarn wins!`;
 }
 
 function render() {
-  // Clear canvas
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawSkyline();
+  drawBricks();
+  drawYarn();
+  drawPlayer(player1);
+  drawPlayer(player2);
+  drawGround();
+}
 
-  // Draw bricks
+function drawSkyline() {
+  ctx.fillStyle = "#fef5e7";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#87ceeb";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+  ctx.fillRect(0, 70, canvas.width, 40);
+}
+
+function drawBricks() {
   bricks.forEach((brick) => {
-    ctx.fillStyle = '#a89968';
+    ctx.fillStyle = "#a89968";
     ctx.fillRect(brick.x, brick.y, brick.width, brick.height);
-    ctx.strokeStyle = '#8b7355';
+    ctx.strokeStyle = "#8b7355";
     ctx.lineWidth = 1;
     ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
   });
+}
 
-  // Draw yarn at top
-  ctx.fillStyle = '#ffcc00';
+function drawYarn() {
+  ctx.fillStyle = "#ffcc00";
   ctx.beginPath();
   ctx.arc(canvas.width / 2, YARN_Y, 15, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#ff8800';
+  ctx.strokeStyle = "#ff8800";
   ctx.lineWidth = 2;
   ctx.stroke();
-
-  // Draw players
-  drawPlayer(player1);
-  drawPlayer(player2);
-
-  // Draw ground
-  ctx.fillStyle = '#8b7355';
-  ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+  ctx.beginPath();
+  ctx.moveTo(canvas.width / 2 - 12, YARN_Y);
+  ctx.quadraticCurveTo(canvas.width / 2, YARN_Y - 18, canvas.width / 2 + 12, YARN_Y);
+  ctx.stroke();
 }
 
 function drawPlayer(player) {
-  // Body
   ctx.fillStyle = player.color;
   ctx.fillRect(player.x, player.y, player.width, player.height);
 
-  // Eyes
-  ctx.fillStyle = 'white';
-  ctx.fillRect(player.x + 8, player.y + 8, 8, 8);
-  ctx.fillRect(player.x + 14, player.y + 8, 8, 8);
+  ctx.fillStyle = player.color;
+  ctx.beginPath();
+  ctx.moveTo(player.x + 4, player.y + 2);
+  ctx.lineTo(player.x + 10, player.y - 8);
+  ctx.lineTo(player.x + 15, player.y + 2);
+  ctx.lineTo(player.x + 20, player.y - 8);
+  ctx.lineTo(player.x + 26, player.y + 2);
+  ctx.closePath();
+  ctx.fill();
 
-  // Pupils
-  ctx.fillStyle = 'black';
-  ctx.fillRect(player.x + 10, player.y + 10, 4, 4);
-  ctx.fillRect(player.x + 16, player.y + 10, 4, 4);
+  ctx.fillStyle = "white";
+  ctx.fillRect(player.x + 7, player.y + 8, 7, 7);
+  ctx.fillRect(player.x + 17, player.y + 8, 7, 7);
 
-  // Border
-  ctx.strokeStyle = '#1a1a2e';
+  ctx.fillStyle = "black";
+  ctx.fillRect(player.x + 9, player.y + 10, 3, 3);
+  ctx.fillRect(player.x + 19, player.y + 10, 3, 3);
+
+  ctx.strokeStyle = "#1a1a2e";
   ctx.lineWidth = 2;
   ctx.strokeRect(player.x, player.y, player.width, player.height);
+}
+
+function drawGround() {
+  ctx.fillStyle = "#8b7355";
+  ctx.fillRect(0, GROUND_Y, canvas.width, GROUND_HEIGHT);
+}
+
+function placePlayerAtStart(player) {
+  player.x = player.number === 1 ? 130 : canvas.width - 160;
+  player.y = GROUND_Y - player.height;
+  player.vx = 0;
+  player.vy = 0;
+  player.onGround = true;
+  player.previousDestroy = false;
 }
 
 function reset() {
   game.running = true;
   game.won = null;
-  player1.x = 150;
-  player1.y = canvas.height - 100;
-  player1.vx = 0;
-  player1.vy = 0;
-  player1.onGround = false;
-  player2.x = canvas.width - 150;
-  player2.y = canvas.height - 100;
-  player2.vx = 0;
-  player2.vy = 0;
-  player2.onGround = false;
+  game.paused = document.hidden;
+  player1.smashed = 0;
+  player2.smashed = 0;
+  clearHeldInput();
+  placePlayerAtStart(player1);
+  placePlayerAtStart(player2);
   initBricks();
-  statusText.textContent = 'Player 1 or 2 reaches the yarn first to win!';
+  statusText.textContent = "Player 1 or 2 reaches the yarn first to win!";
+  lastTime = performance.now();
+  accumulatedTime = 0;
+  render();
 }
 
-resetButton.addEventListener('click', reset);
-
-// Game loop
-let lastTime = performance.now();
 function gameLoop(currentTime) {
-  const deltaTime = currentTime - lastTime;
-  lastTime = currentTime;
+  animationFrame = null;
 
-  if (deltaTime >= STEP_MS) {
-    update(STEP_MS / 1000);
+  if (!game.paused) {
+    const frameDelta = Math.min(currentTime - lastTime, MAX_ACCUMULATED_MS);
+    lastTime = currentTime;
+    accumulatedTime += frameDelta;
+
+    while (accumulatedTime >= STEP_MS) {
+      update(STEP_MS / 1000);
+      accumulatedTime -= STEP_MS;
+    }
+
+    render();
   }
 
-  render();
-  requestAnimationFrame(gameLoop);
+  animationFrame = requestAnimationFrame(gameLoop);
 }
 
-// Handle visibility
-document.addEventListener('visibilitychange', () => {
+function stopLoop() {
+  if (animationFrame !== null) {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  }
+}
+
+function startLoop() {
+  stopLoop();
+  lastTime = performance.now();
+  animationFrame = requestAnimationFrame(gameLoop);
+}
+
+window.addEventListener("blur", clearHeldInput);
+
+document.addEventListener("visibilitychange", () => {
+  game.paused = document.hidden;
+  clearHeldInput();
+
   if (document.hidden) {
-    // Pause if needed
+    stopLoop();
   } else {
-    lastTime = performance.now();
+    startLoop();
   }
 });
 
-// Start game
-initBricks();
-requestAnimationFrame(gameLoop);
+resetButton.addEventListener("click", reset);
+
+window.__catCityRampage = {
+  game,
+  players: [player1, player2],
+  get bricks() {
+    return bricks;
+  },
+  reset,
+  update,
+  clearHeldInput
+};
+
+reset();
+startLoop();

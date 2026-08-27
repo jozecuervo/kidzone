@@ -13,8 +13,7 @@ Two mischievous cats race up a skyscraper, smashing and clawing their way to the
 - `Enter` to destroy bricks
 
 **On Touch:**
-- Tap and drag to move
-- Tap to destroy bricks
+- Use each cat's buttons to move, jump, and smash bricks
 
 First cat to reach the yarn at the top of the building wins!
 
