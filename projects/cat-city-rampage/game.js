@@ -121,16 +121,28 @@ document.addEventListener("keyup", (event) => handleKey(event, false));
 touchButtons.forEach((button) => {
   const press = (event) => {
     event.preventDefault();
-    button.setPointerCapture?.(event.pointerId);
-    button.setAttribute("aria-pressed", "true");
     setControl(button.dataset.player, button.dataset.control, true);
+    button.setAttribute("aria-pressed", "true");
+    // Pointer capture keeps the control held if the finger slides off the
+    // button; it is a best-effort enhancement, not a requirement for the
+    // control itself, so a capture failure must not block setControl above.
+    try {
+      button.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Ignored: some pointer sessions (including synthetic PointerEvents)
+      // have no OS-level "active pointer" to capture.
+    }
   };
 
   const release = (event) => {
     event.preventDefault();
-    button.releasePointerCapture?.(event.pointerId);
-    button.setAttribute("aria-pressed", "false");
     setControl(button.dataset.player, button.dataset.control, false);
+    button.setAttribute("aria-pressed", "false");
+    try {
+      button.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Ignored: nothing to release if capture was never established.
+    }
   };
 
   button.addEventListener("pointerdown", press);
