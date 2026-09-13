@@ -74,6 +74,55 @@ body {
   height: min(60vh, 26rem);
 }
 
+/* Step 1b §9: a small overlay at the canvas's top edge, horizontally at the
+   impact point's projected x (the canvas/stage-panel horizontal centre,
+   since the camera always looks straight at the impact point). Purely
+   informational/decorative — aria-hidden, pointer-events:none — visible in
+   `ready` and `falling` while the fruit is above the frame (see
+   rules.js incomingFor). */
+.incoming-marker {
+  position: absolute;
+  top: 0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  pointer-events: none;
+}
+
+.incoming-marker[hidden] {
+  display: none;
+}
+
+.incoming-marker-arrow {
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--ink);
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+.incoming-marker-dot {
+  display: block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  /* --fruit-color set from the fruit table in view.js, no colour hard-coded here. */
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), var(--fruit-color) 72%);
+  border: 2px solid #1b1b1b;
+}
+
+.incoming-marker-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0.02rem 0.3rem;
+  border-radius: 0.3rem;
+  white-space: nowrap;
+}
+
 /* Height bar (zoomed-out view): a DOM/CSS overlay on the right edge of the
    shot. Purely decorative/informational — aria-hidden, and never the
    live-region text. */
@@ -180,7 +229,9 @@ body {
   width: 1.1rem;
   height: 1.1rem;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #8fd47f, #2e7d32 72%);
+  /* Step 1b §9: --fruit-color is set from the fruit table in view.js, no
+     colour hard-coded here. */
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), var(--fruit-color) 72%);
   border: 2px solid #1b1b1b;
   flex: none;
 }

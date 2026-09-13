@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
 import {
+  FRUIT_KEYS,
   LANDMARKS,
   fruitByKey,
   heightFromSlider,
@@ -1024,8 +1025,14 @@ test.describe("Splat Lab", () => {
     }
   }
 
+  function boxesIntersect(a, b) {
+    return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  }
+
   // Step 1b §5: the moving metres label and every visible tick name must
-  // never intersect, at ready, mid-fall and settled, at both sizes.
+  // never intersect, at ready, mid-fall and settled, at both sizes. Step 1b
+  // §9 extends this to the incoming marker (when visible): it must not
+  // overlap the height bar or the moving label either.
   async function assertLabelNeverIntersectsVisibleTickNames(page) {
     await page.goto(gamePath);
     await waitForPhase(page, "ready");
@@ -1039,15 +1046,25 @@ test.describe("Splat Lab", () => {
       for (const box of tickNameBoxes) {
         if (!box) continue;
 
-        const intersects =
-          labelBox.x < box.x + box.width &&
-          labelBox.x + labelBox.width > box.x &&
-          labelBox.y < box.y + box.height &&
-          labelBox.y + labelBox.height > box.y;
+        expect(
+          boxesIntersect(labelBox, box),
+          `label box ${JSON.stringify(labelBox)} intersects tick name box ${JSON.stringify(box)}`
+        ).toBe(false);
+      }
+
+      const incomingHidden = await page.locator("#incoming-marker").isHidden();
+
+      if (!incomingHidden) {
+        const incomingBox = await page.locator("#incoming-marker").boundingBox();
+        const heightBarBox = await page.locator("#height-bar").boundingBox();
 
         expect(
-          intersects,
-          `label box ${JSON.stringify(labelBox)} intersects tick name box ${JSON.stringify(box)}`
+          boxesIntersect(incomingBox, heightBarBox),
+          `incoming marker box ${JSON.stringify(incomingBox)} intersects the height bar box ${JSON.stringify(heightBarBox)}`
+        ).toBe(false);
+        expect(
+          boxesIntersect(incomingBox, labelBox),
+          `incoming marker box ${JSON.stringify(incomingBox)} intersects the moving label box ${JSON.stringify(labelBox)}`
         ).toBe(false);
       }
     }
@@ -1296,6 +1313,181 @@ test.describe("Splat Lab", () => {
       await expect(page.locator("#status")).toContainText("from 7.3 m.");
 
       expect(errors).toEqual([]);
+    });
+  });
+
+  test.describe("step 1b §9: incoming marker, fruit colour, ground texture", () => {
+    const counterHeightSliderValue = String(Math.round(sliderFromHeight(1)));
+
+    test("ready: #incoming-marker is visible for all five fruits at Counter", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), counterHeightSliderValue);
+
+      for (const fruitKey of FRUIT_KEYS) {
+        await setFruit(page, fruitKey);
+        await expect(page.locator("#incoming-marker"), `${fruitKey} at Counter`).toBeVisible();
+      }
+
+      expect(errors).toEqual([]);
+    });
+
+    test("a Counter watermelon drop hides the incoming marker before settled, and it reappears after reset (twice in one session)", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      async function dropAndCheckOnce() {
+        await setSliderValue(page.locator("#height-slider"), counterHeightSliderValue);
+        await expect(page.locator("#incoming-marker")).toBeVisible();
+
+        await page.getByRole("button", { name: "Drop" }).click();
+        await waitForPhase(page, "falling");
+
+        // Poll for the marker hiding; a phase of "settled" reached first
+        // (still visible) is the failure this test exists to catch.
+        const deadline = Date.now() + 15000;
+        let hiddenBeforeSettled = null;
+
+        while (Date.now() < deadline) {
+          const phase = await page.locator("main").getAttribute("data-phase");
+          const hidden = await page.locator("#incoming-marker").isHidden();
+
+          if (hidden) {
+            hiddenBeforeSettled = phase !== "settled";
+            break;
+          }
+
+          if (phase === "settled") {
+            hiddenBeforeSettled = false;
+            break;
+          }
+
+          await page.waitForTimeout(30);
+        }
+
+        expect(
+          hiddenBeforeSettled,
+          "incoming marker should hide before data-phase becomes settled"
+        ).toBe(true);
+
+        await waitForPhase(page, "settled", { timeout: 15000 });
+        await expect(page.locator("#incoming-marker")).toBeHidden();
+
+        await page.getByRole("button", { name: "Reset" }).click();
+        await waitForPhase(page, "ready");
+        await expect(page.locator("#incoming-marker")).toBeVisible();
+      }
+
+      await dropAndCheckOnce();
+      await dropAndCheckOnce();
+
+      expect(errors).toEqual([]);
+    });
+
+    test("--fruit-color on #incoming-marker-dot and #height-bar-marker matches the fruit table's skin colour, for tomato and coconut", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      for (const fruitKey of ["tomato", "coconut"]) {
+        await setFruit(page, fruitKey);
+
+        const expectedColor = `#${fruitByKey(fruitKey).skinColor.toString(16).padStart(6, "0")}`;
+
+        const dotColor = await page
+          .locator("#incoming-marker-dot")
+          .evaluate((el) => getComputedStyle(el).getPropertyValue("--fruit-color").trim());
+        const barMarkerColor = await page
+          .locator("#height-bar-marker")
+          .evaluate((el) => getComputedStyle(el).getPropertyValue("--fruit-color").trim());
+
+        expect(dotColor, fruitKey).toBe(expectedColor);
+        expect(barMarkerColor, fruitKey).toBe(expectedColor);
+      }
+
+      expect(errors).toEqual([]);
+    });
+
+    test("incoming marker write budget stays under 150 DOM mutations during one Plane drop", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), PLANE_V);
+      await setSliderValue(page.locator("#toughness-slider"), 1);
+
+      await page.evaluate(() => {
+        window.__incomingMutationCount = 0;
+        const target = document.getElementById("incoming-marker");
+        const observer = new MutationObserver((records) => {
+          window.__incomingMutationCount += records.length;
+        });
+        observer.observe(target, { attributes: true, childList: true, characterData: true, subtree: true });
+        window.__incomingMutationObserver = observer;
+      });
+
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "settled", { timeout: 15000 });
+
+      const mutationCount = await page.evaluate(() => {
+        window.__incomingMutationObserver.disconnect();
+        return window.__incomingMutationCount;
+      });
+
+      expect(mutationCount).toBeLessThan(150);
+
+      expect(errors).toEqual([]);
+    });
+
+    // Step 1b §9 (CTO ruling): impactViewFor unit tests moved from the
+    // viewport sizes to the real measured #scene-canvas CSS sizes. This
+    // assertion keeps that test constant from silently drifting away from
+    // the real canvas aspect.
+    test("canvas aspect at 1280x900 stays within +/-2% of the impactViewFor test size (592x416)", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      const box = await page.locator("#scene-canvas").evaluate((el) => ({ w: el.clientWidth, h: el.clientHeight }));
+      const measuredAspect = box.w / box.h;
+      const testAspect = 592 / 416;
+
+      expect(
+        Math.abs(measuredAspect - testAspect) / testAspect,
+        `measured canvas ${box.w}x${box.h} (aspect ${measuredAspect}) vs test size aspect ${testAspect}`
+      ).toBeLessThanOrEqual(0.02);
+
+      expect(errors).toEqual([]);
+    });
+
+    test.describe("touch viewport", () => {
+      test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+      test("canvas aspect at 390x844 stays within +/-2% of the impactViewFor test size (358x256)", async ({ page }) => {
+        const errors = trackConsoleAndPageErrors(page);
+        await routeCdnAndRecordUnexpectedRequests(page);
+        await page.goto(gamePath);
+        await waitForPhase(page, "ready");
+
+        const box = await page.locator("#scene-canvas").evaluate((el) => ({ w: el.clientWidth, h: el.clientHeight }));
+        const measuredAspect = box.w / box.h;
+        const testAspect = 358 / 256;
+
+        expect(
+          Math.abs(measuredAspect - testAspect) / testAspect,
+          `measured canvas ${box.w}x${box.h} (aspect ${measuredAspect}) vs test size aspect ${testAspect}`
+        ).toBeLessThanOrEqual(0.02);
+
+        expect(errors).toEqual([]);
+      });
     });
   });
 });

@@ -17,6 +17,7 @@ import {
   heightFromSlider,
   heightSliderLabel,
   impactViewFor,
+  incomingFor,
   instructionsForPhase,
   layoutHash,
   shellPiece,
@@ -80,6 +81,13 @@ function nextDropSeed(pinnedSeed) {
 
 function hexToRgb01(hex) {
   return [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
+}
+
+// Step 1b §9: the height bar's marker and the incoming circle both use the
+// selected fruit's own skin colour via a CSS custom property, so neither
+// hard-codes a colour.
+function hexToCssColor(hex) {
+  return `#${hex.toString(16).padStart(6, "0")}`;
 }
 
 // --- Unbroken-fruit skin (code-drawn CanvasTexture, no image files) --------
@@ -157,6 +165,69 @@ function createFruitSkinTexture(fruit) {
   return texture;
 }
 
+// --- Ground texture (step 1b §9): a faint, code-drawn soil speckle, no ----
+// image files. A deterministic LCG (not Math.random) keeps repeated calls
+// with the same fruit visually identical, matching the pattern already
+// used for the orange skin's dimples.
+const GROUND_TILE_WORLD_SIZE = 30; // matches the ground BoxGeometry's width/depth
+const GROUND_TEXTURE_SIZE = 64;
+
+function drawGroundTexture(context, size) {
+  const hex = (value) => `#${value.toString(16).padStart(6, "0")}`;
+
+  context.fillStyle = hex(GROUND_COLOR);
+  context.fillRect(0, 0, size, size);
+
+  let state = 0x9e3779b1;
+  const rand = () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0xffffffff;
+  };
+
+  // Faint speckle: a handful of slightly lighter/darker dots, low opacity,
+  // so the ground reads as ground without competing with the fruit/debris.
+  for (let i = 0; i < 40; i += 1) {
+    const x = rand() * size;
+    const y = rand() * size;
+    const radius = size * (0.01 + rand() * 0.03);
+    const lighter = rand() > 0.5;
+
+    context.fillStyle = lighter ? "rgba(255, 255, 255, 0.10)" : "rgba(0, 0, 0, 0.10)";
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // A faint tile outline, so the repeat is visible as a subtle grid at
+  // close range without looking like a harsh checkerboard.
+  context.strokeStyle = "rgba(0, 0, 0, 0.06)";
+  context.lineWidth = Math.max(1, size * 0.015);
+  context.strokeRect(0, 0, size, size);
+}
+
+// One tile is about 2 * fruit.radius world metres, so the close-up shot
+// (step 1b §8) shows a sense of scale and depth regardless of fruit size.
+function createGroundTexture(fruit) {
+  const canvas = document.createElement("canvas");
+
+  canvas.width = GROUND_TEXTURE_SIZE;
+  canvas.height = GROUND_TEXTURE_SIZE;
+
+  const context = canvas.getContext("2d");
+
+  drawGroundTexture(context, GROUND_TEXTURE_SIZE);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const repeatCount = GROUND_TILE_WORLD_SIZE / (2 * fruit.radius);
+
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeatCount, repeatCount);
+  texture.needsUpdate = true;
+
+  return texture;
+}
+
 export function start(elements) {
   const {
     main,
@@ -175,7 +246,11 @@ export function start(elements) {
     heightBarTrack,
     heightBarTicks,
     heightBarIndicator,
-    heightBarLabel
+    heightBarLabel,
+    heightBarMarker,
+    incomingMarker,
+    incomingMarkerDot,
+    incomingMarkerLabel
   } = elements;
 
   const fruitRadios = Array.from(fruitFieldset.querySelectorAll('input[name="fruit"]'));
@@ -214,19 +289,44 @@ export function start(elements) {
   scene.add(ambientLight, sunLight);
 
   const groundGeometry = new THREE.BoxGeometry(30, GROUND_HALF_THICKNESS * 2, 30);
-  const groundMaterial = new THREE.MeshStandardMaterial({ color: GROUND_COLOR });
+  // The texture (below) carries the ground's actual colour and speckle;
+  // material.color stays white so the map is not additionally tinted.
+  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
   const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
   groundMesh.position.set(0, GROUND_TOP_Y - GROUND_HALF_THICKNESS, 0);
   scene.add(groundMesh);
 
+  // Ground texture (step 1b §9): view.js is the sole owner, and disposes
+  // the previous texture whenever it replaces it on a fruit change.
+  let groundTexture = createGroundTexture(fruitByKey(currentFruitKey));
+  groundMaterial.map = groundTexture;
+  groundMaterial.needsUpdate = true;
+
+  function applyGroundTexture() {
+    const nextTexture = createGroundTexture(fruitByKey(currentFruitKey));
+
+    groundTexture.dispose();
+    groundTexture = nextTexture;
+    groundMaterial.map = groundTexture;
+    groundMaterial.needsUpdate = true;
+  }
+
   // Camera framing per fruit (step 1b §5): position/target/fov come from
   // impactViewFor, recomputed at start, on resize, and whenever the fruit
   // changes (in ready). Never during a drop.
+  // Step 1b §9: cached so the incoming marker (recomputed every frame while
+  // shown) reuses the same view the camera itself is using, rather than
+  // recomputing impactViewFor from scratch each frame. Recomputed only
+  // where applyImpactView is called: on resize and on fruit change, in
+  // `ready`, never during a drop (no camera motion).
+  let currentView = null;
+
   function applyImpactView() {
     const width = canvas.clientWidth || 1;
     const height = canvas.clientHeight || 1;
     const view = impactViewFor({ width, height, fruit: fruitByKey(currentFruitKey) });
 
+    currentView = view;
     camera.position.set(view.position[0], view.position[1], view.position[2]);
     camera.up.set(0, 1, 0);
     camera.lookAt(view.target[0], view.target[1], view.target[2]);
@@ -681,11 +781,53 @@ export function start(elements) {
     }
   }
 
+  // Step 1b §9: the "incoming" marker. Visible in `ready` and `falling`
+  // while the fruit's LOWEST point is above the frame's top edge (see
+  // rules.js incomingFor for the exact resolution of the plan's own
+  // wording contradiction). Hidden at `settled` and whenever there is no
+  // fruit body (post-split) or incomingFor says it's not visible. Shares
+  // the height bar's write discipline: a DOM write only on an actual
+  // visibility or label change, never every frame.
+  let lastIncomingVisible = null;
+  let lastIncomingLabel = null;
+
+  function setIncomingHidden(hidden) {
+    if (incomingMarker.hidden !== hidden) {
+      incomingMarker.hidden = hidden;
+    }
+  }
+
+  function updateIncomingMarker() {
+    const shownPhase = sim.phase === "ready" || sim.phase === "falling";
+    const fruitBody = shownPhase ? sim.bodies().find((body) => body.kind === "fruit") : null;
+
+    let visible = false;
+    let label = null;
+
+    if (fruitBody && currentView) {
+      const result = incomingFor({ fruitY: fruitBody.position[1], fruitRadius: fruitBody.radius, view: currentView });
+
+      visible = result.visible;
+      label = result.label;
+    }
+
+    if (visible !== lastIncomingVisible) {
+      setIncomingHidden(!visible);
+      lastIncomingVisible = visible;
+    }
+
+    if (visible && label !== lastIncomingLabel) {
+      incomingMarkerLabel.textContent = label;
+      lastIncomingLabel = label;
+    }
+  }
+
   function updateDom() {
     updateControlsEnabled();
     updateStatusText();
     updatePhaseAttributes();
     updateHeightBar();
+    updateIncomingMarker();
   }
 
   function render() {
@@ -749,11 +891,22 @@ export function start(elements) {
     delete main.dataset.layoutHash;
   }
 
+  // Step 1b §9: both markers use the selected fruit's own skin colour, no
+  // hard-coded colour anywhere.
+  function updateFruitColor() {
+    const cssColor = hexToCssColor(fruitByKey(currentFruitKey).skinColor);
+
+    heightBarMarker.style.setProperty("--fruit-color", cssColor);
+    incomingMarkerDot.style.setProperty("--fruit-color", cssColor);
+  }
+
   function applyFruitChange() {
     currentFruitKey = checkedFruitKey();
     sim.reset({ fruit: currentFruitKey });
     clearLayoutHash();
     applyImpactView();
+    applyGroundTexture();
+    updateFruitColor();
     resetSceneMeshes();
     updateReadouts();
     updateDom();
@@ -857,6 +1010,7 @@ export function start(elements) {
 
   // --- initial paint -------------------------------------------------------
   renderHeightSliderTicks();
+  updateFruitColor();
   resizeRendererToDisplaySize();
   syncSceneFromSim();
   updateReadouts();

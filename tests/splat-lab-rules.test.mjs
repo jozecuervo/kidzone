@@ -29,6 +29,7 @@ import {
   heightFromSlider,
   heightSliderLabel,
   impactViewFor,
+  incomingFor,
   jitterFactor,
   kFruitFor,
   layoutHash,
@@ -554,9 +555,15 @@ function visibleWidthAt({ position, target, fov }, aspect) {
   return visibleHeight * aspect;
 }
 
+// Step 1b §9: these are the real measured #scene-canvas CSS sizes at the two
+// supported viewports (390x844 and 1280x900), not the viewport sizes
+// themselves — the canvas is smaller than the viewport (controls take up
+// the rest). A Playwright assertion checks these stay within +/-2% of the
+// canvas's real aspect ratio, so this constant can't silently drift from
+// reality.
 const VIEW_SIZES = [
-  { width: 390, height: 844 },
-  { width: 1280, height: 900 }
+  { width: 358, height: 256 },
+  { width: 592, height: 416 }
 ];
 
 test("impactViewFor: vertical fov stays <= 75 degrees at both sizes, for every fruit", () => {
@@ -672,6 +679,92 @@ test("impactViewFor: same inputs give deep-equal outputs", () => {
   const fruit = fruitByKey("watermelon");
   const first = impactViewFor({ width: 1280, height: 900, fruit });
   const second = impactViewFor({ width: 1280, height: 900, fruit });
+
+  assert.deepEqual(first, second);
+});
+
+// --- step 1b §9: the "incoming" marker ------------------------------------------
+
+// Independently reconstructs hEdge (the height on the impact point's
+// vertical line exactly at the frame's top edge) from the raw view, rather
+// than calling incomingFor, so this actually checks incomingFor's formula
+// rather than just its own self-consistency.
+function computeHEdge(view) {
+  const camY = view.position[1];
+  const horiz = Math.hypot(view.position[0], view.position[2]);
+  const pitch = Math.atan2(camY - view.target[1], horiz);
+  const halfFovRad = (view.fov * Math.PI) / 180 / 2;
+
+  return Math.max(0, camY + horiz * Math.tan(halfFovRad - pitch));
+}
+
+test("incomingFor: visible just above hEdge, hidden just below it (+/- 1mm)", () => {
+  const fruit = fruitByKey("watermelon");
+  const view = impactViewFor({ ...VIEW_SIZES[1], fruit });
+  const hEdge = computeHEdge(view);
+
+  const justAbove = incomingFor({ fruitY: hEdge + 0.001 + fruit.radius, fruitRadius: fruit.radius, view });
+  const justBelow = incomingFor({ fruitY: hEdge - 0.001 + fruit.radius, fruitRadius: fruit.radius, view });
+
+  assert.equal(justAbove.visible, true);
+  assert.equal(justBelow.visible, false);
+});
+
+test("incomingFor: hidden at ground (fruitY = R)", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+      const result = incomingFor({ fruitY: fruit.radius, fruitRadius: fruit.radius, view });
+
+      assert.equal(result.visible, false, `${key} at ${JSON.stringify(size)}: should be hidden at ground`);
+      assert.equal(result.metresAbove, 0);
+    }
+  }
+});
+
+test("incomingFor: visible for every fruit at Counter (fruitY = 1 + R), at both real canvas sizes", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+      const result = incomingFor({ fruitY: 1 + fruit.radius, fruitRadius: fruit.radius, view });
+
+      assert.equal(result.visible, true, `${key} at ${JSON.stringify(size)}: should be visible at Counter`);
+    }
+  }
+});
+
+test("incomingFor: label matches formatHeight(metresAbove)", () => {
+  const fruit = fruitByKey("watermelon");
+  const view = impactViewFor({ ...VIEW_SIZES[1], fruit });
+  const result = incomingFor({ fruitY: 1 + fruit.radius, fruitRadius: fruit.radius, view });
+
+  assert.equal(result.label, formatHeight(result.metresAbove));
+  assert.ok(result.metresAbove > 0);
+});
+
+test("incomingFor: correct above the camera height (e.g. 60 m), where naive NDC projection breaks", () => {
+  const fruit = fruitByKey("watermelon");
+  const view = impactViewFor({ ...VIEW_SIZES[1], fruit });
+
+  assert.ok(view.position[1] < 60, "camera should be well below 60 m for this to be a meaningful check");
+
+  const result = incomingFor({ fruitY: 60 + fruit.radius, fruitRadius: fruit.radius, view });
+
+  assert.equal(result.visible, true);
+  assert.ok(Number.isFinite(result.metresAbove) && result.metresAbove > 0);
+  assert.ok(result.metresAbove < 60, "metresAbove should be less than the full drop height (some of it is within the frame)");
+});
+
+test("incomingFor: deterministic for the same inputs", () => {
+  const fruit = fruitByKey("watermelon");
+  const view = impactViewFor({ ...VIEW_SIZES[1], fruit });
+
+  const first = incomingFor({ fruitY: 1 + fruit.radius, fruitRadius: fruit.radius, view });
+  const second = incomingFor({ fruitY: 1 + fruit.radius, fruitRadius: fruit.radius, view });
 
   assert.deepEqual(first, second);
 });

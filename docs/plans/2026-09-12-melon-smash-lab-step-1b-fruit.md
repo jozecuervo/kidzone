@@ -272,6 +272,42 @@ decorative CSS marks with no snapping. Restore the plan's mid-track drag test: a
 **Screenshots,** same set as before, plus the unbroken fruit in `ready` for each fruit
 at 390x844.
 
+## 9. Show what's coming (CTO screenshot review of §8, 2026-09-12)
+
+The close-up now reads well at impact, but in `ready` and during most of the fall the shot
+is an empty brown field with a shadow. The hanging fruit is above the frame, as expected
+for a close camera, and the height bar's marker is a green ball whatever the fruit.
+
+- **"Incoming" marker (option c).**
+  - **What it is:** a small DOM overlay at the top edge of the canvas, directly above the
+    impact point: a down-arrow, a fruit-coloured circle, and the distance above the frame
+    edge in metres.
+  - **When it shows:** in `ready` and `falling` while the fruit's projected position is
+    above the frame. It hides the moment any part of the fruit enters the frame, and
+    shows again on reset.
+  - **Other rules:** `aria-hidden`. It writes only when its rounded label changes, sharing
+    the bar's write discipline. No camera motion.
+- **Fruit-coloured markers.** The height bar's marker and the incoming circle use the
+  selected fruit's skin colour (tomato red, watermelon green, apple red, orange orange,
+  coconut brown), and they update when the fruit changes in `ready`.
+- **Ground that reads as ground.** Add a subtle, code-drawn CanvasTexture: a faint tile
+  or soil speckle, repeated at a scale tied to fruit radius so the close-up shows size
+  and depth. Keep the palette. No image files.
+- **Tests:**
+  - **Pure `incomingFor({ fruitY, fruitRadius, view })`:** it is visible exactly when the
+    fruit's top projection is above the frame, and the label is correct.
+  - **Playwright, ready and hidden:** in `ready`, the incoming marker is visible for every
+    fruit at Counter. During a Counter watermelon drop it becomes hidden before `settled`.
+  - **Playwright, reset:** it reappears after reset. Run that sequence twice.
+  - **Playwright, colour:** the marker colour matches the fruit (read the CSS custom
+    property) for two different fruits.
+  - **Playwright, writes:** the marker's write count during a Plane drop is under 150.
+- **Mutations:**
+  - Never hide the marker: the hidden-before-settled test must fail.
+  - Hard-code green: the colour test must fail.
+- **Screenshots:** `ready` for every fruit at 390x844, a mid-fall watermelon at Roof, and
+  the Counter crack settled. Replace the old set.
+
 ## Tests (added or replaced; none loosened)
 
 **Rules unit tests:**

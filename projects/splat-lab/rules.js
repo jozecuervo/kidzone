@@ -473,6 +473,37 @@ function clampNumber(value, min, max) {
   return Math.max(min, Math.min(value, max));
 }
 
+// Step 1b §9: the "incoming" marker. Resolves the plan's self-contradiction
+// (marker hides "the moment any part of the fruit enters the frame" vs. the
+// test wording "the fruit's top projection is above the frame") in favour
+// of the first: visibility is keyed on the fruit's LOWEST point (centre y -
+// radius), on the vertical line through the impact point.
+//
+// Uses angles, not NDC projection: NDC's sign flips for points behind the
+// camera plane (camZ <= 0), which happens for points high above the camera
+// (e.g. a fruit released from Plane, 60 m up, is behind the camera's near
+// plane in the camera's own forward direction terms) — exactly the case
+// this marker exists to handle.
+export function incomingFor({ fruitY, fruitRadius, view }) {
+  const camY = view.position[1];
+  const horiz = Math.hypot(view.position[0], view.position[2]);
+  const targetY = view.target[1];
+  const pitch = Math.atan2(camY - targetY, horiz);
+  const halfFovRad = (view.fov * Math.PI) / 180 / 2;
+
+  // Height (on the impact point's vertical line) exactly at the frame's top
+  // edge: solving a(h) = halfFov for h, where
+  // a(h) = atan2(h - camY, horiz) + pitch is a point at height h's angle
+  // above the camera's forward axis.
+  const hEdge = Math.max(0, camY + horiz * Math.tan(halfFovRad - pitch));
+
+  const lowestPoint = fruitY - fruitRadius;
+  const visible = lowestPoint > hEdge;
+  const metresAbove = Math.max(0, lowestPoint - hEdge);
+
+  return { visible, metresAbove, label: formatHeight(metresAbove) };
+}
+
 // Step 1b §8: the height bar now uses the same log scale as the height
 // slider (sliderFromHeight), so landmark ticks spread out instead of
 // bunching near the bottom of a linear scale. s(0.3) is exactly 0 by

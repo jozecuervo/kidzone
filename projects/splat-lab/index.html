@@ -30,6 +30,11 @@
 
       <section class="stage-panel" aria-label="Drop scene">
         <canvas id="scene-canvas"></canvas>
+        <div id="incoming-marker" class="incoming-marker" aria-hidden="true" hidden>
+          <span class="incoming-marker-arrow" aria-hidden="true">&#9660;</span>
+          <span id="incoming-marker-dot" class="incoming-marker-dot"></span>
+          <span id="incoming-marker-label" class="incoming-marker-label">0.0 m</span>
+        </div>
         <div id="height-bar" class="height-bar" aria-hidden="true">
           <div id="height-bar-track" class="height-bar-track">
             <div id="height-bar-ticks" class="height-bar-ticks"></div>
@@ -124,7 +129,11 @@
           heightBarTrack: document.getElementById("height-bar-track"),
           heightBarTicks: document.getElementById("height-bar-ticks"),
           heightBarIndicator: document.getElementById("height-bar-indicator"),
-          heightBarLabel: document.getElementById("height-bar-label")
+          heightBarLabel: document.getElementById("height-bar-label"),
+          heightBarMarker: document.getElementById("height-bar-marker"),
+          incomingMarker: document.getElementById("incoming-marker"),
+          incomingMarkerDot: document.getElementById("incoming-marker-dot"),
+          incomingMarkerLabel: document.getElementById("incoming-marker-label")
         }))
         .catch(() => {
           document.getElementById("load-failure").hidden = false;
