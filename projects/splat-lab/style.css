@@ -95,10 +95,19 @@ body {
 
 .height-bar-track {
   position: relative;
-  width: 3rem;
-  min-width: 44px;
+  /* Step 1b §8: a slim 16-20px track (including its border, box-sizing is
+     border-box globally), not the old 44px-minimum pill that covered ~15%
+     of the canvas. The bar is aria-hidden and pointer-events:none — it was
+     never interactive, so the old 44px touch-target minimum never applied
+     to it. An OPAQUE background (not the old translucent
+     rgba(255,255,255,0.55)): with the old alpha, a settled debris piece
+     directly behind the track showed through as a stray coloured dot (seen
+     in the 390x844 Plane screenshot review) — the cause was debris on the
+     canvas showing through the DOM overlay, not a stray DOM element (there
+     is exactly one .height-bar-marker; see the Playwright assertion). */
+  width: 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
+  background: #eef3f7;
   border: 1px solid rgba(20, 40, 60, 0.3);
 }
 
@@ -222,6 +231,38 @@ body {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 0.75rem;
+}
+
+/* Step 1b §8: the height slider's landmark ticks are decorative CSS marks
+   (no `<datalist>` — Chromium magnetically snaps a pointer drag to a
+   datalist option near it, which is a form of stepping Jose ruled out).
+   The wrap only exists to host the ticks positioned under the native
+   track; it does not change the input's own hit area or behaviour. */
+.height-slider-wrap {
+  position: relative;
+}
+
+.height-slider-wrap input {
+  display: block;
+  width: 100%;
+}
+
+.height-slider-ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.2rem;
+  height: 0.4rem;
+  pointer-events: none;
+}
+
+.height-slider-tick {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 0.4rem;
+  background: var(--line);
+  transform: translateX(-50%);
 }
 
 .toughness-ends {
@@ -383,7 +424,8 @@ body {
     grid-area: label;
   }
 
-  .control-row input {
+  .control-row input,
+  .control-row .height-slider-wrap {
     grid-area: slider;
     min-width: 0;
   }

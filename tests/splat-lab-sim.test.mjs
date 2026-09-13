@@ -9,6 +9,7 @@ import {
   LANDMARKS,
   MAX_DYNAMIC_BODIES,
   MAX_SETTLE_STEPS,
+  containmentWidthFor,
   expectedImpactSpeed,
   fruitByKey,
   kFruitFor
@@ -444,7 +445,7 @@ test("containment: all five fruits x seeds 1-20 at Plane t=1", () => {
 
   for (const fruitKey of FRUIT_KEYS) {
     const fruit = fruitByKey(fruitKey);
-    const W = 25 * fruit.radius;
+    const W = containmentWidthFor(fruit); // step 1b §8: 0.5W = 12.5R, W = 25R, physics-only
     const runner = runPlaneT1(fruitKey);
     let minWithinHalfW = Infinity;
     let maxFarOverW = 0;

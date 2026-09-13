@@ -716,6 +716,48 @@ test.describe("Splat Lab", () => {
     expect(errors).toEqual([]);
   });
 
+  // Step 1b §8: the "stray pink dot" seen in the 390x844 Plane screenshot
+  // review was debris on the canvas showing through the height-bar track's
+  // translucent background (rgba(255,255,255,0.55)), not a stray DOM
+  // element. Two assertions that fit that cause: exactly one
+  // .height-bar-marker (no duplicate/stray positioned indicator), and the
+  // track's computed background-color has alpha 1 (opaque, so canvas
+  // content can no longer show through it).
+  test("B3: the pink-dot cause stays fixed — exactly one .height-bar-marker, and the track background is opaque", async ({ page }) => {
+    const errors = trackConsoleAndPageErrors(page);
+    await routeCdnAndRecordUnexpectedRequests(page);
+    await page.goto(gamePath);
+    await waitForPhase(page, "ready");
+
+    await setSliderValue(page.locator("#height-slider"), PLANE_V);
+    await setSliderValue(page.locator("#toughness-slider"), 1);
+    await page.getByRole("button", { name: "Drop" }).click();
+    await waitForPhase(page, "settled", { timeout: 15000 });
+
+    const markerCount = await page.locator("#height-bar .height-bar-marker").count();
+    expect(markerCount).toBe(1);
+
+    // No other positioned children beyond the track's own ticks, label and
+    // indicator: the height bar's direct DOM shape stays exactly
+    // track > (ticks, indicator > (marker, label)).
+    const structure = await page.locator("#height-bar").evaluate((bar) => {
+      const track = bar.querySelector("#height-bar-track");
+      const directChildIds = Array.from(track.children).map((el) => el.id || el.className);
+      return directChildIds;
+    });
+    expect(structure.sort()).toEqual(["height-bar-indicator", "height-bar-ticks"].sort());
+
+    const trackBackgroundAlpha = await page.locator("#height-bar-track").evaluate((track) => {
+      const color = getComputedStyle(track).backgroundColor;
+      const match = color.match(/rgba?\(([^)]+)\)/);
+      const parts = match[1].split(",").map((part) => Number(part.trim()));
+      return parts.length === 4 ? parts[3] : 1;
+    });
+    expect(trackBackgroundAlpha).toBe(1);
+
+    expect(errors).toEqual([]);
+  });
+
   test("B2/B3: the height bar marker moves down during a Plane fall and reaches the track bottom at settled", async ({ page }) => {
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
@@ -907,7 +949,10 @@ test.describe("Splat Lab", () => {
     const barBox = await page.locator("#height-bar").boundingBox();
     const trackBox = await page.locator("#height-bar-track").boundingBox();
 
-    expect(trackBox.width).toBeGreaterThanOrEqual(44);
+    // Step 1b §8: the 44px minimum is withdrawn (the bar is aria-hidden and
+    // pointer-events:none, never interactive); the track is now a slim
+    // 16-20px strip.
+    expect(trackBox.width).toBeLessThanOrEqual(20);
 
     // V1: tick and marker names are positioned to the LEFT of the track via
     // CSS, outside #height-bar's own layout box, so its boundingBox() alone
@@ -1019,7 +1064,7 @@ test.describe("Splat Lab", () => {
     await checkNoIntersection(); // settled
   }
 
-  test("B1/B3: the bar never covers the contact point at 1280x900, and the track stays >= 44px wide", async ({ page }) => {
+  test("B1/B3: the bar never covers the contact point at 1280x900, and the track is at most 20px wide", async ({ page }) => {
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await assertBarAvoidsContactPointAndTrackIsWideEnough(page);
@@ -1050,7 +1095,7 @@ test.describe("Splat Lab", () => {
   test.describe("touch viewport", () => {
     test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
-    test("B1/B3: the bar never covers the contact point at 390x844, and the track stays >= 44px wide", async ({ page }) => {
+    test("B1/B3: the bar never covers the contact point at 390x844, and the track is at most 20px wide", async ({ page }) => {
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
       await assertBarAvoidsContactPointAndTrackIsWideEnough(page);
@@ -1156,28 +1201,12 @@ test.describe("Splat Lab", () => {
       expect(errors).toEqual([]);
     });
 
-    // Deviation from the plan's literal example (found while writing this
-    // test, not hand-tuned to force it green): the plan's own worked example
-    // asks for a pointer drag to the visual middle of the track, expecting
-    // heightFromSlider(500) (~4.2 m) within 10%. But the height slider also
-    // carries the required `<datalist>` landmark ticks (§7's "the named
-    // heights show as <datalist> tick marks"), and Chromium's native
-    // pointer handling for a `list`-bound range input magnetically snaps a
-    // click/drag near a tick to that tick's exact value. Slider value 531
-    // (Treehouse) sits only ~31 units from the logical midpoint (500) — well
-    // inside that snap radius — so a literal mid-track click always lands
-    // on Treehouse (~5.0 m), which is itself ~17.8% away from 4.2 m: outside
-    // the plan's own 10% band. This is a real, reproducible browser
-    // behaviour (confirmed by removing the `list` attribute, which restores
-    // an exact midpoint click), not a test-precision issue, and it cannot be
-    // fixed without removing the landmark ticks the plan also requires.
-    // Reported to the CTO/Jose; in the meantime this test targets a
-    // track position clear of every landmark's snap radius (slider value
-    // ~400, ~173 units from the nearest landmark) to still prove that a
-    // genuine pointer/touch drag lands on the correct continuous height for
-    // wherever it actually lands, with no discrete jump to an unintended
-    // value.
-    test("pointer: dragging to a non-landmark point mid-track gives the height that position maps to, within 10%", async ({ page }) => {
+    // Step 1b §8: restored to the plan's original mid-track drag test. The
+    // §7 workaround (targeting a non-landmark point) is no longer needed —
+    // the `<datalist>` (and the Chromium pointer-snap-to-tick behaviour it
+    // caused) is removed in §8; landmark ticks are now purely decorative
+    // CSS marks with no effect on pointer/touch input.
+    test("pointer: dragging to mid-track gives a height near heightFromSlider(500) (~4.2 m), within 10%", async ({ page }) => {
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
       await page.goto(gamePath);
@@ -1186,18 +1215,10 @@ test.describe("Splat Lab", () => {
       const heightSlider = page.locator("#height-slider");
       const sliderBox = await heightSlider.boundingBox();
 
-      await heightSlider.click({ position: { x: sliderBox.width * 0.4, y: sliderBox.height / 2 } });
+      await heightSlider.click({ position: { x: sliderBox.width / 2, y: sliderBox.height / 2 } });
 
       const actualValue = Number(await heightSlider.inputValue());
-      // Confirm the click didn't land inside a landmark's snap radius, or
-      // this test would silently degrade into testing the snap instead.
-      for (const landmark of LANDMARKS) {
-        const landmarkValue = sliderFromHeight(landmark.meters);
-        expect(
-          Math.abs(actualValue - landmarkValue),
-          `clicked value ${actualValue} landed on/near the ${landmark.name} landmark (${landmarkValue}); pick a different fraction`
-        ).toBeGreaterThan(50);
-      }
+      expect(Math.abs(actualValue - 500), `slider value ${actualValue} is more than 10 away from 500`).toBeLessThanOrEqual(10);
 
       const readoutText = await page.locator("#height-readout").textContent();
       const match = readoutText.match(/^([\d.]+)\s*m/);
@@ -1205,7 +1226,7 @@ test.describe("Splat Lab", () => {
       expect(match, `readout text "${readoutText}" did not start with a metres value`).not.toBeNull();
 
       const meters = Number(match[1]);
-      const expectedMeters = heightFromSlider(actualValue);
+      const expectedMeters = heightFromSlider(500); // ~4.2426 m
 
       expect(Math.abs(meters - expectedMeters) / expectedMeters).toBeLessThanOrEqual(0.1);
 
@@ -1215,7 +1236,7 @@ test.describe("Splat Lab", () => {
     test.describe("touch viewport", () => {
       test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
-      test("touch: tapping a non-landmark point mid-track gives the height that position maps to, within 10%", async ({ page }) => {
+      test("touch: tapping mid-track gives a height near heightFromSlider(500) (~4.2 m), within 10%", async ({ page }) => {
         const errors = trackConsoleAndPageErrors(page);
         await routeCdnAndRecordUnexpectedRequests(page);
         await page.goto(gamePath);
@@ -1224,16 +1245,10 @@ test.describe("Splat Lab", () => {
         const heightSlider = page.locator("#height-slider");
         const sliderBox = await heightSlider.boundingBox();
 
-        await heightSlider.tap({ position: { x: sliderBox.width * 0.4, y: sliderBox.height / 2 } });
+        await heightSlider.tap({ position: { x: sliderBox.width / 2, y: sliderBox.height / 2 } });
 
         const actualValue = Number(await heightSlider.inputValue());
-        for (const landmark of LANDMARKS) {
-          const landmarkValue = sliderFromHeight(landmark.meters);
-          expect(
-            Math.abs(actualValue - landmarkValue),
-            `tapped value ${actualValue} landed on/near the ${landmark.name} landmark (${landmarkValue}); pick a different fraction`
-          ).toBeGreaterThan(50);
-        }
+        expect(Math.abs(actualValue - 500), `tapped value ${actualValue} is more than 10 away from 500`).toBeLessThanOrEqual(10);
 
         const readoutText = await page.locator("#height-readout").textContent();
         const match = readoutText.match(/^([\d.]+)\s*m/);
@@ -1241,12 +1256,27 @@ test.describe("Splat Lab", () => {
         expect(match, `readout text "${readoutText}" did not start with a metres value`).not.toBeNull();
 
         const meters = Number(match[1]);
-        const expectedMeters = heightFromSlider(actualValue);
+        const expectedMeters = heightFromSlider(500); // ~4.2426 m
 
         expect(Math.abs(meters - expectedMeters) / expectedMeters).toBeLessThanOrEqual(0.1);
 
         expect(errors).toEqual([]);
       });
+    });
+
+    test("no datalist is present, and #height-slider has no list attribute", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      const datalistCount = await page.evaluate(() => document.querySelectorAll("datalist").length);
+      expect(datalistCount).toBe(0);
+
+      const hasListAttribute = await page.locator("#height-slider").evaluate((el) => el.hasAttribute("list"));
+      expect(hasListAttribute).toBe(false);
+
+      expect(errors).toEqual([]);
     });
 
     test("a drop at an arbitrary height (7.3 m) reports \"7.3 m\" in the result", async ({ page }) => {

@@ -8,6 +8,8 @@ import {
   DEFAULT_FRUIT_KEY,
   DEFAULT_TOUGHNESS,
   FIXED_STEP,
+  HEIGHT_SLIDER_MAX,
+  LANDMARKS,
   chunkShape,
   controlsEnabledForPhase,
   fruitByKey,
@@ -17,7 +19,8 @@ import {
   impactViewFor,
   instructionsForPhase,
   layoutHash,
-  shellPiece
+  shellPiece,
+  sliderFromHeight
 } from "./rules.js";
 
 const MAX_STEPS_PER_FRAME = 5;
@@ -33,10 +36,25 @@ const GROUND_HALF_THICKNESS = 5;
 // tripping the "< 150" Playwright budget test with no margin.)
 const HEIGHT_BAR_FRACTION_EPSILON = 0.02;
 // Blob shadow: grows and darkens as the fruit's lowest point approaches the
-// ground, reaching full size/darkness within this many metres of it.
+// ground, reaching full size/darkness within this many metres of it. The
+// two scales were tuned as absolute metres (0.35-1.1m) against the OLD,
+// containment-tied camera, where the frame was ~12.5x a fruit's own
+// diameter wide (diameter = 8% of view width) — a ~1m shadow was a modest
+// fraction of that wide frame. Step 1b §8's per-fruit close-up framing
+// makes the fruit's diameter 25% of view width instead (frame = 8x the
+// fruit's radius wide), so keeping the shadow an absolute size — or even
+// keeping it a multiple of the OLD radius-relative ratio (still tuned
+// against the old, much wider frame) — made it enormous relative to the
+// new, tightly-framed shot: a solid dark blob covering most of the canvas,
+// completely hiding the fruit (found via a `ready` screenshot review).
+// Retuned as a multiple of the fruit's own radius, sized against the NEW
+// frame width (8R): 1.5R-3.5R keeps the shadow visually smaller than the
+// fruit's own diameter (2R) at its smallest and at most ~44% of the frame
+// width at its largest (near touchdown), leaving the fruit clearly the
+// larger, dominant shape in frame at every distance.
+const SHADOW_MIN_SCALE = 1.5;
+const SHADOW_MAX_SCALE = 3.5;
 const SHADOW_CLOSE_DISTANCE_M = 4;
-const SHADOW_MIN_SCALE = 0.35;
-const SHADOW_MAX_SCALE = 1.1;
 const SHADOW_MIN_OPACITY = 0.12;
 const SHADOW_MAX_OPACITY = 0.5;
 
@@ -145,6 +163,7 @@ export function start(elements) {
     canvas,
     fruitFieldset,
     heightSlider,
+    heightSliderTicks,
     heightReadout,
     toughnessSlider,
     toughnessReadout,
@@ -263,7 +282,7 @@ export function start(elements) {
 
     const fruitY = Math.max(0, fruitBody.position[1] - fruitBody.radius);
     const closeness = 1 - Math.min(1, fruitY / SHADOW_CLOSE_DISTANCE_M);
-    const scale = SHADOW_MIN_SCALE + (SHADOW_MAX_SCALE - SHADOW_MIN_SCALE) * closeness;
+    const scale = fruitBody.radius * (SHADOW_MIN_SCALE + (SHADOW_MAX_SCALE - SHADOW_MIN_SCALE) * closeness);
 
     shadowMesh.scale.set(scale, scale, 1);
     shadowMesh.position.set(fruitBody.position[0], GROUND_TOP_Y + 0.002, fruitBody.position[2]);
@@ -607,6 +626,27 @@ export function start(elements) {
     });
   }
 
+  // Step 1b §8: decorative marks under the height slider for the six
+  // landmarks, positioned at sliderFromHeight(L)/1000 of the track width.
+  // Static (rendered once) — these mark fixed positions on the 0-1000
+  // slider, independent of the currently chosen height, unlike the height
+  // bar's own ticks (which only show landmarks at or below the chosen
+  // height). No `<datalist>`: see .height-slider-wrap's CSS comment.
+  function renderHeightSliderTicks() {
+    if (!heightSliderTicks) return;
+
+    heightSliderTicks.textContent = "";
+
+    for (const landmark of LANDMARKS) {
+      const tickEl = document.createElement("span");
+      const fraction = sliderFromHeight(landmark.meters) / HEIGHT_SLIDER_MAX;
+
+      tickEl.className = "height-slider-tick";
+      tickEl.style.left = `${fraction * 100}%`;
+      heightSliderTicks.appendChild(tickEl);
+    }
+  }
+
   function updateHeightBar() {
     const heightM = currentHeightM;
     const fruitY = currentFruitY();
@@ -816,6 +856,7 @@ export function start(elements) {
   window.addEventListener("resize", resizeRendererToDisplaySize);
 
   // --- initial paint -------------------------------------------------------
+  renderHeightSliderTicks();
   resizeRendererToDisplaySize();
   syncSceneFromSim();
   updateReadouts();

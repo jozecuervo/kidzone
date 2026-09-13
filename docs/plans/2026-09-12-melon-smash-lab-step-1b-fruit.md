@@ -224,6 +224,54 @@ were the CTO's own proxies, not Jose's requirements; his requirement is realism.
   - a drop at an arbitrary height, for example 7.3 m, reports "7.3 m" in the result.
 - **Mutation:** set `step="100"` on the slider. The ArrowRight test must fail.
 
+## 8. Visual pass (CTO screenshot review, 2026-09-12)
+
+The screenshots show that the "close-up" isn't close. A Counter watermelon crack is a
+dozen specks on a field of brown, and a Plane smash is dots. Jose's ask was "zoom in on
+the drop zone so we can see the impact", and this misses it. The 8% framing rule was the
+CTO's proxy and was too weak.
+
+**Camera**
+- **Angle:** a low three-quarter view, 20-30° above the ground, looking at the impact
+  point. The horizon may be visible, but ground fills at least 60% of the frame.
+- **Distance:** scaled per fruit, so the **unbroken fruit's diameter is about 25% of the
+  view width** (tested within 20-30%) at 390x844 and 1280x900. The 75° field-of-view cap
+  stays.
+- **Separate from containment:** framing is no longer tied to containment. The
+  containment and energy tests keep their current numbers, restated in fruit radii
+  (0.5W = 12.5R, W = 25R) and asserted on physics, not on the view. At the extreme
+  settings (Plane, squishy) debris is allowed to leave the shot; the impact is what must
+  be visible.
+
+**Height bar**
+- **Size:** a slim track of 16-20 px, no longer the pill that covers about 15% of the
+  canvas. The earlier 44 px minimum is withdrawn, since the bar isn't interactive.
+- **Scale:** the same log scale as the slider (`sliderFromHeight`), so landmark ticks
+  spread out instead of bunching at the bottom.
+- **Stray pink dot:** the 390x844 Plane screenshot shows a pink dot in the middle of the
+  bar. Find it and remove it. If it's a debris mesh rendered over the bar, say so.
+- **Labels:** landmark labels sit inside the canvas edge and never overlap the moving
+  label (the existing test).
+
+**Slider ticks:** remove the `<datalist>`. Chromium snaps a drag to the nearest option,
+which is stepping, and Jose ruled that out. Draw the landmark ticks under the slider as
+decorative CSS marks with no snapping. Restore the plan's mid-track drag test: a drag to
+500 gives about 4.2 m ±10%, by pointer and by touch.
+
+**Tests**
+- A unit test checks the fruit's on-screen diameter fraction for every fruit at both
+  sizes, using pinhole maths.
+- Playwright checks the bar track is at most 20 px wide and that no `datalist` is
+  present.
+- The mid-track drag test is restored.
+
+**Mutations**
+- Put the `datalist` back: the drag test must fail.
+- Use the old 25R framing: the diameter-fraction test must fail.
+
+**Screenshots,** same set as before, plus the unbroken fruit in `ready` for each fruit
+at 390x844.
+
 ## Tests (added or replaced; none loosened)
 
 **Rules unit tests:**

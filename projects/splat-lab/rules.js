@@ -387,72 +387,122 @@ export function controlsEnabledForPhase(phase) {
   };
 }
 
-// Camera framing per fruit (step 1b §5, replacing the fixed-width step 1
-// camera): the ground width is exactly 25x the fruit's radius (so the fruit
-// is 8% of the frame width), and the vertical field of view stays at or
-// below 75 degrees at every aspect ratio. Position/target are constants for
-// a given fruit — the same for every screen size — and only the vertical
-// fov (three.js convention) varies with aspect, exactly like step 1's
-// camera. The narrowest supported aspect (390x844 portrait) needs the
-// largest vertical fov for a given width, so sizing the camera distance
-// against that aspect and the fov cap keeps every wider aspect safely
-// under the cap too (a wider aspect needs LESS vertical fov for the same
-// width). Because horizontal fov is fixed by width/distance alone, the
-// visible width comes out to exactly W at any aspect, not just the
-// reference one.
-export function viewWidthFor(fruit) {
+// Containment width (step 1b §8, split off from camera framing): 25x the
+// fruit's radius. Framing (below) is no longer tied to this — it is now
+// sized to make the fruit visibly large in frame — but containment and the
+// energy guard still reference this exact number, restated in fruit radii
+// (0.5W = 12.5R, W = 25R), asserted purely on physics.
+export function containmentWidthFor(fruit) {
   return 25 * fruit.radius;
 }
 
+// Camera framing per fruit (step 1b §8, replacing the containment-tied step
+// 1b §5 camera): a low three-quarter view, looking at the impact point
+// (0,0,0). The 8% ground-width framing was too weak to see the impact
+// ("the screenshots show dots"); framing is now sized so the UNBROKEN
+// fruit's diameter is ~25% of the view width (tested within 20-30%),
+// measured with pinhole maths at the target distance, per fruit and aspect.
+//
+// Both the elevation angle and the horizontal field of view are fixed
+// constants, independent of fruit and aspect: elevation because the plan
+// asks for "20-30 degrees above ground" as a single camera pose, and
+// horizontal fov because fixing it (and solving distance per-fruit from the
+// diameter-fraction target) makes the diameter fraction come out the same
+// at any aspect ratio for a given fruit — the fraction only depends on
+// horizontal fov and distance, not aspect (see impactViewFor below). Only
+// the per-fruit distance (which scales with R) and the derived vertical fov
+// (which varies with aspect, larger at the narrower portrait aspect,
+// exactly like the old camera) change.
+const IMPACT_VIEW_ELEVATION_DEG = 25;
+const IMPACT_VIEW_DIAMETER_FRACTION = 0.25;
 const IMPACT_VIEW_MAX_VERTICAL_FOV_DEG = 75;
-const IMPACT_VIEW_REFERENCE_ASPECT = 390 / 844;
+const IMPACT_VIEW_REFERENCE_ASPECT = 390 / 844; // narrowest supported aspect: needs the most vertical fov
 // A small margin so floating-point rounding never nudges the reference
 // aspect's fov a hair past the 75 degree cap.
-const IMPACT_VIEW_DISTANCE_MARGIN = 1.02;
-// Fixed elevation direction from the target to the camera (same angle for
-// every fruit and aspect; only the distance along it changes per fruit).
-const IMPACT_VIEW_DIRECTION = (() => {
-  const raw = [0, 0.24, 1];
-  const length = Math.hypot(...raw);
+const IMPACT_VIEW_FOV_MARGIN = 0.98;
 
-  return raw.map((component) => component / length);
+const IMPACT_VIEW_ELEVATION_RAD = (IMPACT_VIEW_ELEVATION_DEG * Math.PI) / 180;
+// Fixed elevation direction from the target to the camera: horizontal
+// forward/back (z) and vertical (y) components of a unit vector at
+// IMPACT_VIEW_ELEVATION_DEG above the ground plane.
+const IMPACT_VIEW_DIRECTION = [0, Math.sin(IMPACT_VIEW_ELEVATION_RAD), Math.cos(IMPACT_VIEW_ELEVATION_RAD)];
+
+// Horizontal half-fov (radians), fixed for every fruit and aspect: the
+// largest value whose derived vertical fov at the reference (portrait)
+// aspect still stays under the 75 degree cap, times a small safety margin.
+const IMPACT_VIEW_HALF_HFOV_RAD = (() => {
+  const capHalfRad = (IMPACT_VIEW_MAX_VERTICAL_FOV_DEG * Math.PI) / 180 / 2;
+  const rawHalfHfovRad = Math.atan(Math.tan(capHalfRad) * IMPACT_VIEW_REFERENCE_ASPECT);
+
+  return rawHalfHfovRad * IMPACT_VIEW_FOV_MARGIN;
 })();
-
-function impactViewDistanceForWidth(width) {
-  const capRad = (IMPACT_VIEW_MAX_VERTICAL_FOV_DEG * Math.PI) / 180;
-  const minDistance = width / (2 * IMPACT_VIEW_REFERENCE_ASPECT * Math.tan(capRad / 2));
-
-  return minDistance * IMPACT_VIEW_DISTANCE_MARGIN;
-}
 
 export function impactViewFor({ width, height, fruit }) {
   const aspect = width / height;
-  const groundWidth = viewWidthFor(fruit);
-  const distance = impactViewDistanceForWidth(groundWidth);
+  const diameter = 2 * fruit.radius;
+  // fraction = 2R / visibleWidth = 2R / (2 * distance * tan(hfov/2))
+  // => distance = R / (fraction * tan(hfov/2))
+  const distance = fruit.radius / (IMPACT_VIEW_DIAMETER_FRACTION * Math.tan(IMPACT_VIEW_HALF_HFOV_RAD));
   const position = IMPACT_VIEW_DIRECTION.map((component) => component * distance);
   const target = [0, 0, 0];
-  const horizontalHalfFovRad = Math.atan(groundWidth / 2 / distance);
-  const verticalHalfFovRad = Math.atan(Math.tan(horizontalHalfFovRad) / aspect);
+  const verticalHalfFovRad = Math.atan(Math.tan(IMPACT_VIEW_HALF_HFOV_RAD) / aspect);
   const fov = verticalHalfFovRad * 2 * (180 / Math.PI);
+  const visibleWidth = 2 * distance * Math.tan(IMPACT_VIEW_HALF_HFOV_RAD);
+  const diameterFraction = diameter / visibleWidth;
+  // Ground fraction: the horizon (an infinitely distant point at the
+  // camera's own height) projects to NDC y = tan(elevation) / tan(vfov/2)
+  // when that is < 1 (horizon inside the frame); a camera pitched down by
+  // `elevation` from horizontal shows that ray `elevation` above its own
+  // forward direction. Ground fills everything below it: (y_h + 1) / 2 of
+  // the frame height, clamped to [0, 1] (a horizon above/below the frame
+  // means all-ground or all-sky).
+  const horizonNdcY = Math.tan(IMPACT_VIEW_ELEVATION_RAD) / Math.tan(verticalHalfFovRad);
+  const groundFraction = clampNumber((clampNumber(horizonNdcY, -1, 1) + 1) / 2, 0, 1);
 
-  return { position, target, fov };
+  return {
+    position,
+    target,
+    fov,
+    elevationDeg: IMPACT_VIEW_ELEVATION_DEG,
+    diameterFraction,
+    groundFraction
+  };
 }
 
 function clampNumber(value, min, max) {
   return Math.max(min, Math.min(value, max));
 }
 
-// The height bar's data (unchanged from step 1): melonY is the fruit's
-// lowest point above the ground (view.js passes centre y minus radius
-// while the fruit exists, and 0 once it has split), and heightM is the
-// chosen drop height.
+// Step 1b §8: the height bar now uses the same log scale as the height
+// slider (sliderFromHeight), so landmark ticks spread out instead of
+// bunching near the bottom of a linear scale. s(0.3) is exactly 0 by
+// construction (heightFromSlider(0) = 0.3), so this is written out in full
+// per the spec rather than relying on that being zero.
+function heightBarFraction(valueMeters, heightM) {
+  const sMin = sliderFromHeight(HEIGHT_SLIDER_MIN_METERS);
+  const sHeight = sliderFromHeight(heightM);
+
+  if (sHeight - sMin <= 1e-9) {
+    // Degenerate case: a drop at (or effectively at) the 0.3 m minimum, so
+    // the log scale has no usable range. Fall back to a linear fraction.
+    return clampNumber(valueMeters / heightM, 0, 1);
+  }
+
+  const sValue = sliderFromHeight(clampNumber(valueMeters, HEIGHT_SLIDER_MIN_METERS, heightM));
+
+  return clampNumber((sValue - sMin) / (sHeight - sMin), 0, 1);
+}
+
+// The height bar's data: melonY is the fruit's lowest point above the
+// ground (view.js passes centre y minus radius while the fruit exists, and
+// 0 once it has split), and heightM is the chosen drop height.
 export function heightBarFor({ melonY, heightM }) {
-  const fraction = clampNumber(melonY / heightM, 0, 1);
+  const fraction = heightBarFraction(melonY, heightM);
   const label = formatHeight(clampNumber(melonY, 0, heightM));
   const ticks = LANDMARKS.filter((landmark) => landmark.meters <= heightM).map((landmark) => ({
     name: landmark.name,
     meters: landmark.meters,
-    fraction: landmark.meters / heightM
+    fraction: heightBarFraction(landmark.meters, heightM)
   }));
 
   return { fraction, label, ticks };

@@ -20,6 +20,7 @@ import {
   burstSpeed,
   burstVelocity,
   chunkShape,
+  containmentWidthFor,
   crossVec3,
   expectedImpactSpeed,
   formatHeight,
@@ -40,8 +41,7 @@ import {
   shouldBreakFruit,
   sliderFromHeight,
   tierForSeverity,
-  toughnessMultiplier,
-  viewWidthFor
+  toughnessMultiplier
 } from "../projects/splat-lab/rules.js";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -417,6 +417,37 @@ test("heightBarFor: label uses formatHeight (one decimal below 10 m, whole metre
   assert.equal(heightBarFor({ melonY: 0.4, heightM: 10 }).label, "0.4 m");
 });
 
+// --- step 1b §8: height bar log scale -----------------------------------------
+
+test("heightBarFor: at heightM=60, Crane's tick fraction is s(25)/s(60) (~0.83), not the linear 0.417", () => {
+  const craneTick = heightBarFor({ melonY: 0, heightM: 60 }).ticks.find((tick) => tick.name === "Crane");
+  const expected = sliderFromHeight(25) / sliderFromHeight(60);
+
+  assert.ok(craneTick, "expected a Crane tick at heightM=60");
+  assert.ok(Math.abs(craneTick.fraction - expected) < 1e-9);
+  assert.ok(Math.abs(craneTick.fraction - 0.83) < 0.01, `expected ~0.83, got ${craneTick.fraction}`);
+  assert.ok(Math.abs(craneTick.fraction - 25 / 60) > 0.1, "fraction should not be the linear 0.417");
+});
+
+test("heightBarFor: fraction follows the log scale generally (values near the bottom of a tall drop compress less than linearly)", () => {
+  // At heightM=60, a fruit at y=5 (Treehouse) is 1/12 of the way up linearly
+  // but noticeably further up the log-scaled bar.
+  const fraction = heightBarFor({ melonY: 5, heightM: 60 }).fraction;
+  const linearFraction = 5 / 60;
+
+  assert.ok(fraction > linearFraction, `log fraction ${fraction} should exceed the linear fraction ${linearFraction}`);
+});
+
+test("heightBarFor: degenerate case at heightM=0.3 (the slider minimum) falls back to a linear fraction", () => {
+  assert.equal(heightBarFor({ melonY: 0.15, heightM: 0.3 }).fraction, 0.5);
+  assert.equal(heightBarFor({ melonY: 0.3, heightM: 0.3 }).fraction, 1);
+  assert.equal(heightBarFor({ melonY: 0, heightM: 0.3 }).fraction, 0);
+
+  const kneeTick = heightBarFor({ melonY: 0, heightM: 0.3 }).ticks.find((tick) => tick.name === "Knee");
+  assert.ok(kneeTick, "expected a Knee tick at heightM=0.3");
+  assert.equal(kneeTick.fraction, 1);
+});
+
 // --- §7: continuous height slider ---------------------------------------------
 
 test("heightFromSlider: endpoints are 0.3 m and 60 m", () => {
@@ -467,10 +498,10 @@ test("heightSliderLabel: appends '(about <Landmark>)' within 10% relative distan
 
 // --- camera framing per fruit --------------------------------------------------
 
-test("viewWidthFor equals 25x the fruit's radius", () => {
+test("containmentWidthFor equals 25x the fruit's radius (physics-only, no longer tied to framing)", () => {
   for (const key of FRUIT_KEYS) {
     const fruit = fruitByKey(key);
-    assert.ok(Math.abs(viewWidthFor(fruit) - 25 * fruit.radius) < 1e-9);
+    assert.ok(Math.abs(containmentWidthFor(fruit) - 25 * fruit.radius) < 1e-9);
   }
 });
 
@@ -540,25 +571,88 @@ test("impactViewFor: vertical fov stays <= 75 degrees at both sizes, for every f
   }
 });
 
-test("impactViewFor: visible ground width matches viewWidthFor within +/-5%, for every fruit at both sizes", () => {
+test("impactViewFor: elevation stays within 20-30 degrees above the ground, for every fruit at both sizes", () => {
   for (const key of FRUIT_KEYS) {
     const fruit = fruitByKey(key);
-    const expectedWidth = viewWidthFor(fruit);
 
     for (const size of VIEW_SIZES) {
       const view = impactViewFor({ ...size, fruit });
-      const aspect = size.width / size.height;
-      const width = visibleWidthAt(view, aspect);
 
       assert.ok(
-        Math.abs(width - expectedWidth) / expectedWidth <= 0.05,
-        `${key} at ${JSON.stringify(size)}: visible width ${width} not within 5% of ${expectedWidth}`
+        view.elevationDeg >= 20 && view.elevationDeg <= 30,
+        `${key} at ${JSON.stringify(size)}: elevation ${view.elevationDeg} outside [20, 30]`
+      );
+
+      // Cross-check elevationDeg against the actual camera position/target,
+      // independent of the field the implementation reports.
+      const [px, py, pz] = view.position;
+      const [tx, ty, tz] = view.target;
+      const horizontalDistance = Math.hypot(px - tx, pz - tz);
+      const measuredElevationDeg = (Math.atan2(py - ty, horizontalDistance) * 180) / Math.PI;
+
+      assert.ok(
+        Math.abs(measuredElevationDeg - view.elevationDeg) < 1e-6,
+        `${key} at ${JSON.stringify(size)}: measured elevation ${measuredElevationDeg} disagrees with reported ${view.elevationDeg}`
       );
     }
   }
 });
 
-test("impactViewFor: the contact point is inside the view, for every fruit at both sizes", () => {
+test("impactViewFor: the unbroken fruit's on-screen diameter fraction is 20-30% of view width, for every fruit at both sizes", () => {
+  const report = {};
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    report[key] = {};
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+      const aspect = size.width / size.height;
+      const visibleWidth = visibleWidthAt(view, aspect);
+      const measuredFraction = (2 * fruit.radius) / visibleWidth;
+
+      report[key][`${size.width}x${size.height}`] = Number(measuredFraction.toFixed(4));
+
+      assert.ok(
+        measuredFraction >= 0.2 && measuredFraction <= 0.3,
+        `${key} at ${JSON.stringify(size)}: diameter fraction ${measuredFraction} outside [0.20, 0.30]`
+      );
+      assert.ok(
+        Math.abs(measuredFraction - view.diameterFraction) < 1e-9,
+        `${key} at ${JSON.stringify(size)}: reported diameterFraction disagrees with independently measured value`
+      );
+    }
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("Diameter fraction per fruit/size:", JSON.stringify(report, null, 2));
+});
+
+test("impactViewFor: ground fills at least 60% of the frame, for every fruit at both sizes", () => {
+  const report = {};
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    report[key] = {};
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+
+      report[key][`${size.width}x${size.height}`] = Number(view.groundFraction.toFixed(4));
+
+      assert.ok(
+        view.groundFraction >= 0.6,
+        `${key} at ${JSON.stringify(size)}: ground fraction ${view.groundFraction} below 0.60`
+      );
+      assert.ok(view.groundFraction <= 1, `${key} at ${JSON.stringify(size)}: ground fraction ${view.groundFraction} above 1`);
+    }
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("Ground fraction per fruit/size:", JSON.stringify(report, null, 2));
+});
+
+test("impactViewFor: the contact point is inside |NDC| <= 0.9, for every fruit at both sizes", () => {
   for (const key of FRUIT_KEYS) {
     const fruit = fruitByKey(key);
 
@@ -568,8 +662,8 @@ test("impactViewFor: the contact point is inside the view, for every fruit at bo
       const projected = projectToNdc([0, 0, 0], view, aspect);
 
       assert.ok(projected.inFront);
-      assert.ok(Math.abs(projected.ndcX) <= 1);
-      assert.ok(Math.abs(projected.ndcY) <= 1);
+      assert.ok(Math.abs(projected.ndcX) <= 0.9, `${key} at ${JSON.stringify(size)}: ndcX ${projected.ndcX} exceeds 0.9`);
+      assert.ok(Math.abs(projected.ndcY) <= 0.9, `${key} at ${JSON.stringify(size)}: ndcY ${projected.ndcY} exceeds 0.9`);
     }
   }
 });
