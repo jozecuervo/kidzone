@@ -1,0 +1,41 @@
+{
+  "title": "Splat Lab",
+  "summary": "Drop fruit from different heights and see what splats. Starts with a watermelon.",
+  "description": "Pick a height and a rind hardness, press Drop, and watch the watermelon fall, bounce, or smash into rind chunks, flesh cubes, and seeds.",
+  "date": "2026-09-12",
+  "dateSource": "project metadata",
+  "entry": "index.html",
+  "cta": "Start dropping",
+  "tags": ["science", "physics"],
+  "order": 40,
+  "ageRange": "5-11",
+  "interaction": ["pointer", "touch", "keyboard"],
+  "safety": {
+    "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "None required for ordinary play.",
+    "notes": "No gore: broken melon shows flat-colored rind chunks, flesh cubes, and seeds only."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "declared-external-dependency",
+    "storesData": false,
+    "externalDependencies": [
+      {
+        "name": "three.js",
+        "url": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+        "reason": "3D rendering for the drop scene."
+      },
+      {
+        "name": "three.js core",
+        "url": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.core.js",
+        "reason": "three.js core module, imported by three.module.js."
+      },
+      {
+        "name": "cannon-es",
+        "url": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js",
+        "reason": "Physics simulation for the falling melon and its pieces."
+      }
+    ]
+  }
+}

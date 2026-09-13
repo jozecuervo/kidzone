@@ -9,6 +9,8 @@
     "snapshots:install": "playwright install chromium"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "^1.60.0",
+    "cannon-es": "0.20.0",
+    "three": "0.186.0"
   }
 }

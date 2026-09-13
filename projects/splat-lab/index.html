@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Splat Lab</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./style.css">
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+          "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main class="lab-shell" data-phase="ready" data-steps="0">
+      <a class="back-link" href="../../">Back to Kidzone</a>
+
+      <header class="lab-header">
+        <div>
+          <p class="eyebrow">Kidzone Physics Lab</p>
+          <h1>Splat Lab</h1>
+        </div>
+      </header>
+
+      <p class="instructions" id="instructions">Pick a fruit, a height and a toughness, then press Drop.</p>
+
+      <section class="stage-panel" aria-label="Drop scene">
+        <canvas id="scene-canvas"></canvas>
+        <div id="height-bar" class="height-bar" aria-hidden="true">
+          <div id="height-bar-track" class="height-bar-track">
+            <div id="height-bar-ticks" class="height-bar-ticks"></div>
+            <div id="height-bar-indicator" class="height-bar-indicator">
+              <span id="height-bar-marker" class="height-bar-marker"></span>
+              <span id="height-bar-label" class="height-bar-label">10 m</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="controls-panel" aria-label="Experiment controls">
+        <fieldset id="fruit-fieldset" class="fruit-fieldset">
+          <legend>Fruit</legend>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="tomato">
+            Tomato
+          </label>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="watermelon" checked>
+            Watermelon
+          </label>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="apple">
+            Apple
+          </label>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="orange">
+            Orange
+          </label>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="coconut">
+            Coconut
+          </label>
+        </fieldset>
+
+        <div class="control-row">
+          <label for="height-slider">Height</label>
+          <input
+            id="height-slider"
+            type="range"
+            min="0"
+            max="1000"
+            step="1"
+            value="662"
+            list="height-landmarks"
+            aria-valuetext="10 m (about Roof)"
+          >
+          <datalist id="height-landmarks">
+            <option value="0" label="Knee"></option>
+            <option value="227" label="Counter"></option>
+            <option value="531" label="Treehouse"></option>
+            <option value="662" label="Roof"></option>
+            <option value="835" label="Crane"></option>
+            <option value="1000" label="Plane"></option>
+          </datalist>
+          <span id="height-readout" class="control-readout">10 m (about Roof)</span>
+        </div>
+
+        <div class="control-row">
+          <label for="toughness-slider">Toughness</label>
+          <input id="toughness-slider" type="range" min="1" max="10" step="1" value="5" aria-valuetext="5, medium">
+          <span id="toughness-readout" class="control-readout">5</span>
+        </div>
+        <p class="toughness-ends" aria-hidden="true"><span>squishy</span><span>super tough</span></p>
+
+        <div class="action-row">
+          <button id="drop-button" type="button">Drop</button>
+          <button id="reset-button" type="button">Reset</button>
+          <button id="skip-button" type="button" hidden>Skip to result</button>
+        </div>
+      </section>
+
+      <p id="status" class="status" role="status" aria-live="polite">Pick a fruit, a height and a toughness, then press Drop.</p>
+
+      <p id="load-failure" class="load-failure" hidden>
+        The 3D engine couldn't load. Check the internet connection and reload.
+      </p>
+    </main>
+
+    <script type="module">
+      import("./view.js")
+        .then((viewModule) => viewModule.start({
+          main: document.querySelector("main"),
+          canvas: document.getElementById("scene-canvas"),
+          fruitFieldset: document.getElementById("fruit-fieldset"),
+          heightSlider: document.getElementById("height-slider"),
+          heightReadout: document.getElementById("height-readout"),
+          toughnessSlider: document.getElementById("toughness-slider"),
+          toughnessReadout: document.getElementById("toughness-readout"),
+          dropButton: document.getElementById("drop-button"),
+          resetButton: document.getElementById("reset-button"),
+          skipButton: document.getElementById("skip-button"),
+          statusEl: document.getElementById("status"),
+          instructionsEl: document.getElementById("instructions"),
+          loadFailureEl: document.getElementById("load-failure"),
+          heightBarTrack: document.getElementById("height-bar-track"),
+          heightBarTicks: document.getElementById("height-bar-ticks"),
+          heightBarIndicator: document.getElementById("height-bar-indicator"),
+          heightBarLabel: document.getElementById("height-bar-label")
+        }))
+        .catch(() => {
+          document.getElementById("load-failure").hidden = false;
+        });
+    </script>
+  </body>
+</html>
