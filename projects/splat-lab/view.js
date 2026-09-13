@@ -26,10 +26,12 @@ const GROUND_TOP_Y = 0;
 const GROUND_HALF_THICKNESS = 5;
 // Height-bar marker/label DOM writes are skipped unless the fraction moves
 // by at least this much of the track, or the rounded label text changes.
-// The runtime rule's floor is 0.5%; 1% is used here (strictly coarser, so
+// The runtime rule's floor is 0.5%; 2% is used here (strictly coarser, so
 // every write still satisfies "changed by at least 0.5%") to keep the total
 // number of writes over one full-height fall well under the write budget.
-const HEIGHT_BAR_FRACTION_EPSILON = 0.01;
+// (Raised from 1% to 2%: at 1%, a Plane fall measured exactly 150 mutations,
+// tripping the "< 150" Playwright budget test with no margin.)
+const HEIGHT_BAR_FRACTION_EPSILON = 0.02;
 // Blob shadow: grows and darkens as the fruit's lowest point approaches the
 // ground, reaching full size/darkness within this many metres of it.
 const SHADOW_CLOSE_DISTANCE_M = 4;
@@ -616,7 +618,16 @@ export function start(elements) {
       lastBarFraction = null; // force a fresh layout pass below
     }
 
-    const fractionChanged = lastBarFraction === null || Math.abs(fraction - lastBarFraction) >= HEIGHT_BAR_FRACTION_EPSILON;
+    // Endpoints (0 = settled/ground, 1 = ready/full height) always write,
+    // regardless of the epsilon: otherwise the coarser threshold (raised to
+    // fix the write-budget test) can leave the marker short of the track's
+    // bottom edge at settled if the second-to-last update landed within the
+    // threshold of exactly 0.
+    const fractionChanged =
+      lastBarFraction === null ||
+      fraction === 0 ||
+      fraction === 1 ||
+      Math.abs(fraction - lastBarFraction) >= HEIGHT_BAR_FRACTION_EPSILON;
 
     if (label !== lastBarLabel) {
       heightBarLabel.textContent = label;

@@ -178,10 +178,10 @@
     {
       "slug": "splat-lab",
       "title": "Splat Lab",
-      "description": "Pick a height and a rind hardness, press Drop, and watch the watermelon fall, bounce, or smash into rind chunks, flesh cubes, and seeds.",
+      "description": "Pick a fruit, a height, and a toughness, press Drop, and watch it fall, bounce, or smash into rind/shell pieces and seeds.",
       "date": "2026-09-12",
       "dateSource": "project metadata",
-      "summary": "Drop fruit from different heights and see what splats. Starts with a watermelon.",
+      "summary": "Drop a fruit from different heights and see what splats. Tomato, watermelon, apple, orange, or coconut.",
       "href": "./projects/splat-lab/",
       "entry": "index.html",
       "cta": "Start dropping",

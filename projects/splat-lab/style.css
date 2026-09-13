@@ -79,7 +79,14 @@ body {
    live-region text. */
 .height-bar {
   position: absolute;
-  top: 0.75rem;
+  /* 1.65rem (not 0.75rem): at fraction 1, the top tick name and the moving
+     metres label both centre on the track's top point (a permanent, not
+     occasional, coincidence — see .height-bar-tick--top below). There is
+     only ~5px of room above the label before the stage panel's own clipped
+     top edge; extra top offset here creates enough room for the top tick's
+     name to sit above the label without either overlapping it or being
+     clipped by the panel. */
+  top: 1.65rem;
   right: 0.75rem;
   bottom: 0.75rem;
   display: flex;
@@ -293,7 +300,19 @@ body {
 
   /* Keep the controls compact enough that Drop/Reset stay on-screen at
      390x844 without scrolling (touch test): tighter gaps and a smaller
-     fruit-option font, not a layout change. */
+     fruit-option font, not a layout change. Step 1b §1 added the fruit
+     fieldset and toughness-ends row, which pushed the total page height
+     back past 844px on top of the earlier D6/V5 compaction (round 4) —
+     shrink the lab-shell's own gap/padding and the canvas height cap too. */
+  .lab-shell {
+    gap: 0.6rem;
+    padding: 0.6rem 0 0.75rem;
+  }
+
+  #scene-canvas {
+    height: min(45vh, 16rem);
+  }
+
   .controls-panel {
     gap: 0.6rem;
     padding: 0.75rem;
