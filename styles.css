@@ -96,8 +96,18 @@ a {
   line-height: 1.45;
 }
 
-.hero-copy > a {
-  justify-self: start;
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hero-actions > a.hero-secondary {
+  color: var(--line);
+  background: var(--cloud);
+}
+
+.hero-actions > a {
   padding: 0.9rem 1rem;
   border: 2px solid var(--line);
   border-radius: 8px;
