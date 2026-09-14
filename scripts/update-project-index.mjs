@@ -123,6 +123,10 @@ function projectRecord(slug, metadata) {
     throw new Error(`${slug}/project.json order must be a number.`);
   }
 
+  if (metadata.shelf !== undefined && typeof metadata.shelf !== "boolean") {
+    throw new Error(`${slug}/project.json shelf must be true or false.`);
+  }
+
   assertSafety(metadata, slug);
   assertRuntime(metadata, slug);
 
@@ -141,6 +145,7 @@ function projectRecord(slug, metadata) {
     cta: metadata.cta ?? "Open project",
     tags: metadata.tags ?? [],
     order: metadata.order ?? 999,
+    shelf: metadata.shelf ?? true,
     ageRange: metadata.ageRange,
     interaction: metadata.interaction,
     safety: metadata.safety,
@@ -169,9 +174,12 @@ export async function projectIndex() {
     projects.push(await readProject(directory));
   }
 
+  // Newest first by date; undated projects go last, then order, then title.
   projects.sort(
     (first, second) =>
-      first.order - second.order || first.title.localeCompare(second.title)
+      (second.date ?? "").localeCompare(first.date ?? "") ||
+      first.order - second.order ||
+      first.title.localeCompare(second.title)
   );
 
   return `${JSON.stringify({ projects }, null, 2)}\n`;

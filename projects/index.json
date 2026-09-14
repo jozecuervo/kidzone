@@ -1,30 +1,82 @@
 {
   "projects": [
     {
-      "slug": "make-a-game",
-      "title": "Would you like to make a game?",
-      "description": "A tiny canvas game starter with a moving comet, collectible sparks, and obvious first pull request ideas.",
-      "date": "2026-05-22",
-      "dateSource": "earliest creation timestamp across project files",
-      "summary": "Start with a tiny playable canvas, change one idea, and send the first Kidzone pull request.",
-      "href": "./projects/make-a-game/",
+      "slug": "splat-lab",
+      "title": "Splat Lab",
+      "description": "Pick a fruit and a height on a continuous slider, then press Drop, again and again if you like: up to 5 fruit fall into the same drop zone at once, each holding, cracking, splitting, or smashing on its own.",
+      "date": "2026-09-12",
+      "dateSource": "project metadata",
+      "summary": "Drop fruit from different heights and see what splats. Press Drop as fast as you like — up to 5 fruit at once.",
+      "href": "./projects/splat-lab/",
       "entry": "index.html",
-      "cta": "Open the starter game",
+      "cta": "Start dropping",
       "tags": [
-        "starter",
-        "game"
+        "science",
+        "physics"
       ],
-      "order": 1,
+      "order": 40,
+      "shelf": true,
+      "ageRange": "5-11",
+      "interaction": [
+        "pointer",
+        "touch",
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "None required for ordinary play.",
+        "notes": "No gore: broken fruit shows cartoon skin pieces, irregular flesh chunks, and seeds only. There is no toughness control — every fruit breaks at its own fixed real-world-inspired speed. Splat sound effects are generated in the browser with Web Audio (no audio files, no network request); a visible on/off sound toggle is provided, defaults to on, and is not persisted between visits."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "declared-external-dependency",
+        "storesData": false,
+        "externalDependencies": [
+          {
+            "name": "three.js",
+            "url": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+            "reason": "3D rendering for the drop scene."
+          },
+          {
+            "name": "three.js core",
+            "url": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.core.js",
+            "reason": "three.js core module, imported by three.module.js."
+          },
+          {
+            "name": "cannon-es",
+            "url": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js",
+            "reason": "Physics simulation for the falling fruit and their pieces."
+          }
+        ]
+      }
+    },
+    {
+      "slug": "cat-city-rampage",
+      "title": "Cat City Rampage",
+      "description": "Race your friend's cat up a crumbling building. Destroy walls to create paths, dodge obstacles, and be the first to reach the yarn ball at the top!",
+      "date": "2026-07-27",
+      "dateSource": "project creation",
+      "summary": "Two mischievous cats race to grab the yarn at the top of a skyscraper, smashing and clawing their way up.",
+      "href": "./projects/cat-city-rampage/",
+      "entry": "index.html",
+      "cta": "Start Rampage",
+      "tags": [
+        "arcade",
+        "competitive",
+        "physics"
+      ],
+      "order": 70,
+      "shelf": true,
       "ageRange": "7-12",
       "interaction": [
         "keyboard",
-        "pointer",
         "touch"
       ],
       "safety": {
-        "privacy": "Local-only canvas play with no accounts, chat, sharing, or saved data.",
-        "adultHelp": "Adult help is useful for the first pull request or code edit.",
-        "notes": "Starter game encourages small, visible changes instead of passive scrolling."
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "None required. This is a silly, playful game about cartoon destruction with no consequence or pressure.",
+        "notes": "Two-player competitive game. Cartoon destruction of buildings. No timers, no failure states, just fun chaos. Both cats are always visible on screen."
       },
       "runtime": {
         "type": "static",
@@ -50,6 +102,7 @@
         "schema"
       ],
       "order": 20,
+      "shelf": true,
       "ageRange": "7-12",
       "interaction": [
         "pointer",
@@ -60,6 +113,289 @@
         "privacy": "Local-only play with no accounts, chat, sharing, uploads, saved data, analytics, or remote services.",
         "adultHelp": "None required for digital play; adult help may be useful later if printable craft templates are added.",
         "notes": "Dress-up and posing are expressive, not ranked. There are no scores, timers, streaks, public posting, or body/beauty judgments."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
+      "slug": "haunted-maze",
+      "title": "Haunted Maze Walk",
+      "description": "A local-only ten-level maze walk with a framed maze view, free click-to-move exploration, footprint clues to the locked door, dark areas that hide keys or cartoon monster jump-outs, multiple pirate gold finds per level that glow brighter as you walk closer, and picture popups for treasure and hidden-key discoveries. Each level gets larger and twistier, with no timers, no losing, and hints when you get lost.",
+      "date": "2026-05-29",
+      "dateSource": "project metadata",
+      "summary": "Click open paths, follow footprints to the door, search dark areas for keys, and walk toward glowing pirate gold.",
+      "href": "./projects/haunted-maze/",
+      "entry": "index.html",
+      "cta": "Enter the maze",
+      "tags": [
+        "game",
+        "halloween",
+        "maze",
+        "puzzle"
+      ],
+      "order": 75,
+      "shelf": true,
+      "ageRange": "6-10",
+      "interaction": [
+        "pointer",
+        "touch",
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview is useful if a kid is sensitive to spooky Halloween decorations or cartoon jump-outs.",
+        "notes": "Dark areas may reveal a hidden key or a cartoon vampire, witch, werewolf, or zombie jump-out, but they never block long-term progress. Glowing pirate gold is a separate bonus find. No timer pressure, losing, public posting, or open-ended communication."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
+      "slug": "dads-dodge-dance",
+      "title": "Dad's Dodge Dance",
+      "description": "A local-only backyard game where Dad joins the joke, dances across the splash zone, and cheers for gentle water-balloon tosses.",
+      "date": "2026-05-25",
+      "dateSource": "project metadata",
+      "summary": "Toss soft water balloons while Dad dances through a cheerful backyard splash zone.",
+      "href": "./projects/dads-dodge-dance/",
+      "entry": "index.html",
+      "cta": "Start splashing",
+      "tags": [
+        "game",
+        "backyard",
+        "arcade"
+      ],
+      "order": 70,
+      "shelf": true,
+      "ageRange": "5-9",
+      "interaction": [
+        "pointer",
+        "touch",
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview is useful for framing the cartoon splash play as pretend backyard play with consent.",
+        "notes": "Dad is a smiling participant in the splash zone. There is no losing, timer pressure, public posting, or open-ended communication."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
+      "slug": "color-mixer-lab",
+      "title": "Color Mixer Lab",
+      "description": "A color mixing game where each level asks players to create a target shade using only five paint colors.",
+      "date": "2026-05-23",
+      "dateSource": "project metadata",
+      "summary": "Mix red, yellow, blue, white, and brown to match five mystery target colors.",
+      "href": "./projects/color-mixer-lab/",
+      "entry": "index.html",
+      "cta": "Mix colors",
+      "tags": [
+        "art",
+        "color",
+        "game"
+      ],
+      "order": 80,
+      "shelf": true,
+      "ageRange": "6-10",
+      "interaction": [
+        "pointer",
+        "touch",
+        "keyboard"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "None required for ordinary play.",
+        "notes": "No timers or score pressure; wrong mixes simply retry the same level."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
+      "slug": "make-a-game",
+      "title": "Would you like to make a game?",
+      "description": "A tiny canvas game starter with a moving comet, collectible sparks, and obvious first pull request ideas.",
+      "date": "2026-05-22",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "Start with a tiny playable canvas, change one idea, and send the first Kidzone pull request.",
+      "href": "./projects/make-a-game/",
+      "entry": "index.html",
+      "cta": "Open the starter game",
+      "tags": [
+        "starter",
+        "game"
+      ],
+      "order": 1,
+      "shelf": false,
+      "ageRange": "7-12",
+      "interaction": [
+        "keyboard",
+        "pointer",
+        "touch"
+      ],
+      "safety": {
+        "privacy": "Local-only canvas play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult help is useful for the first pull request or code edit.",
+        "notes": "Starter game encourages small, visible changes instead of passive scrolling."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
+      "slug": "cheeseworld",
+      "title": "Cheeseworld",
+      "description": "Move, jump, collect cheese, grab speed boosts, and survive the hazards in this mousey platformer.",
+      "date": "2026-01-24",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A platform game about collecting cheese, leveling up, and dodging a cat and grumpy old man.",
+      "href": "./projects/cheeseworld/",
+      "entry": "index.html",
+      "cta": "Enter Cheeseworld",
+      "tags": [
+        "platformer",
+        "arcade"
+      ],
+      "order": 60,
+      "shelf": true,
+      "ageRange": "8-12",
+      "interaction": [
+        "keyboard",
+        "touch"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview may be useful for younger players because of cartoon hazards.",
+        "notes": "Includes chasing and survival-style platformer hazards."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
+      "slug": "old-rules",
+      "title": "Old Rules",
+      "description": "Choose a player, dodge the grandparents and Mr. Whiskers, collect keys, and escape the house.",
+      "date": "2026-01-24",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A retro escape game about sneaking through Grandma's house, finding keys, and avoiding trouble.",
+      "href": "./projects/old-rules/old-rules-game.html",
+      "entry": "old-rules-game.html",
+      "cta": "Escape the house",
+      "tags": [
+        "retro",
+        "escape"
+      ],
+      "order": 70,
+      "shelf": true,
+      "ageRange": "8-12",
+      "interaction": [
+        "keyboard",
+        "pointer"
+      ],
+      "safety": {
+        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "Adult preview may be useful because the theme includes sneaking and being chased.",
+        "notes": "Retro escape game with cartoon household trouble and mild chase tension."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
+      "slug": "astro-bot-screensaver",
+      "title": "Astro Bot Screensaver",
+      "description": "Watch seven robot faces blink, glow, and track the pointer with animated LED-style eyes. Pause at any time with the button or Space key.",
+      "date": "2025-11-30",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "An Astro Bot-inspired display with animated dot-matrix eyes and friendly robot faces.",
+      "href": "./projects/astro-bot-screensaver/astro.html",
+      "entry": "astro.html",
+      "cta": "Start the screensaver",
+      "tags": [
+        "animation",
+        "canvas"
+      ],
+      "order": 40,
+      "shelf": true,
+      "ageRange": "6-10",
+      "interaction": [
+        "pointer",
+        "keyboard",
+        "passive"
+      ],
+      "safety": {
+        "privacy": "Local-only animation with no accounts, chat, sharing, or saved data.",
+        "adultHelp": "None required for ordinary viewing.",
+        "notes": "Screensaver-style motion; keep animation calm and avoid flashing effects."
+      },
+      "runtime": {
+        "type": "static",
+        "requiresServer": false,
+        "networkAccess": "none",
+        "storesData": false,
+        "externalDependencies": []
+      }
+    },
+    {
+      "slug": "photo-by-numbers",
+      "title": "Photo by Numbers",
+      "description": "Turn photos into line drawings with selectable edge algorithms, then color and download the result.",
+      "date": "2025-11-30",
+      "dateSource": "earliest creation timestamp across project files",
+      "summary": "A photo-to-coloring-page tool with webcam or upload input, edge detection, and interactive coloring.",
+      "href": "./projects/photo-by-numbers/",
+      "entry": "index.html",
+      "cta": "Make a coloring page",
+      "tags": [
+        "art",
+        "camera"
+      ],
+      "order": 50,
+      "shelf": true,
+      "ageRange": "8-12 with adult help",
+      "interaction": [
+        "camera",
+        "file-upload",
+        "pointer",
+        "touch"
+      ],
+      "safety": {
+        "privacy": "Photos are processed locally in the browser; no upload, account, chat, or public sharing is built in.",
+        "adultHelp": "Adult help is recommended for camera permission, photo choices, and downloads.",
+        "notes": "Uses camera or local image files and can download finished artwork."
       },
       "runtime": {
         "type": "static",
@@ -84,6 +420,7 @@
         "puzzle"
       ],
       "order": 20,
+      "shelf": true,
       "ageRange": "8-12",
       "interaction": [
         "pointer",
@@ -123,6 +460,7 @@
         "craft"
       ],
       "order": 30,
+      "shelf": true,
       "ageRange": "7-10",
       "interaction": [
         "keyboard",
@@ -132,281 +470,6 @@
         "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
         "adultHelp": "Adult help may be useful for younger players practicing arithmetic.",
         "notes": "Wrong answers reduce yarn, so a gentler mode may be a future improvement."
-      },
-      "runtime": {
-        "type": "static",
-        "requiresServer": false,
-        "networkAccess": "none",
-        "storesData": false,
-        "externalDependencies": []
-      }
-    },
-    {
-      "slug": "astro-bot-screensaver",
-      "title": "Astro Bot Screensaver",
-      "description": "Watch seven robot faces blink, glow, and track the pointer with animated LED-style eyes. Pause at any time with the button or Space key.",
-      "date": "2025-11-30",
-      "dateSource": "earliest creation timestamp across project files",
-      "summary": "An Astro Bot-inspired display with animated dot-matrix eyes and friendly robot faces.",
-      "href": "./projects/astro-bot-screensaver/astro.html",
-      "entry": "astro.html",
-      "cta": "Start the screensaver",
-      "tags": [
-        "animation",
-        "canvas"
-      ],
-      "order": 40,
-      "ageRange": "6-10",
-      "interaction": [
-        "pointer",
-        "keyboard",
-        "passive"
-      ],
-      "safety": {
-        "privacy": "Local-only animation with no accounts, chat, sharing, or saved data.",
-        "adultHelp": "None required for ordinary viewing.",
-        "notes": "Screensaver-style motion; keep animation calm and avoid flashing effects."
-      },
-      "runtime": {
-        "type": "static",
-        "requiresServer": false,
-        "networkAccess": "none",
-        "storesData": false,
-        "externalDependencies": []
-      }
-    },
-    {
-      "slug": "photo-by-numbers",
-      "title": "Photo by Numbers",
-      "description": "Turn photos into line drawings with selectable edge algorithms, then color and download the result.",
-      "date": "2025-11-30",
-      "dateSource": "earliest creation timestamp across project files",
-      "summary": "A photo-to-coloring-page tool with webcam or upload input, edge detection, and interactive coloring.",
-      "href": "./projects/photo-by-numbers/",
-      "entry": "index.html",
-      "cta": "Make a coloring page",
-      "tags": [
-        "art",
-        "camera"
-      ],
-      "order": 50,
-      "ageRange": "8-12 with adult help",
-      "interaction": [
-        "camera",
-        "file-upload",
-        "pointer",
-        "touch"
-      ],
-      "safety": {
-        "privacy": "Photos are processed locally in the browser; no upload, account, chat, or public sharing is built in.",
-        "adultHelp": "Adult help is recommended for camera permission, photo choices, and downloads.",
-        "notes": "Uses camera or local image files and can download finished artwork."
-      },
-      "runtime": {
-        "type": "static",
-        "requiresServer": false,
-        "networkAccess": "none",
-        "storesData": false,
-        "externalDependencies": []
-      }
-    },
-    {
-      "slug": "cheeseworld",
-      "title": "Cheeseworld",
-      "description": "Move, jump, collect cheese, grab speed boosts, and survive the hazards in this mousey platformer.",
-      "date": "2026-01-24",
-      "dateSource": "earliest creation timestamp across project files",
-      "summary": "A platform game about collecting cheese, leveling up, and dodging a cat and grumpy old man.",
-      "href": "./projects/cheeseworld/",
-      "entry": "index.html",
-      "cta": "Enter Cheeseworld",
-      "tags": [
-        "platformer",
-        "arcade"
-      ],
-      "order": 60,
-      "ageRange": "8-12",
-      "interaction": [
-        "keyboard",
-        "touch"
-      ],
-      "safety": {
-        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
-        "adultHelp": "Adult preview may be useful for younger players because of cartoon hazards.",
-        "notes": "Includes chasing and survival-style platformer hazards."
-      },
-      "runtime": {
-        "type": "static",
-        "requiresServer": false,
-        "networkAccess": "none",
-        "storesData": false,
-        "externalDependencies": []
-      }
-    },
-    {
-      "slug": "cat-city-rampage",
-      "title": "Cat City Rampage",
-      "description": "Race your friend's cat up a crumbling building. Destroy walls to create paths, dodge obstacles, and be the first to reach the yarn ball at the top!",
-      "date": "2026-07-27",
-      "dateSource": "project creation",
-      "summary": "Two mischievous cats race to grab the yarn at the top of a skyscraper, smashing and clawing their way up.",
-      "href": "./projects/cat-city-rampage/",
-      "entry": "index.html",
-      "cta": "Start Rampage",
-      "tags": [
-        "arcade",
-        "competitive",
-        "physics"
-      ],
-      "order": 70,
-      "ageRange": "7-12",
-      "interaction": [
-        "keyboard",
-        "touch"
-      ],
-      "safety": {
-        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
-        "adultHelp": "None required. This is a silly, playful game about cartoon destruction with no consequence or pressure.",
-        "notes": "Two-player competitive game. Cartoon destruction of buildings. No timers, no failure states, just fun chaos. Both cats are always visible on screen."
-      },
-      "runtime": {
-        "type": "static",
-        "requiresServer": false,
-        "networkAccess": "none",
-        "storesData": false,
-        "externalDependencies": []
-      }
-    },
-    {
-      "slug": "dads-dodge-dance",
-      "title": "Dad's Dodge Dance",
-      "description": "A local-only backyard game where Dad joins the joke, dances across the splash zone, and cheers for gentle water-balloon tosses.",
-      "date": "2026-05-25",
-      "dateSource": "project metadata",
-      "summary": "Toss soft water balloons while Dad dances through a cheerful backyard splash zone.",
-      "href": "./projects/dads-dodge-dance/",
-      "entry": "index.html",
-      "cta": "Start splashing",
-      "tags": [
-        "game",
-        "backyard",
-        "arcade"
-      ],
-      "order": 70,
-      "ageRange": "5-9",
-      "interaction": [
-        "pointer",
-        "touch",
-        "keyboard"
-      ],
-      "safety": {
-        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
-        "adultHelp": "Adult preview is useful for framing the cartoon splash play as pretend backyard play with consent.",
-        "notes": "Dad is a smiling participant in the splash zone. There is no losing, timer pressure, public posting, or open-ended communication."
-      },
-      "runtime": {
-        "type": "static",
-        "requiresServer": false,
-        "networkAccess": "none",
-        "storesData": false,
-        "externalDependencies": []
-      }
-    },
-    {
-      "slug": "old-rules",
-      "title": "Old Rules",
-      "description": "Choose a player, dodge the grandparents and Mr. Whiskers, collect keys, and escape the house.",
-      "date": "2026-01-24",
-      "dateSource": "earliest creation timestamp across project files",
-      "summary": "A retro escape game about sneaking through Grandma's house, finding keys, and avoiding trouble.",
-      "href": "./projects/old-rules/old-rules-game.html",
-      "entry": "old-rules-game.html",
-      "cta": "Escape the house",
-      "tags": [
-        "retro",
-        "escape"
-      ],
-      "order": 70,
-      "ageRange": "8-12",
-      "interaction": [
-        "keyboard",
-        "pointer"
-      ],
-      "safety": {
-        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
-        "adultHelp": "Adult preview may be useful because the theme includes sneaking and being chased.",
-        "notes": "Retro escape game with cartoon household trouble and mild chase tension."
-      },
-      "runtime": {
-        "type": "static",
-        "requiresServer": false,
-        "networkAccess": "none",
-        "storesData": false,
-        "externalDependencies": []
-      }
-    },
-    {
-      "slug": "haunted-maze",
-      "title": "Haunted Maze Walk",
-      "description": "A local-only ten-level maze walk with a framed maze view, free click-to-move exploration, footprint clues to the locked door, dark areas that hide keys or cartoon monster jump-outs, multiple pirate gold finds per level that glow brighter as you walk closer, and picture popups for treasure and hidden-key discoveries. Each level gets larger and twistier, with no timers, no losing, and hints when you get lost.",
-      "date": "2026-05-29",
-      "dateSource": "project metadata",
-      "summary": "Click open paths, follow footprints to the door, search dark areas for keys, and walk toward glowing pirate gold.",
-      "href": "./projects/haunted-maze/",
-      "entry": "index.html",
-      "cta": "Enter the maze",
-      "tags": [
-        "game",
-        "halloween",
-        "maze",
-        "puzzle"
-      ],
-      "order": 75,
-      "ageRange": "6-10",
-      "interaction": [
-        "pointer",
-        "touch",
-        "keyboard"
-      ],
-      "safety": {
-        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
-        "adultHelp": "Adult preview is useful if a kid is sensitive to spooky Halloween decorations or cartoon jump-outs.",
-        "notes": "Dark areas may reveal a hidden key or a cartoon vampire, witch, werewolf, or zombie jump-out, but they never block long-term progress. Glowing pirate gold is a separate bonus find. No timer pressure, losing, public posting, or open-ended communication."
-      },
-      "runtime": {
-        "type": "static",
-        "requiresServer": false,
-        "networkAccess": "none",
-        "storesData": false,
-        "externalDependencies": []
-      }
-    },
-    {
-      "slug": "color-mixer-lab",
-      "title": "Color Mixer Lab",
-      "description": "A color mixing game where each level asks players to create a target shade using only five paint colors.",
-      "date": "2026-05-23",
-      "dateSource": "project metadata",
-      "summary": "Mix red, yellow, blue, white, and brown to match five mystery target colors.",
-      "href": "./projects/color-mixer-lab/",
-      "entry": "index.html",
-      "cta": "Mix colors",
-      "tags": [
-        "art",
-        "color",
-        "game"
-      ],
-      "order": 80,
-      "ageRange": "6-10",
-      "interaction": [
-        "pointer",
-        "touch",
-        "keyboard"
-      ],
-      "safety": {
-        "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
-        "adultHelp": "None required for ordinary play.",
-        "notes": "No timers or score pressure; wrong mixes simply retry the same level."
       },
       "runtime": {
         "type": "static",

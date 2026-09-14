@@ -129,7 +129,9 @@ async function loadProjects() {
       throw new Error(`Project index returned ${response.status}.`);
     }
 
-    const { projects } = await response.json();
+    const projects = ((await response.json()).projects ?? []).filter(
+      (project) => project.shelf !== false
+    );
 
     if (!projects?.length) {
       projectCount.textContent = "No projects yet";

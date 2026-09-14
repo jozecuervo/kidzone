@@ -1,0 +1,1115 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+
+import {
+  BURST_JITTER_RANGE,
+  BURST_K,
+  E_BOUNCE,
+  FRUIT_KEYS,
+  HEIGHT_SLIDER_MAX,
+  HEIGHT_SLIDER_MIN,
+  LANDMARKS,
+  batchResultText,
+  bounceVelocity,
+  breakSpeedFor,
+  budgetTrimPlan,
+  burstDirection,
+  burstSpeed,
+  burstVelocity,
+  chunkShape,
+  containmentWidthFor,
+  controlsEnabledForPhase,
+  crossVec3,
+  expectedImpactSpeed,
+  formatHeight,
+  fruitByKey,
+  heightBarFor,
+  heightFromSlider,
+  heightSliderLabel,
+  impactViewFor,
+  incomingFor,
+  jitterFactor,
+  kFruitFor,
+  layoutHash,
+  pieceCountsForTier,
+  pieceVelocity,
+  releaseWobble,
+  resultText,
+  severityFor,
+  shellPiece,
+  shouldBreakFruit,
+  sliderFromHeight,
+  spawnPlanFor,
+  splatSoundFor,
+  tierForSeverity
+} from "../projects/splat-lab/rules.js";
+
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+
+test("margin rule: no landmark's sqrt(2gh) is within 10% of any fruit's real break speed", () => {
+  const presetSpeeds = LANDMARKS.map((landmark) => ({
+    name: landmark.name,
+    speed: expectedImpactSpeed(landmark.meters)
+  }));
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    const bs = breakSpeedFor(fruit);
+
+    for (const preset of presetSpeeds) {
+      const relToBreakSpeed = Math.abs(preset.speed - bs) / bs;
+      const relToPresetSpeed = Math.abs(preset.speed - bs) / preset.speed;
+
+      assert.ok(
+        relToBreakSpeed >= 0.1 && relToPresetSpeed >= 0.1,
+        `${key} breakSpeed ${bs} is within 10% of ${preset.name} (${preset.speed})`
+      );
+    }
+  }
+});
+
+// --- severity tiers ----------------------------------------------------------
+
+test("severity tier boundaries are exactly at 1.0, 1.6 and 3.0", () => {
+  assert.equal(tierForSeverity(0.999999), "held");
+  assert.equal(tierForSeverity(1), "cracked");
+  assert.equal(tierForSeverity(1.599999), "cracked");
+  assert.equal(tierForSeverity(1.6), "split");
+  assert.equal(tierForSeverity(2.999999), "split");
+  assert.equal(tierForSeverity(3), "smashed");
+  assert.equal(tierForSeverity(10), "smashed");
+});
+
+test("severityFor divides impact speed by the fruit's real break speed", () => {
+  const fruit = fruitByKey("watermelon");
+  const bs = breakSpeedFor(fruit);
+
+  assert.ok(Math.abs(severityFor(bs * 2, fruit) - 2) < 1e-9);
+});
+
+test("shouldBreakFruit matches the tier boundary at severity 1", () => {
+  const fruit = fruitByKey("apple");
+  const bs = breakSpeedFor(fruit);
+
+  assert.equal(shouldBreakFruit(bs, fruit), true);
+  assert.equal(shouldBreakFruit(bs - 0.001, fruit), false);
+});
+
+// --- piece counts per tier and fruit -----------------------------------------
+
+test("pieceCountsForTier: held tier has no pieces", () => {
+  for (const key of FRUIT_KEYS) {
+    const counts = pieceCountsForTier(fruitByKey(key), "held");
+    assert.deepEqual(counts, { outer: 0, inner: 0, seeds: 0 });
+  }
+});
+
+test("pieceCountsForTier: smashed tier matches each fruit's full counts exactly", () => {
+  const watermelon = fruitByKey("watermelon");
+  const counts = pieceCountsForTier(watermelon, "smashed");
+
+  assert.deepEqual(counts, { outer: 12, inner: 12, seeds: 40 });
+
+  const coconut = fruitByKey("coconut");
+  const coconutCounts = pieceCountsForTier(coconut, "smashed");
+
+  assert.deepEqual(coconutCounts, { outer: 10, inner: 8, seeds: 0 });
+});
+
+test("pieceCountsForTier: cracked and split scale down, with at least 2 outer pieces", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const tier of ["cracked", "split"]) {
+      const counts = pieceCountsForTier(fruit, tier);
+
+      assert.ok(counts.outer >= 2, `${key} ${tier} outer count ${counts.outer} should be >= 2`);
+
+      const total = counts.outer + counts.inner + counts.seeds;
+      assert.ok(total <= 64, `${key} ${tier} total pieces ${total} exceeds 64`);
+    }
+  }
+});
+
+test("pieceCountsForTier: every fruit's smashed total is at most 64", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    const counts = pieceCountsForTier(fruit, "smashed");
+    const total = counts.outer + counts.inner + counts.seeds;
+
+    assert.ok(total <= 64, `${key} smashed total ${total} exceeds 64`);
+  }
+});
+
+// --- chunkShape / shellPiece --------------------------------------------------
+
+test("chunkShape: deterministic for a seed, has at least 12 vertices, and has radial spread", () => {
+  const a = chunkShape(7);
+  const b = chunkShape(7);
+
+  assert.deepEqual(a, b);
+  assert.ok(a.positions.length >= 12);
+
+  const distances = a.positions.map((p) => Math.hypot(...p));
+  const mean = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+  const spread = Math.max(...distances) - Math.min(...distances);
+
+  assert.ok(spread >= 0.2 * mean, `spread ${spread} should be >= 0.2 * mean (${mean})`);
+});
+
+test("chunkShape: different seeds give different shapes", () => {
+  const a = chunkShape(1);
+  const b = chunkShape(2);
+
+  assert.notDeepEqual(a.positions, b.positions);
+});
+
+test("shellPiece: deterministic for a seed, not flat (non-zero normal spread)", () => {
+  const fruit = fruitByKey("watermelon");
+  const a = shellPiece(3, fruit);
+  const b = shellPiece(3, fruit);
+
+  assert.deepEqual(a, b);
+
+  // "Not flat": the outer face's sampled normals must not all be equal.
+  const normals = a.outerNormals;
+  let maxPairwiseDistance = 0;
+
+  for (let i = 0; i < normals.length; i += 1) {
+    for (let j = i + 1; j < normals.length; j += 1) {
+      const distance = Math.hypot(
+        normals[i][0] - normals[j][0],
+        normals[i][1] - normals[j][1],
+        normals[i][2] - normals[j][2]
+      );
+      maxPairwiseDistance = Math.max(maxPairwiseDistance, distance);
+    }
+  }
+
+  assert.ok(maxPairwiseDistance > 0, "shellPiece outer normals should vary across the patch (a curved surface)");
+});
+
+test("shellPiece: different seeds give different patches, and colors come from the fruit", () => {
+  const fruit = fruitByKey("watermelon");
+  const a = shellPiece(1, fruit);
+  const b = shellPiece(2, fruit);
+
+  assert.notDeepEqual(a.positions, b.positions);
+  assert.equal(a.outerColor, fruit.shellOuterColor);
+  assert.equal(a.innerColor, fruit.shellInnerColor);
+});
+
+// --- result text ---------------------------------------------------------------
+
+test("resultText: held", () => {
+  const text = resultText({
+    fruit: fruitByKey("watermelon"),
+    heightMeters: 1,
+    impactSpeed: 4.4,
+    tier: "held",
+    outerCount: 0,
+    seedCount: 0
+  });
+
+  assert.equal(text, "Dropped a watermelon from 1.0 m. Hit the ground at 4.4 m/s. It held and bounced.");
+});
+
+test("resultText: cracked, split and smashed use their own verb and fly-word", () => {
+  const fruit = fruitByKey("watermelon");
+  const base = { fruit, heightMeters: 1, impactSpeed: 4.4, outerCount: 3, seedCount: 10 };
+
+  assert.equal(
+    resultText({ ...base, tier: "cracked" }),
+    "Dropped a watermelon from 1.0 m. Hit the ground at 4.4 m/s. It cracked into 3 pieces and 10 seeds fell out."
+  );
+  assert.equal(
+    resultText({ ...base, tier: "split" }),
+    "Dropped a watermelon from 1.0 m. Hit the ground at 4.4 m/s. It split into 3 pieces and 10 seeds fell out."
+  );
+  assert.equal(
+    resultText({ ...base, tier: "smashed", outerCount: 12, seedCount: 40 }),
+    "Dropped a watermelon from 1.0 m. Hit the ground at 4.4 m/s. It smashed into 12 pieces and 40 seeds flew out."
+  );
+});
+
+test("resultText: coconut's no-seed form ends after 'pieces.'", () => {
+  const text = resultText({
+    fruit: fruitByKey("coconut"),
+    heightMeters: 25,
+    impactSpeed: 22.1,
+    tier: "cracked",
+    outerCount: 3,
+    seedCount: 0
+  });
+
+  assert.equal(text, "Dropped a coconut from 25 m. Hit the ground at 22.1 m/s. It cracked into 3 pieces.");
+});
+
+test("resultText: a/an by fruit", () => {
+  assert.ok(
+    resultText({
+      fruit: fruitByKey("apple"),
+      heightMeters: 5,
+      impactSpeed: 10,
+      tier: "held",
+      outerCount: 0,
+      seedCount: 0
+    }).startsWith("Dropped an apple")
+  );
+  assert.ok(
+    resultText({
+      fruit: fruitByKey("orange"),
+      heightMeters: 5,
+      impactSpeed: 10,
+      tier: "held",
+      outerCount: 0,
+      seedCount: 0
+    }).startsWith("Dropped an orange")
+  );
+  assert.ok(
+    resultText({
+      fruit: fruitByKey("tomato"),
+      heightMeters: 5,
+      impactSpeed: 10,
+      tier: "held",
+      outerCount: 0,
+      seedCount: 0
+    }).startsWith("Dropped a tomato")
+  );
+  assert.ok(
+    resultText({
+      fruit: fruitByKey("coconut"),
+      heightMeters: 5,
+      impactSpeed: 10,
+      tier: "held",
+      outerCount: 0,
+      seedCount: 0
+    }).startsWith("Dropped a coconut")
+  );
+});
+
+// --- velocity formula (unchanged pure functions, still fruit-agnostic) -------
+
+test("bounceVelocity keeps the tangential part and partially reflects the normal part", () => {
+  const result = bounceVelocity([2, -34.3, -1], E_BOUNCE);
+
+  assert.equal(result[0], 2);
+  assert.ok(Math.abs(result[1] - E_BOUNCE * 34.3) < 1e-9);
+  assert.equal(result[2], -1);
+});
+
+test("crossVec3 matches the standard right-hand-rule cross product", () => {
+  assert.deepEqual(crossVec3([1, 0, 0], [0, 1, 0]), [0, 0, 1]);
+  assert.deepEqual(crossVec3([0, 1, 0], [1, 0, 0]), [0, 0, -1]);
+});
+
+test("burstDirection lifts a downward-pointing r to point sideways/up, and normalises", () => {
+  const direction = burstDirection([1, -1, 0]);
+
+  assert.ok(direction[1] >= 0, "burst direction must never point into the ground");
+  const length = Math.hypot(...direction);
+  assert.ok(Math.abs(length - 1) < 1e-9);
+});
+
+test("burstDirection falls back to straight up when r is (near) the centre", () => {
+  assert.deepEqual(burstDirection([0, 0, 0]), [0, 1, 0]);
+  assert.deepEqual(burstDirection([1e-10, -1e-10, 1e-10]), [0, 1, 0]);
+});
+
+test("burstSpeed is zero at or below breakSpeed and grows linearly with K above it", () => {
+  assert.equal(burstSpeed(10, 15, 0.04), 0);
+  assert.equal(burstSpeed(15, 15, 0.04), 0);
+  assert.ok(Math.abs(burstSpeed(20, 15, 0.04) - 0.04 * 5) < 1e-9);
+});
+
+test("jitterFactor stays within 1 +/- BURST_JITTER_RANGE and is linear in its input", () => {
+  assert.ok(Math.abs(jitterFactor(0) - (1 - BURST_JITTER_RANGE)) < 1e-9);
+  assert.ok(Math.abs(jitterFactor(1) - (1 + BURST_JITTER_RANGE)) < 1e-9);
+  assert.ok(Math.abs(jitterFactor(0.5) - 1) < 1e-9);
+});
+
+test("burstVelocity has zero magnitude below breakSpeed regardless of direction", () => {
+  const result = burstVelocity({
+    impactSpeed: 10,
+    breakSpeedValue: 15,
+    r: [1, 1, 1],
+    jitter: 1.1,
+    k: BURST_K
+  });
+
+  assert.deepEqual(result, [0, 0, 0]);
+});
+
+test("pieceVelocity combines bounce, spin and burst additively", () => {
+  const velocity = [1, -10, 2];
+  const angularVelocity = [0, 1, 0];
+  const r = [1, 0, 0];
+
+  const result = pieceVelocity({
+    velocity,
+    angularVelocity,
+    r,
+    impactSpeed: 30,
+    breakSpeedValue: 10,
+    jitter: 1,
+    k: 0,
+    e: E_BOUNCE
+  });
+
+  const expectedBounce = bounceVelocity(velocity, E_BOUNCE);
+  const expectedSpin = crossVec3(angularVelocity, r);
+
+  assert.ok(Math.abs(result[0] - (expectedBounce[0] + expectedSpin[0])) < 1e-9);
+  assert.ok(Math.abs(result[1] - (expectedBounce[1] + expectedSpin[1])) < 1e-9);
+  assert.ok(Math.abs(result[2] - (expectedBounce[2] + expectedSpin[2])) < 1e-9);
+});
+
+test("kFruitFor scales the burst constant by fruit radius relative to the watermelon reference", () => {
+  const watermelon = fruitByKey("watermelon");
+  const tomato = fruitByKey("tomato");
+
+  assert.ok(Math.abs(kFruitFor(watermelon, 0.01) - 0.01) < 1e-9);
+  assert.ok(Math.abs(kFruitFor(tomato, 0.01) - 0.01 * (tomato.radius / 0.15)) < 1e-9);
+});
+
+// --- height bar --------------------------------------------------------------
+
+test("heightBarFor: fraction is exactly 1 at melonY = heightM and 0 at melonY = 0", () => {
+  assert.equal(heightBarFor({ melonY: 10, heightM: 10 }).fraction, 1);
+  assert.equal(heightBarFor({ melonY: 0, heightM: 10 }).fraction, 0);
+});
+
+test("heightBarFor: fraction and melonY are clamped for out-of-range melonY", () => {
+  assert.equal(heightBarFor({ melonY: 15, heightM: 10 }).fraction, 1);
+  assert.equal(heightBarFor({ melonY: -1, heightM: 10 }).fraction, 0);
+  assert.equal(heightBarFor({ melonY: 15, heightM: 10 }).label, "10 m");
+  assert.equal(heightBarFor({ melonY: -1, heightM: 10 }).label, "0.0 m");
+});
+
+test("heightBarFor: ticks include only landmarks at or below heightM", () => {
+  const roofTicks = heightBarFor({ melonY: 5, heightM: 10 }).ticks.map((tick) => tick.name);
+  assert.deepEqual(roofTicks, ["Knee", "Counter", "Treehouse", "Roof"]);
+
+  const planeTicks = heightBarFor({ melonY: 30, heightM: 60 }).ticks.map((tick) => tick.name);
+  assert.deepEqual(planeTicks, LANDMARKS.map((landmark) => landmark.name));
+});
+
+test("heightBarFor: label uses formatHeight (one decimal below 10 m, whole metres at or above)", () => {
+  assert.equal(heightBarFor({ melonY: 60, heightM: 60 }).label, "60 m");
+  assert.equal(heightBarFor({ melonY: 9.6, heightM: 10 }).label, formatHeight(9.6));
+  assert.equal(heightBarFor({ melonY: 0.4, heightM: 10 }).label, "0.4 m");
+});
+
+// --- step 1b §8: height bar log scale -----------------------------------------
+
+test("heightBarFor: at heightM=60, Crane's tick fraction is s(25)/s(60) (~0.83), not the linear 0.417", () => {
+  const craneTick = heightBarFor({ melonY: 0, heightM: 60 }).ticks.find((tick) => tick.name === "Crane");
+  const expected = sliderFromHeight(25) / sliderFromHeight(60);
+
+  assert.ok(craneTick, "expected a Crane tick at heightM=60");
+  assert.ok(Math.abs(craneTick.fraction - expected) < 1e-9);
+  assert.ok(Math.abs(craneTick.fraction - 0.83) < 0.01, `expected ~0.83, got ${craneTick.fraction}`);
+  assert.ok(Math.abs(craneTick.fraction - 25 / 60) > 0.1, "fraction should not be the linear 0.417");
+});
+
+test("heightBarFor: fraction follows the log scale generally (values near the bottom of a tall drop compress less than linearly)", () => {
+  // At heightM=60, a fruit at y=5 (Treehouse) is 1/12 of the way up linearly
+  // but noticeably further up the log-scaled bar.
+  const fraction = heightBarFor({ melonY: 5, heightM: 60 }).fraction;
+  const linearFraction = 5 / 60;
+
+  assert.ok(fraction > linearFraction, `log fraction ${fraction} should exceed the linear fraction ${linearFraction}`);
+});
+
+test("heightBarFor: degenerate case at heightM=0.3 (the slider minimum) falls back to a linear fraction", () => {
+  assert.equal(heightBarFor({ melonY: 0.15, heightM: 0.3 }).fraction, 0.5);
+  assert.equal(heightBarFor({ melonY: 0.3, heightM: 0.3 }).fraction, 1);
+  assert.equal(heightBarFor({ melonY: 0, heightM: 0.3 }).fraction, 0);
+
+  const kneeTick = heightBarFor({ melonY: 0, heightM: 0.3 }).ticks.find((tick) => tick.name === "Knee");
+  assert.ok(kneeTick, "expected a Knee tick at heightM=0.3");
+  assert.equal(kneeTick.fraction, 1);
+});
+
+// --- §7: continuous height slider ---------------------------------------------
+
+test("heightFromSlider: endpoints are 0.3 m and 60 m", () => {
+  assert.ok(Math.abs(heightFromSlider(HEIGHT_SLIDER_MIN) - 0.3) < 1e-9);
+  assert.ok(Math.abs(heightFromSlider(HEIGHT_SLIDER_MAX) - 60) < 1e-6);
+});
+
+test("heightFromSlider: monotonically increasing", () => {
+  let previous = heightFromSlider(0);
+
+  for (let v = 50; v <= 1000; v += 50) {
+    const current = heightFromSlider(v);
+    assert.ok(current > previous, `heightFromSlider(${v}) should exceed the previous value`);
+    previous = current;
+  }
+});
+
+test("sliderFromHeight is the inverse of heightFromSlider", () => {
+  for (const v of [0, 1, 227, 500, 662, 999, 1000]) {
+    const height = heightFromSlider(v);
+    const roundTripped = sliderFromHeight(height);
+
+    assert.ok(Math.abs(roundTripped - v) < 1e-6, `round trip for slider value ${v} gave ${roundTripped}`);
+  }
+});
+
+test("sliderFromHeight places every landmark meters value inside [0, 1000]", () => {
+  for (const landmark of LANDMARKS) {
+    const v = sliderFromHeight(landmark.meters);
+    assert.ok(v >= HEIGHT_SLIDER_MIN - 1e-6 && v <= HEIGHT_SLIDER_MAX + 1e-6, `${landmark.name} slider value ${v} out of range`);
+  }
+});
+
+test("formatHeight: one decimal place below 10 m, rounded whole metres at or above 10 m", () => {
+  assert.equal(formatHeight(0.3), "0.3 m");
+  assert.equal(formatHeight(7.3), "7.3 m");
+  assert.equal(formatHeight(9.96), "10.0 m");
+  assert.equal(formatHeight(10), "10 m");
+  assert.equal(formatHeight(10.4), "10 m");
+  assert.equal(formatHeight(60), "60 m");
+});
+
+test("heightSliderLabel: appends '(about <Landmark>)' within 10% relative distance, omits it otherwise", () => {
+  assert.equal(heightSliderLabel(1.0), "1.0 m (about Counter)");
+  assert.equal(heightSliderLabel(60), "60 m (about Plane)");
+  assert.equal(heightSliderLabel(7.3), "7.3 m");
+});
+
+// --- camera framing per fruit --------------------------------------------------
+
+test("containmentWidthFor equals 25x the fruit's radius (physics-only, no longer tied to framing)", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    assert.ok(Math.abs(containmentWidthFor(fruit) - 25 * fruit.radius) < 1e-9);
+  }
+});
+
+// Pinhole camera maths, independent of view.js/three.js: builds a camera
+// basis from position -> target with world up (0,1,0), then projects a
+// world point to normalized device coordinates using the returned vertical
+// fov and the given aspect ratio.
+function projectToNdc(point, { position, target, fov }, aspect) {
+  function sub(a, b) {
+    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  }
+  function dot(a, b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  }
+  function cross(a, b) {
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  }
+  function normalize(a) {
+    const length = Math.hypot(...a);
+    return [a[0] / length, a[1] / length, a[2] / length];
+  }
+
+  const forward = normalize(sub(target, position));
+  const worldUp = [0, 1, 0];
+  const right = normalize(cross(forward, worldUp));
+  const up = cross(right, forward);
+  const relative = sub(point, position);
+  const camX = dot(relative, right);
+  const camY = dot(relative, up);
+  const camZ = dot(relative, forward);
+  const verticalHalfFovRad = (fov * Math.PI) / 180 / 2;
+  const tanVertical = Math.tan(verticalHalfFovRad);
+
+  return {
+    ndcX: camX / (camZ * tanVertical * aspect),
+    ndcY: camY / (camZ * tanVertical),
+    inFront: camZ > 0
+  };
+}
+
+function visibleWidthAt({ position, target, fov }, aspect) {
+  const distance = Math.hypot(
+    position[0] - target[0],
+    position[1] - target[1],
+    position[2] - target[2]
+  );
+  const verticalHalfFovRad = (fov * Math.PI) / 180 / 2;
+  const visibleHeight = 2 * distance * Math.tan(verticalHalfFovRad);
+
+  return visibleHeight * aspect;
+}
+
+// Step 1b §9: these are the real measured #scene-canvas CSS sizes at the two
+// supported viewports (390x844 and 1280x900), not the viewport sizes
+// themselves — the canvas is smaller than the viewport (controls take up
+// the rest). A Playwright assertion checks these stay within +/-2% of the
+// canvas's real aspect ratio, so this constant can't silently drift from
+// reality.
+const VIEW_SIZES = [
+  { width: 358, height: 256 },
+  { width: 592, height: 416 }
+];
+
+test("impactViewFor: vertical fov stays <= 75 degrees at both sizes, for every fruit", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+
+      assert.ok(view.fov <= 75, `${key} at ${JSON.stringify(size)}: fov ${view.fov} exceeds 75`);
+    }
+  }
+});
+
+test("impactViewFor: elevation stays within 20-30 degrees above the ground, for every fruit at both sizes", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+
+      assert.ok(
+        view.elevationDeg >= 20 && view.elevationDeg <= 30,
+        `${key} at ${JSON.stringify(size)}: elevation ${view.elevationDeg} outside [20, 30]`
+      );
+
+      // Cross-check elevationDeg against the actual camera position/target,
+      // independent of the field the implementation reports.
+      const [px, py, pz] = view.position;
+      const [tx, ty, tz] = view.target;
+      const horizontalDistance = Math.hypot(px - tx, pz - tz);
+      const measuredElevationDeg = (Math.atan2(py - ty, horizontalDistance) * 180) / Math.PI;
+
+      assert.ok(
+        Math.abs(measuredElevationDeg - view.elevationDeg) < 1e-6,
+        `${key} at ${JSON.stringify(size)}: measured elevation ${measuredElevationDeg} disagrees with reported ${view.elevationDeg}`
+      );
+    }
+  }
+});
+
+test("impactViewFor: the unbroken fruit's on-screen diameter fraction is 20-30% of view width, for every fruit at both sizes", () => {
+  const report = {};
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    report[key] = {};
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+      const aspect = size.width / size.height;
+      const visibleWidth = visibleWidthAt(view, aspect);
+      const measuredFraction = (2 * fruit.radius) / visibleWidth;
+
+      report[key][`${size.width}x${size.height}`] = Number(measuredFraction.toFixed(4));
+
+      assert.ok(
+        measuredFraction >= 0.2 && measuredFraction <= 0.3,
+        `${key} at ${JSON.stringify(size)}: diameter fraction ${measuredFraction} outside [0.20, 0.30]`
+      );
+      assert.ok(
+        Math.abs(measuredFraction - view.diameterFraction) < 1e-9,
+        `${key} at ${JSON.stringify(size)}: reported diameterFraction disagrees with independently measured value`
+      );
+    }
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("Diameter fraction per fruit/size:", JSON.stringify(report, null, 2));
+});
+
+test("impactViewFor: ground fills at least 60% of the frame, for every fruit at both sizes", () => {
+  const report = {};
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    report[key] = {};
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+
+      report[key][`${size.width}x${size.height}`] = Number(view.groundFraction.toFixed(4));
+
+      assert.ok(
+        view.groundFraction >= 0.6,
+        `${key} at ${JSON.stringify(size)}: ground fraction ${view.groundFraction} below 0.60`
+      );
+      assert.ok(view.groundFraction <= 1, `${key} at ${JSON.stringify(size)}: ground fraction ${view.groundFraction} above 1`);
+    }
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("Ground fraction per fruit/size:", JSON.stringify(report, null, 2));
+});
+
+test("impactViewFor: the contact point is inside |NDC| <= 0.9, for every fruit at both sizes", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+      const aspect = size.width / size.height;
+      const projected = projectToNdc([0, 0, 0], view, aspect);
+
+      assert.ok(projected.inFront);
+      assert.ok(Math.abs(projected.ndcX) <= 0.9, `${key} at ${JSON.stringify(size)}: ndcX ${projected.ndcX} exceeds 0.9`);
+      assert.ok(Math.abs(projected.ndcY) <= 0.9, `${key} at ${JSON.stringify(size)}: ndcY ${projected.ndcY} exceeds 0.9`);
+    }
+  }
+});
+
+test("impactViewFor: same inputs give deep-equal outputs", () => {
+  const fruit = fruitByKey("watermelon");
+  const first = impactViewFor({ width: 1280, height: 900, fruit });
+  const second = impactViewFor({ width: 1280, height: 900, fruit });
+
+  assert.deepEqual(first, second);
+});
+
+// --- step 1b §9: the "incoming" marker ------------------------------------------
+
+// Independently reconstructs hEdge (the height on the impact point's
+// vertical line exactly at the frame's top edge) from the raw view, rather
+// than calling incomingFor, so this actually checks incomingFor's formula
+// rather than just its own self-consistency.
+function computeHEdge(view) {
+  const camY = view.position[1];
+  const horiz = Math.hypot(view.position[0], view.position[2]);
+  const pitch = Math.atan2(camY - view.target[1], horiz);
+  const halfFovRad = (view.fov * Math.PI) / 180 / 2;
+
+  return Math.max(0, camY + horiz * Math.tan(halfFovRad - pitch));
+}
+
+test("incomingFor: visible just above hEdge, hidden just below it (+/- 1mm)", () => {
+  const fruit = fruitByKey("watermelon");
+  const view = impactViewFor({ ...VIEW_SIZES[1], fruit });
+  const hEdge = computeHEdge(view);
+
+  const justAbove = incomingFor({ fruitY: hEdge + 0.001 + fruit.radius, fruitRadius: fruit.radius, view });
+  const justBelow = incomingFor({ fruitY: hEdge - 0.001 + fruit.radius, fruitRadius: fruit.radius, view });
+
+  assert.equal(justAbove.visible, true);
+  assert.equal(justBelow.visible, false);
+});
+
+test("incomingFor: hidden at ground (fruitY = R)", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+      const result = incomingFor({ fruitY: fruit.radius, fruitRadius: fruit.radius, view });
+
+      assert.equal(result.visible, false, `${key} at ${JSON.stringify(size)}: should be hidden at ground`);
+      assert.equal(result.metresAbove, 0);
+    }
+  }
+});
+
+test("incomingFor: visible for every fruit at Counter (fruitY = 1 + R), at both real canvas sizes", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const size of VIEW_SIZES) {
+      const view = impactViewFor({ ...size, fruit });
+      const result = incomingFor({ fruitY: 1 + fruit.radius, fruitRadius: fruit.radius, view });
+
+      assert.equal(result.visible, true, `${key} at ${JSON.stringify(size)}: should be visible at Counter`);
+    }
+  }
+});
+
+test("incomingFor: label matches formatHeight(metresAbove)", () => {
+  const fruit = fruitByKey("watermelon");
+  const view = impactViewFor({ ...VIEW_SIZES[1], fruit });
+  const result = incomingFor({ fruitY: 1 + fruit.radius, fruitRadius: fruit.radius, view });
+
+  assert.equal(result.label, formatHeight(result.metresAbove));
+  assert.ok(result.metresAbove > 0);
+});
+
+test("incomingFor: correct above the camera height (e.g. 60 m), where naive NDC projection breaks", () => {
+  const fruit = fruitByKey("watermelon");
+  const view = impactViewFor({ ...VIEW_SIZES[1], fruit });
+
+  assert.ok(view.position[1] < 60, "camera should be well below 60 m for this to be a meaningful check");
+
+  const result = incomingFor({ fruitY: 60 + fruit.radius, fruitRadius: fruit.radius, view });
+
+  assert.equal(result.visible, true);
+  assert.ok(Number.isFinite(result.metresAbove) && result.metresAbove > 0);
+  assert.ok(result.metresAbove < 60, "metresAbove should be less than the full drop height (some of it is within the frame)");
+});
+
+test("incomingFor: deterministic for the same inputs", () => {
+  const fruit = fruitByKey("watermelon");
+  const view = impactViewFor({ ...VIEW_SIZES[1], fruit });
+
+  const first = incomingFor({ fruitY: 1 + fruit.radius, fruitRadius: fruit.radius, view });
+  const second = incomingFor({ fruitY: 1 + fruit.radius, fruitRadius: fruit.radius, view });
+
+  assert.deepEqual(first, second);
+});
+
+// --- §7: release wobble --------------------------------------------------------
+
+function makeRng(sequence) {
+  let i = 0;
+  return () => sequence[i++ % sequence.length];
+}
+
+test("releaseWobble: deterministic for the same rng sequence", () => {
+  const a = releaseWobble(makeRng([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]));
+  const b = releaseWobble(makeRng([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]));
+
+  assert.deepEqual(a, b);
+});
+
+test("releaseWobble: tilt stays within +/-8 degrees, spin within [0, 1.5], horizontal speed within [0, 0.05]", () => {
+  for (let seed = 0; seed < 50; seed += 1) {
+    let s = seed + 1;
+    const rng = () => {
+      s = (s * 1103515245 + 12345) >>> 0;
+      return s / 0xffffffff;
+    };
+
+    const wobble = releaseWobble(rng);
+
+    // quaternion axis-angle: |sin(angle/2)| bounds the tilt angle directly.
+    const sinHalf = Math.hypot(wobble.quaternion[0], wobble.quaternion[1], wobble.quaternion[2]);
+    const tiltAngleDeg = 2 * Math.asin(Math.min(1, sinHalf)) * (180 / Math.PI);
+    assert.ok(tiltAngleDeg <= 8 + 1e-6, `tilt ${tiltAngleDeg} exceeds 8 degrees`);
+
+    const spinMagnitude = Math.hypot(...wobble.angularVelocity);
+    assert.ok(spinMagnitude >= 0 && spinMagnitude <= 1.5 + 1e-9, `spin ${spinMagnitude} out of [0, 1.5]`);
+
+    const horizontalSpeed = Math.hypot(wobble.velocity[0], wobble.velocity[2]);
+    assert.ok(horizontalSpeed >= 0 && horizontalSpeed <= 0.05 + 1e-9, `horizontal speed ${horizontalSpeed} out of [0, 0.05]`);
+    assert.equal(wobble.velocity[1], 0, "release wobble must not add vertical velocity");
+  }
+});
+
+// --- §7: layoutHash --------------------------------------------------------------
+
+test("layoutHash: deterministic for the same positions", () => {
+  const positions = [[1, 2, 3], [4, 5, 6]];
+
+  assert.equal(layoutHash(positions), layoutHash(positions));
+  assert.equal(layoutHash([[1, 2, 3], [4, 5, 6]]), layoutHash([[1, 2, 3], [4, 5, 6]]));
+});
+
+test("layoutHash: sensitive to a 1e-3 m change in a single coordinate", () => {
+  const base = [[1, 2, 3], [4, 5, 6]];
+  const nudged = [[1, 2, 3], [4.001, 5, 6]];
+
+  assert.notEqual(layoutHash(base), layoutHash(nudged));
+});
+
+test("layoutHash: order-sensitive (different piece order gives a different hash)", () => {
+  const a = [[1, 2, 3], [4, 5, 6]];
+  const b = [[4, 5, 6], [1, 2, 3]];
+
+  assert.notEqual(layoutHash(a), layoutHash(b));
+});
+
+// --- step 1b §11b (spawn ruling v3): Drop always works — controls never disable ---
+// Replaces "controlsEnabledForPhase: fruit/height/Drop enabled in ready and
+// settled, disabled only while falling; sound toggle always enabled".
+
+test("controlsEnabledForPhase: fruit/height/Drop/sound enabled in every phase (ready/active/settled); only skipButton is phase-gated, to active", () => {
+  for (const phase of ["ready", "active", "settled"]) {
+    const enabled = controlsEnabledForPhase(phase);
+
+    assert.equal(enabled.fruitRadios, true, phase);
+    assert.equal(enabled.heightSlider, true, phase);
+    assert.equal(enabled.dropButton, true, phase);
+    assert.equal(enabled.soundToggle, true, phase);
+    assert.equal(enabled.skipButton, phase === "active", phase);
+  }
+
+  assert.equal(controlsEnabledForPhase("ready").resetButton, undefined, "resetButton must not exist");
+  assert.equal(controlsEnabledForPhase("ready").toughnessSlider, undefined, "toughnessSlider must not exist");
+});
+
+// --- step 1b §10: splatSoundFor -------------------------------------------------
+
+test("splatSoundFor: every gain is within [0, 0.6], durations and frequencies stay within their bounds", () => {
+  const severities = [0.3, 0.7, 1, 1.3, 2, 3, 5, 8];
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const severity of severities) {
+      const impactSpeed = severity * breakSpeedFor(fruit);
+      const sound = splatSoundFor({ fruit: key, severity, impactSpeed });
+
+      for (const gainField of ["noiseGain", "thudGain", "crackGain"]) {
+        assert.ok(
+          sound[gainField] >= 0 && sound[gainField] <= 0.6,
+          `${key} severity ${severity}: ${gainField} ${sound[gainField]} outside [0, 0.6]`
+        );
+      }
+
+      assert.ok(sound.noiseDuration >= 0 && sound.noiseDuration <= 0.6, `${key} severity ${severity}: noiseDuration`);
+      assert.ok(sound.thudDuration >= 0 && sound.thudDuration <= 0.3, `${key} severity ${severity}: thudDuration`);
+
+      for (const freqField of ["cutoffStart", "cutoffEnd", "thudFreq"]) {
+        assert.ok(
+          sound[freqField] >= 60 && sound[freqField] <= 4000,
+          `${key} severity ${severity}: ${freqField} ${sound[freqField]} outside [60, 4000] Hz`
+        );
+      }
+    }
+  }
+});
+
+test("splatSoundFor: held (severity < 1) is a thud only — zero noise gain and zero crack, for every fruit", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    const sound = splatSoundFor({ fruit: key, severity: 0.7, impactSpeed: 0.7 * breakSpeedFor(fruit) });
+
+    assert.equal(sound.noiseGain, 0, key);
+    assert.equal(sound.crackGain, 0, key);
+    assert.ok(sound.thudGain > 0, `${key}: held should still have a thud`);
+  }
+});
+
+test("splatSoundFor: coconut has crackGain > 0, tomato has crackGain === 0", () => {
+  const coconut = fruitByKey("coconut");
+  const tomato = fruitByKey("tomato");
+
+  const coconutSound = splatSoundFor({ fruit: "coconut", severity: 2, impactSpeed: 2 * breakSpeedFor(coconut) });
+  const tomatoSound = splatSoundFor({ fruit: "tomato", severity: 2, impactSpeed: 2 * breakSpeedFor(tomato) });
+
+  assert.ok(coconutSound.crackGain > 0);
+  assert.equal(tomatoSound.crackGain, 0);
+});
+
+test("splatSoundFor: noiseDuration and noiseGain never decrease as severity rises through the tiers, for every fruit", () => {
+  const tierSeverities = [0.7, 1.3, 2.0, 5.0]; // held, cracked, split, smashed (representative)
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    let previousGain = -Infinity;
+    let previousDuration = -Infinity;
+
+    for (const severity of tierSeverities) {
+      const impactSpeed = severity * breakSpeedFor(fruit);
+      const sound = splatSoundFor({ fruit: key, severity, impactSpeed });
+
+      assert.ok(sound.noiseGain >= previousGain, `${key} at severity ${severity}: noiseGain decreased`);
+      assert.ok(sound.noiseDuration >= previousDuration, `${key} at severity ${severity}: noiseDuration decreased`);
+
+      previousGain = sound.noiseGain;
+      previousDuration = sound.noiseDuration;
+    }
+  }
+});
+
+test("devDependency versions match the CDN URL versions declared in project.json", async () => {
+  const packageJson = JSON.parse(await readFile(join(repoRoot, "package.json"), "utf8"));
+  const projectJson = JSON.parse(
+    await readFile(join(repoRoot, "projects/splat-lab/project.json"), "utf8")
+  );
+
+  const urlVersion = (url) => {
+    const match = url.match(/\/npm\/([^/]+)@([^/]+)\//);
+    assert.ok(match, `could not parse package/version from ${url}`);
+    return { name: match[1], version: match[2] };
+  };
+
+  const dependencies = projectJson.runtime.externalDependencies;
+  assert.equal(dependencies.length, 3, "expected three declared external dependencies");
+
+  for (const dependency of dependencies) {
+    const { name, version } = urlVersion(dependency.url);
+    const devDependencyVersion = packageJson.devDependencies[name];
+
+    assert.ok(devDependencyVersion, `package.json devDependencies is missing ${name}`);
+    assert.equal(
+      devDependencyVersion,
+      version,
+      `${name} devDependency version should match the CDN URL version in ${dependency.url}`
+    );
+  }
+});
+
+test("instructions never mention a Reset button, which §10 removed", async () => {
+  const { instructionsForPhase } = await import("../projects/splat-lab/rules.js");
+
+  for (const phase of ["ready", "active", "settled"]) {
+    assert.doesNotMatch(instructionsForPhase(phase), /reset/i, `${phase} instructions mention Reset`);
+  }
+  assert.match(instructionsForPhase("settled"), /Drop/);
+});
+
+// --- step 1b §11b (spawn ruling v3): spawnPlanFor --------------------------------
+
+test("spawnPlanFor: empty scene spawns at the chosen height with no removals", () => {
+  const fruit = fruitByKey("watermelon");
+  const plan = spawnPlanFor({ fruit, heightM: 10, bodies: [] });
+
+  assert.equal(plan.y, 10 + fruit.radius);
+  assert.deepEqual(plan.removeIds, []);
+});
+
+test("spawnPlanFor: raises above a falling fruit directly below the spawn point", () => {
+  const fruit = fruitByKey("watermelon");
+  const other = {
+    id: 1,
+    fruitId: 1,
+    kind: "fruit",
+    position: [0, 10 + fruit.radius, 0],
+    radius: fruit.radius,
+    falling: true
+  };
+  const plan = spawnPlanFor({ fruit, heightM: 10, bodies: [other] });
+
+  assert.ok(plan.y > 10 + fruit.radius, "spawn should be raised above the base height");
+  assert.equal(plan.y, other.position[1] + other.radius + fruit.radius + 0.02);
+  assert.deepEqual(plan.removeIds, [], "falling fruit are never removed, only avoided");
+
+  // The new spawn must actually clear the falling fruit.
+  const dist = Math.abs(plan.y - other.position[1]);
+  assert.ok(dist >= fruit.radius + other.radius + 0.02 - 1e-9);
+});
+
+test("spawnPlanFor: removes landed blockers overlapping the spawn instead of raising", () => {
+  const fruit = fruitByKey("watermelon");
+  const blocker = {
+    id: 2,
+    fruitId: 2,
+    kind: "fruit",
+    position: [0, fruit.radius, 0],
+    radius: fruit.radius,
+    falling: false
+  };
+  const plan = spawnPlanFor({ fruit, heightM: 0.3, bodies: [blocker] });
+
+  assert.equal(plan.y, 0.3 + fruit.radius, "landed blockers are removed, not raised over");
+  assert.deepEqual(plan.removeIds, [2]);
+});
+
+test("spawnPlanFor: a landed piece far to the side is left alone (no overlap, no removal)", () => {
+  const fruit = fruitByKey("watermelon");
+  const farAway = {
+    id: 3,
+    fruitId: 3,
+    kind: "outer",
+    position: [5, 0.05, 0],
+    radius: 0.05,
+    falling: false
+  };
+  const plan = spawnPlanFor({ fruit, heightM: 10, bodies: [farAway] });
+
+  assert.equal(plan.y, 10 + fruit.radius);
+  assert.deepEqual(plan.removeIds, []);
+});
+
+// --- step 1b §11b (spawn ruling v3): batchResultText -----------------------------
+
+test("batchResultText: one fruit keeps today's resultText wording", () => {
+  const fruit = fruitByKey("watermelon");
+  const text = batchResultText([
+    { fruit, heightMeters: 10, impactSpeed: 14, tier: "smashed", outerCount: 12, seedCount: 40 }
+  ]);
+
+  assert.equal(
+    text,
+    resultText({ fruit, heightMeters: 10, impactSpeed: 14, tier: "smashed", outerCount: 12, seedCount: 40 })
+  );
+});
+
+test("batchResultText: three fruit, mixed tiers, matches the spec's example wording", () => {
+  const watermelon = fruitByKey("watermelon");
+  const tomato = fruitByKey("tomato");
+  const coconut = fruitByKey("coconut");
+
+  const text = batchResultText([
+    { fruit: watermelon, heightMeters: 10, impactSpeed: 14, tier: "smashed", outerCount: 12, seedCount: 40 },
+    { fruit: tomato, heightMeters: 1, impactSpeed: 4, tier: "cracked", outerCount: 2, seedCount: 0 },
+    { fruit: coconut, heightMeters: 0.3, impactSpeed: 2, tier: "held", outerCount: 0, seedCount: 0 }
+  ]);
+
+  assert.equal(
+    text,
+    "Dropped 3 fruit. The watermelon smashed into 12 pieces and 40 seeds flew out. " +
+      "The tomato cracked into 2 pieces. The coconut held."
+  );
+});
+
+test("batchResultText: five fruit produces five clauses after the lead sentence", () => {
+  const fruit = fruitByKey("apple");
+  const results = Array.from({ length: 5 }, () => ({
+    fruit,
+    heightMeters: 1,
+    impactSpeed: 3,
+    tier: "cracked",
+    outerCount: 2,
+    seedCount: 0
+  }));
+
+  const text = batchResultText(results);
+
+  assert.match(text, /^Dropped 5 fruit\. /);
+  assert.equal((text.match(/The apple cracked into 2 pieces\./g) || []).length, 5);
+});
+
+// --- step 1b §11b (spawn ruling v3): budgetTrimPlan ------------------------------
+
+test("budgetTrimPlan: under budget removes nothing and trims nothing", () => {
+  const plan = budgetTrimPlan({
+    existingCounts: [{ id: 1, bodyCount: 10 }],
+    breakingCounts: { outer: 12, inner: 20, seeds: 40 }
+  });
+
+  assert.deepEqual(plan.removeFruitIds, []);
+  assert.deepEqual(plan.trimmedBreakingCounts, { outer: 12, inner: 20, seeds: 40 });
+});
+
+test("budgetTrimPlan: removes the oldest fruit first, never the breaking fruit", () => {
+  const plan = budgetTrimPlan({
+    existingCounts: [
+      { id: 1, bodyCount: 100 },
+      { id: 2, bodyCount: 100 }
+    ],
+    breakingCounts: { outer: 12, inner: 20, seeds: 40 }
+  });
+
+  // total = 100 + 100 + 72 = 272; removing id 1 (oldest) brings it to 172.
+  assert.deepEqual(plan.removeFruitIds, [1]);
+  assert.deepEqual(plan.trimmedBreakingCounts, { outer: 12, inner: 20, seeds: 40 });
+});
+
+test("budgetTrimPlan: trims the breaking fruit's seeds, then inner, keeping at least 2 outer, only after every other fruit is gone", () => {
+  const plan = budgetTrimPlan({
+    existingCounts: [{ id: 1, bodyCount: 5 }],
+    breakingCounts: { outer: 12, inner: 20, seeds: 190 }
+  });
+
+  // total = 5 + 12 + 20 + 190 = 227; removing id 1 -> 222; still over 200,
+  // so seeds get trimmed by 22 (190 -> 168), landing exactly at 200.
+  assert.deepEqual(plan.removeFruitIds, [1]);
+  assert.equal(plan.trimmedBreakingCounts.outer, 12);
+  assert.equal(plan.trimmedBreakingCounts.inner, 20);
+  assert.equal(plan.trimmedBreakingCounts.seeds, 168);
+
+  const total =
+    plan.trimmedBreakingCounts.outer + plan.trimmedBreakingCounts.inner + plan.trimmedBreakingCounts.seeds;
+  assert.ok(total <= 200);
+});
+
+test("budgetTrimPlan: never trims outer below 2, even under extreme pressure", () => {
+  const plan = budgetTrimPlan({
+    existingCounts: [],
+    breakingCounts: { outer: 12, inner: 0, seeds: 0 },
+    limit: 1
+  });
+
+  assert.deepEqual(plan.removeFruitIds, [], "no other fruit exists to remove");
+  assert.equal(plan.trimmedBreakingCounts.outer, 2, "outer floors at 2 rather than trimming to the limit of 1");
+});
+
