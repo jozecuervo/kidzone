@@ -1,0 +1,3 @@
+# kidzone
+
+@AGENTS.md

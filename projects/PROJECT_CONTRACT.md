@@ -46,6 +46,11 @@ the entry must stay inside the project folder.
 }
 ```
 
+The landing page shelf lists projects **newest first by `date`**; `order` only
+breaks ties between projects with the same date. Set `"shelf": false` to keep a
+project published and in `projects/index.json` but off the shelf (the
+`make-a-game` starter uses this; the hero links to it instead).
+
 ## Safety Defaults
 
 - Prefer active creation, experiments, puzzles, and making things.

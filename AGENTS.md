@@ -99,3 +99,8 @@ Before marking a game pull request ready:
 - Do not assume deployment at `/`; Kidzone may be served below a repository path.
 - Use the local static server for preview needs, but keep publishable projects
   deployable to GitHub Pages without server-only behavior.
+- Run Playwright per spec file, and split a large spec with `--grep` or line
+  numbers plus `--global-timeout=280000`. Agent sessions stall on a 10-minute
+  no-output watchdog, and `tests/splat-lab.spec.mjs` alone takes about 5 minutes.
+- Stop a preview or test server by the PID you started, never with
+  `pkill -f server.mjs`: that also kills anyone else's preview on another port.
