@@ -1,0 +1,41 @@
+{
+  "title": "Splat Lab",
+  "summary": "Drop fruit from different heights and see what splats. Press Drop as fast as you like — up to 5 fruit at once.",
+  "description": "Pick a fruit and a height on a continuous slider, then press Drop, again and again if you like: up to 5 fruit fall into the same drop zone at once, each holding, cracking, splitting, or smashing on its own.",
+  "date": "2026-09-12",
+  "dateSource": "project metadata",
+  "entry": "index.html",
+  "cta": "Start dropping",
+  "tags": ["science", "physics"],
+  "order": 40,
+  "ageRange": "5-11",
+  "interaction": ["pointer", "touch", "keyboard"],
+  "safety": {
+    "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "None required for ordinary play.",
+    "notes": "No gore: broken fruit shows cartoon skin pieces, irregular flesh chunks, and seeds only. There is no toughness control — every fruit breaks at its own fixed real-world-inspired speed. Splat sound effects are generated in the browser with Web Audio (no audio files, no network request); a visible on/off sound toggle is provided, defaults to on, and is not persisted between visits."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "declared-external-dependency",
+    "storesData": false,
+    "externalDependencies": [
+      {
+        "name": "three.js",
+        "url": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+        "reason": "3D rendering for the drop scene."
+      },
+      {
+        "name": "three.js core",
+        "url": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.core.js",
+        "reason": "three.js core module, imported by three.module.js."
+      },
+      {
+        "name": "cannon-es",
+        "url": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js",
+        "reason": "Physics simulation for the falling fruit and their pieces."
+      }
+    ]
+  }
+}
