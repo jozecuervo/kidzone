@@ -748,3 +748,117 @@ test("displayed impact speed matches sqrt(2gh) within 0.25 m/s for every landmar
   // eslint-disable-next-line no-console
   console.log("Measured impact speeds:", JSON.stringify(measured, null, 2));
 });
+
+// --- step 1b §10: firstImpact -----------------------------------------------
+
+test("firstImpact: null before impact, set at the impact step with the correct tier, null after reset", () => {
+  const sim = createSim({ seed: 1, heightM: PLANE_M, toughness: 1, fruit: "watermelon" });
+
+  assert.equal(sim.firstImpact, null);
+
+  sim.drop();
+  assert.equal(sim.firstImpact, null, "must stay null while falling, before ground contact");
+
+  let steps = 0;
+
+  while (sim.firstImpact === null && steps < MAX_STEPS_TO_SETTLE) {
+    sim.step();
+    steps += 1;
+  }
+
+  assert.ok(sim.firstImpact, "firstImpact should be set once ground contact is decided");
+  assert.equal(sim.firstImpact.step, steps);
+  assert.ok(sim.firstImpact.impactSpeed > 0);
+  assert.ok(sim.firstImpact.severity > 0);
+  assert.equal(sim.firstImpact.fruit, "watermelon");
+  // Plane t=1 always breaks watermelon (§2 pins), so this is never "held".
+  assert.notEqual(sim.firstImpact.tier, "held");
+
+  // Stays set (not cleared) as the sim continues settling.
+  runToSettled(sim);
+  assert.ok(sim.firstImpact);
+
+  sim.reset();
+  assert.equal(sim.firstImpact, null);
+});
+
+test("firstImpact: a held drop (Knee, t=5) reports tier 'held'", () => {
+  const sim = createSim({ seed: 4, heightM: KNEE_M, toughness: 5, fruit: "watermelon" });
+
+  sim.drop();
+
+  let steps = 0;
+
+  while (sim.firstImpact === null && steps < MAX_STEPS_TO_SETTLE) {
+    sim.step();
+    steps += 1;
+  }
+
+  assert.ok(sim.firstImpact);
+  assert.equal(sim.firstImpact.tier, "held");
+});
+
+// --- step 1b §10 (CTO amendment): uiPhase, decoupled from physics settle ----
+
+function stepToImpact(sim) {
+  let steps = 0;
+
+  while (sim.firstImpact === null && steps < MAX_STEPS_TO_SETTLE) {
+    sim.step();
+    steps += 1;
+  }
+
+  assert.ok(sim.firstImpact, "expected an impact within the step budget");
+
+  return sim.firstImpact.step;
+}
+
+function stepToAbsoluteStep(sim, targetStep) {
+  while (sim.steps < targetStep) sim.step();
+}
+
+test("uiPhase: a held watermelon at Knee (seed 4) is 'falling' at impact+71 and 'settled' at impact+72, with summary appearing exactly then", () => {
+  const sim = createSim({ seed: 4, heightM: KNEE_M, toughness: 5, fruit: "watermelon" });
+
+  sim.drop();
+  const impactStep = stepToImpact(sim);
+
+  stepToAbsoluteStep(sim, impactStep + 71);
+  assert.equal(sim.uiPhase, "falling");
+  assert.equal(sim.summary, null);
+  // Physics itself is still "falling" here too (debris/fruit not
+  // necessarily asleep yet) — the phase most tests read is unaffected.
+  assert.equal(sim.phase, "falling");
+
+  sim.step(); // impact + 72
+  assert.equal(sim.steps, impactStep + 72);
+  assert.equal(sim.uiPhase, "settled");
+  assert.notEqual(sim.summary, null);
+  assert.equal(sim.summary.tier, "held");
+});
+
+test("uiPhase: a Plane watermelon smash (seed 7, t=5) is 'falling' at impact+71 and 'settled' at impact+72, while physics phase stays 'falling' (debris still active)", () => {
+  const sim = createSim({ seed: 7, heightM: PLANE_M, toughness: 5, fruit: "watermelon" });
+
+  sim.drop();
+  const impactStep = stepToImpact(sim);
+  assert.equal(sim.firstImpact.tier, "smashed");
+
+  stepToAbsoluteStep(sim, impactStep + 71);
+  assert.equal(sim.uiPhase, "falling");
+  assert.equal(sim.summary, null);
+
+  sim.step(); // impact + 72
+  assert.equal(sim.uiPhase, "settled");
+  assert.notEqual(sim.summary, null);
+
+  // Physics is NOT settled yet at this early step: a Plane smash's debris
+  // (fresh wobble spin) keeps at least one body moving well past +72.
+  assert.equal(sim.phase, "falling", "physics phase should still be falling at UI-settle time for a Plane smash");
+
+  const uiSettleSummary = sim.summary;
+
+  runToSettled(sim); // physics end (sleep or MAX_SETTLE_STEPS)
+  assert.equal(sim.phase, "settled");
+  assert.deepEqual(sim.summary, uiSettleSummary, "summary must not change between UI settle and physics settle");
+});

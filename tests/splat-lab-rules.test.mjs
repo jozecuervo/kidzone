@@ -21,6 +21,7 @@ import {
   burstVelocity,
   chunkShape,
   containmentWidthFor,
+  controlsEnabledForPhase,
   crossVec3,
   expectedImpactSpeed,
   formatHeight,
@@ -41,6 +42,7 @@ import {
   shellPiece,
   shouldBreakFruit,
   sliderFromHeight,
+  splatSoundFor,
   tierForSeverity,
   toughnessMultiplier
 } from "../projects/splat-lab/rules.js";
@@ -828,6 +830,107 @@ test("layoutHash: order-sensitive (different piece order gives a different hash)
   const b = [[4, 5, 6], [1, 2, 3]];
 
   assert.notEqual(layoutHash(a), layoutHash(b));
+});
+
+// --- step 1b §10: no Reset button — controls follow phase ---------------------
+
+test("controlsEnabledForPhase: fruit/height/toughness/Drop enabled in ready and settled, disabled only while falling; sound toggle always enabled", () => {
+  for (const phase of ["ready", "settled"]) {
+    const enabled = controlsEnabledForPhase(phase);
+
+    assert.equal(enabled.fruitRadios, true, phase);
+    assert.equal(enabled.heightSlider, true, phase);
+    assert.equal(enabled.toughnessSlider, true, phase);
+    assert.equal(enabled.dropButton, true, phase);
+    assert.equal(enabled.skipButton, false, phase);
+    assert.equal(enabled.soundToggle, true, phase);
+  }
+
+  const falling = controlsEnabledForPhase("falling");
+
+  assert.equal(falling.fruitRadios, false);
+  assert.equal(falling.heightSlider, false);
+  assert.equal(falling.toughnessSlider, false);
+  assert.equal(falling.dropButton, false);
+  assert.equal(falling.skipButton, true);
+  assert.equal(falling.soundToggle, true);
+
+  assert.equal(controlsEnabledForPhase("ready").resetButton, undefined, "resetButton must not exist");
+});
+
+// --- step 1b §10: splatSoundFor -------------------------------------------------
+
+test("splatSoundFor: every gain is within [0, 0.6], durations and frequencies stay within their bounds", () => {
+  const severities = [0.3, 0.7, 1, 1.3, 2, 3, 5, 8];
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+
+    for (const severity of severities) {
+      const impactSpeed = severity * breakSpeedFor(fruit, 5);
+      const sound = splatSoundFor({ fruit: key, severity, impactSpeed });
+
+      for (const gainField of ["noiseGain", "thudGain", "crackGain"]) {
+        assert.ok(
+          sound[gainField] >= 0 && sound[gainField] <= 0.6,
+          `${key} severity ${severity}: ${gainField} ${sound[gainField]} outside [0, 0.6]`
+        );
+      }
+
+      assert.ok(sound.noiseDuration >= 0 && sound.noiseDuration <= 0.6, `${key} severity ${severity}: noiseDuration`);
+      assert.ok(sound.thudDuration >= 0 && sound.thudDuration <= 0.3, `${key} severity ${severity}: thudDuration`);
+
+      for (const freqField of ["cutoffStart", "cutoffEnd", "thudFreq"]) {
+        assert.ok(
+          sound[freqField] >= 60 && sound[freqField] <= 4000,
+          `${key} severity ${severity}: ${freqField} ${sound[freqField]} outside [60, 4000] Hz`
+        );
+      }
+    }
+  }
+});
+
+test("splatSoundFor: held (severity < 1) is a thud only — zero noise gain and zero crack, for every fruit", () => {
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    const sound = splatSoundFor({ fruit: key, severity: 0.7, impactSpeed: 0.7 * breakSpeedFor(fruit, 5) });
+
+    assert.equal(sound.noiseGain, 0, key);
+    assert.equal(sound.crackGain, 0, key);
+    assert.ok(sound.thudGain > 0, `${key}: held should still have a thud`);
+  }
+});
+
+test("splatSoundFor: coconut has crackGain > 0, tomato has crackGain === 0", () => {
+  const coconut = fruitByKey("coconut");
+  const tomato = fruitByKey("tomato");
+
+  const coconutSound = splatSoundFor({ fruit: "coconut", severity: 2, impactSpeed: 2 * breakSpeedFor(coconut, 5) });
+  const tomatoSound = splatSoundFor({ fruit: "tomato", severity: 2, impactSpeed: 2 * breakSpeedFor(tomato, 5) });
+
+  assert.ok(coconutSound.crackGain > 0);
+  assert.equal(tomatoSound.crackGain, 0);
+});
+
+test("splatSoundFor: noiseDuration and noiseGain never decrease as severity rises through the tiers, for every fruit", () => {
+  const tierSeverities = [0.7, 1.3, 2.0, 5.0]; // held, cracked, split, smashed (representative)
+
+  for (const key of FRUIT_KEYS) {
+    const fruit = fruitByKey(key);
+    let previousGain = -Infinity;
+    let previousDuration = -Infinity;
+
+    for (const severity of tierSeverities) {
+      const impactSpeed = severity * breakSpeedFor(fruit, 5);
+      const sound = splatSoundFor({ fruit: key, severity, impactSpeed });
+
+      assert.ok(sound.noiseGain >= previousGain, `${key} at severity ${severity}: noiseGain decreased`);
+      assert.ok(sound.noiseDuration >= previousDuration, `${key} at severity ${severity}: noiseDuration decreased`);
+
+      previousGain = sound.noiseGain;
+      previousDuration = sound.noiseDuration;
+    }
+  }
 });
 
 test("devDependency versions match the CDN URL versions declared in project.json", async () => {

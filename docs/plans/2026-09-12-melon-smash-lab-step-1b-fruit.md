@@ -308,6 +308,107 @@ for a close camera, and the height bar's marker is a green ball whatever the fru
 - **Screenshots:** `ready` for every fruit at 390x844, a mid-fall watermelon at Roof, and
   the Counter crack settled. Replace the old set.
 
+## 10. No Reset button, a synthesized splat, one height on screen (Jose, 2026-09-13)
+
+> "After the drop, we shouldn't have to hit reset to start fiddling with the controls
+> again. The reset button doesn't serve a purpose at that point. We should have some
+> sound when the fruit hits. I don't wanna download wave files, just generate a
+> plausible splat noise."
+
+**Controls live again after the drop; the Reset button is removed.**
+- **Phases** stay `ready`, `falling` and `settled`.
+- **Control availability:** fruit, height, toughness and Drop are enabled in `ready`
+  **and** `settled`, and disabled only while `falling`, which lasts at most about 3.5 s.
+- **In `settled`:**
+  - Changing any control clears the debris and returns to `ready` with the new settings,
+    showing the incoming marker and updating the bar.
+  - Pressing Drop clears the debris and drops at once with a fresh seed, which counts as
+    one action.
+  - The result text stays until the next state change.
+- **Lifecycle:** clearing from `settled` owns everything the old reset owned. It disposes
+  the pieces, invalidates stale callbacks and resets the step counter.
+- **Focus:** it stays on the control the user touched. After Drop is pressed in
+  `settled`, focus stays on Drop so Space and Space again repeat drops.
+- **Tests (replacing the Reset-button tests; none loosened):**
+  - **Settled edits:** in `settled`, changing fruit, height or toughness returns to `ready`
+    with 1 body, 0 steps and the new settings. Run it twice in one session.
+  - **Keyboard redrop:** in `settled`, pressing Space on Drop produces a new drop, and
+    its result arrives with no stale text from the previous one.
+  - **No Reset button:** there is no Reset button in the DOM.
+  - **Controls disabled while falling:** held from D3.
+  - **Sim-level reset:** keep the invariant-8 test. Clearing in the sim is still
+    `reset()`.
+- **Mutation:** leave the controls disabled in `settled`. The settled-edit test must fail.
+
+**Amendment (CTO, same day, option A from the xo's measurement).** `falling` actually
+lasted 8 s on every scene, because the physics settle hits the 480-step limit, so the
+controls were locked 8 s. The UI no longer waits for physics:
+- **Two phases, two layers.** The UI phase (`data-phase`) is `ready`, `falling` or
+  `settled`. The sim keeps its own physics phase and its 480-step limit, unchanged.
+  Containment and energy tests still step to the physics end.
+- **UI `settled` begins exactly 72 simulation steps (1.2 s) after the impact step.** It is
+  counted in steps, not with `setTimeout`, so a hidden tab pauses it and it is
+  deterministic. The result text and live controls arrive then.
+- **Debris keeps moving.** Pieces keep simulating and rendering in UI `settled` until
+  they sleep or hit the 480-step limit. The loop then stops stepping. Any control edit
+  or Drop clears them as specified above.
+- **Invariant 1 wording:** the old text "`settled` = all bodies asleep or 8 s" now
+  describes the **physics** phase only.
+- **Tests:**
+  - **Timing, unit/sim:** UI settle happens at impact step + 72 for a held fruit and for
+    a smash.
+  - **Timing, Playwright:** from Drop, a Counter watermelon reaches `data-phase=settled`
+    in under 2.5 s of real time, and a Plane smash in under 5.5 s, with the controls
+    enabled.
+  - **Edit while debris moves:** in UI `settled`, before the physics end, a control edit
+    clears to `ready` with 1 body. No stale callback later changes the phase or text
+    (wait 9 s and assert unchanged).
+  - **Hidden tab:** hiding the tab between impact and impact + 72 delays the UI settle
+    by the hidden time.
+- **Mutation:** gate UI `settled` on the physics end again. The Counter under-2.5 s test
+  must fail.
+
+**Splat sound, synthesized with Web Audio, no files.**
+- **Pure parameters:** `splatSoundFor({ fruit, severity, impactSpeed })` in `rules.js`
+  returns plain numbers: noise-burst duration, low-pass cutoff, gain (clamped ≤ 0.6),
+  thud pitch and thud gain, and a "crack" click gain for hard shells.
+- **Character by fruit and result:**
+  - **Held:** a short dull thud, with no noise.
+  - **Soft fruit (tomato, watermelon flesh):** a wet noise burst with a falling cutoff.
+  - **Coconut:** a sharp click plus a thud.
+  - **Bigger severity:** louder and longer, within the clamps.
+- **Synthesis in `view.js`:** a white-noise `AudioBuffer` generated in code, through a
+  `BiquadFilter` with a cutoff sweep and a `GainNode` envelope, plus an
+  `OscillatorNode` thud. It plays once per drop at the impact step.
+- **Autoplay rules:** create or resume the `AudioContext` only inside the Drop click or
+  key handler. Never create one on page load.
+- **Lifecycle:** one context is reused. Every node is disconnected when it ends, and
+  nothing plays while the tab is hidden, because the sim is paused then.
+- **Sound toggle:** a visible button, `aria-pressed`, default on, not persisted, and
+  enabled in every phase.
+- **No Web Audio:** if `AudioContext` is missing or throws, the toy works silently with
+  no console errors.
+- **`project.json`:** the safety notes mention the generated sound and the sound toggle.
+  There is no new interaction type and no network.
+- **Tests:**
+  - **Unit:** gain ≤ 0.6 everywhere. Duration and gain don't decrease as severity rises
+    for a fruit. Held has zero noise gain. Coconut has crack gain above 0, and tomato
+    has 0.
+  - **Playwright** (with an init script that wraps `AudioContext` and records node
+    creation and `start` calls):
+    - no context exists before the first Drop;
+    - one Counter watermelon drop gives exactly one splat `start` burst at impact;
+    - with sound toggled off, a drop gives zero starts;
+    - with `AudioContext` deleted, a full drop gives zero page errors and the correct
+      result text;
+    - the toggle works by keyboard, and its `aria-pressed` flips.
+- **Mutation:** create the `AudioContext` at module load. The no-context-before-Drop test
+  must fail.
+
+**One height on screen.** Remove the metres label from the incoming marker; it keeps the
+arrow and the fruit-coloured dot. The height bar is the only height readout. Update the
+incoming tests to match. Ground-texture seams: leave as is.
+
 ## Tests (added or replaced; none loosened)
 
 **Rules unit tests:**

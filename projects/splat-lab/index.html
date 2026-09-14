@@ -33,7 +33,6 @@
         <div id="incoming-marker" class="incoming-marker" aria-hidden="true" hidden>
           <span class="incoming-marker-arrow" aria-hidden="true">&#9660;</span>
           <span id="incoming-marker-dot" class="incoming-marker-dot"></span>
-          <span id="incoming-marker-label" class="incoming-marker-label">0.0 m</span>
         </div>
         <div id="height-bar" class="height-bar" aria-hidden="true">
           <div id="height-bar-track" class="height-bar-track">
@@ -96,9 +95,9 @@
         <p class="toughness-ends" aria-hidden="true"><span>squishy</span><span>super tough</span></p>
 
         <div class="action-row">
-          <button id="drop-button" type="button">Drop</button>
-          <button id="reset-button" type="button">Reset</button>
+          <button id="drop-button" type="button" aria-disabled="false">Drop</button>
           <button id="skip-button" type="button" hidden>Skip to result</button>
+          <button id="sound-toggle" type="button" aria-pressed="true">Sound: on</button>
         </div>
       </section>
 
@@ -121,8 +120,8 @@
           toughnessSlider: document.getElementById("toughness-slider"),
           toughnessReadout: document.getElementById("toughness-readout"),
           dropButton: document.getElementById("drop-button"),
-          resetButton: document.getElementById("reset-button"),
           skipButton: document.getElementById("skip-button"),
+          soundToggle: document.getElementById("sound-toggle"),
           statusEl: document.getElementById("status"),
           instructionsEl: document.getElementById("instructions"),
           loadFailureEl: document.getElementById("load-failure"),
@@ -132,8 +131,7 @@
           heightBarLabel: document.getElementById("height-bar-label"),
           heightBarMarker: document.getElementById("height-bar-marker"),
           incomingMarker: document.getElementById("incoming-marker"),
-          incomingMarkerDot: document.getElementById("incoming-marker-dot"),
-          incomingMarkerLabel: document.getElementById("incoming-marker-label")
+          incomingMarkerDot: document.getElementById("incoming-marker-dot")
         }))
         .catch(() => {
           document.getElementById("load-failure").hidden = false;

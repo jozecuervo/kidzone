@@ -113,16 +113,6 @@ body {
   border: 2px solid #1b1b1b;
 }
 
-.incoming-marker-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.85);
-  padding: 0.02rem 0.3rem;
-  border-radius: 0.3rem;
-  white-space: nowrap;
-}
-
 /* Height bar (zoomed-out view): a DOM/CSS overlay on the right edge of the
    shot. Purely decorative/informational — aria-hidden, and never the
    live-region text. */
@@ -356,12 +346,22 @@ body {
   cursor: not-allowed;
 }
 
-#reset-button {
-  background: #3d5a80;
+/* Step 1b §10: Drop is never given the `disabled` attribute (Chromium moves
+   focus to <body> when a focused button becomes disabled, which would break
+   "focus stays on Drop so Space repeats drops" for a settled redrop) —
+   `aria-disabled` carries the same visual/semantic meaning instead. */
+#drop-button[aria-disabled="true"] {
+  background: #a9b6bd;
+  cursor: not-allowed;
 }
 
 #skip-button {
   background: #9b4d24;
+}
+
+#sound-toggle {
+  background: #3d5a80;
+  flex: 1 1 6rem;
 }
 
 .status {

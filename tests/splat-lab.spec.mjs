@@ -125,7 +125,13 @@ async function waitForPhase(page, phase, options = {}) {
 }
 
 test.describe("Splat Lab", () => {
-  test("keyboard only: Tab to height, arrow to Plane, Tab to toughness, Space on Drop, then Enter after Reset", async ({ page }) => {
+  // Replaces "keyboard only ... Enter after Reset" (step 1b §10: no Reset
+  // button). Now: Tab to Drop, Space to drop, wait for settled, assert
+  // focus STAYED on Drop the whole time (the point of using aria-disabled
+  // instead of the `disabled` attribute — Chromium moves focus to <body>
+  // when a focused element gains `disabled`, which would break this), then
+  // Space on Drop again in settled to redrop.
+  test("keyboard only: Tab to height, arrow to Plane, Tab to toughness, Space on Drop, then Space on Drop again in settled", async ({ page }) => {
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -134,7 +140,6 @@ test.describe("Splat Lab", () => {
     const heightSlider = page.locator("#height-slider");
     const toughnessSlider = page.locator("#toughness-slider");
     const dropButton = page.getByRole("button", { name: "Drop" });
-    const resetButton = page.getByRole("button", { name: "Reset" });
 
     // D1: keyboard-only, starting from nothing focused. Tab until the height
     // slider itself is focused (capped at 10 presses), asserting after each
@@ -167,51 +172,21 @@ test.describe("Splat Lab", () => {
     await waitForPhase(page, "falling");
     await expect(heightSlider).toBeDisabled();
     await expect(toughnessSlider).toBeDisabled();
+    await expect(dropButton).toHaveAttribute("aria-disabled", "true");
+    // Not `disabled` (see the style.css comment on #drop-button[aria-disabled]):
+    // Chromium moving focus to <body> here would break the redrop below.
+    await expect(dropButton).toBeFocused();
 
     await waitForPhase(page, "settled", { timeout: 15000 });
     // Default fruit (watermelon) at Plane/toughness 5 always smashes.
     await expect(page.locator("#status")).toContainText(
       "It smashed into 12 pieces and 40 seeds flew out."
     );
+    await expect(dropButton).toHaveAttribute("aria-disabled", "false");
+    await expect(dropButton).toBeFocused();
 
-    // D1: reach Reset by keyboard from wherever focus landed once Drop
-    // became disabled (Chromium moves focus to <body> when the focused
-    // element is disabled), using Tab/Shift+Tab, capped at 10 presses each
-    // direction. If neither direction finds it, that is a real stranding and
-    // is reported rather than worked around.
-    let resetFocused = await resetButton.evaluate((element) => element === document.activeElement);
-
-    for (let tabIndex = 0; tabIndex < 10 && !resetFocused; tabIndex += 1) {
-      await page.keyboard.press("Tab");
-      resetFocused = await resetButton.evaluate((element) => element === document.activeElement);
-    }
-
-    if (!resetFocused) {
-      for (let tabIndex = 0; tabIndex < 10 && !resetFocused; tabIndex += 1) {
-        await page.keyboard.press("Shift+Tab");
-        resetFocused = await resetButton.evaluate((element) => element === document.activeElement);
-      }
-    }
-
-    expect(
-      resetFocused,
-      "keyboard user could not reach Reset by Tab or Shift+Tab (capped at 10 presses each) after Drop became disabled"
-    ).toBe(true);
-
-    await page.keyboard.press("Enter");
-    await waitForPhase(page, "ready");
-
-    // Reach Drop by keyboard again and press Enter.
-    let dropFocusedAgain = await dropButton.evaluate((element) => element === document.activeElement);
-
-    for (let tabIndex = 0; tabIndex < 10 && !dropFocusedAgain; tabIndex += 1) {
-      await page.keyboard.press("Tab");
-      dropFocusedAgain = await dropButton.evaluate((element) => element === document.activeElement);
-    }
-
-    expect(dropFocusedAgain, "keyboard user could not reach Drop by Tab (capped at 10 presses) after Reset").toBe(true);
-
-    await page.keyboard.press("Enter");
+    // Space on Drop again, still focused, in settled: a redrop.
+    await page.keyboard.press("Space");
     await waitForPhase(page, "falling");
     await waitForPhase(page, "settled", { timeout: 15000 });
     await expect(page.locator("#status")).toContainText(
@@ -265,9 +240,11 @@ test.describe("Splat Lab", () => {
       const viewportSize = page.viewportSize();
       const canvasBox = await page.locator("#scene-canvas").boundingBox();
       const dropBox = await page.getByRole("button", { name: "Drop" }).boundingBox();
-      const resetBox = await page.getByRole("button", { name: "Reset" }).boundingBox();
+      // Step 1b §10: the sound toggle must be visible at 390x844 without
+      // scrolling past Drop.
+      const soundToggleBox = await page.locator("#sound-toggle").boundingBox();
 
-      for (const box of [canvasBox, dropBox, resetBox]) {
+      for (const box of [canvasBox, dropBox, soundToggleBox]) {
         expect(box.y).toBeGreaterThanOrEqual(0);
         expect(box.y + box.height).toBeLessThanOrEqual(viewportSize.height);
       }
@@ -289,8 +266,13 @@ test.describe("Splat Lab", () => {
       await waitForPhase(page, "settled", { timeout: 15000 });
       await expect(page.locator("#status")).toContainText("It held and bounced.");
 
-      await page.getByRole("button", { name: "Reset" }).tap();
-      await waitForPhase(page, "ready");
+      // Step 1b §10: no Reset button — Drop is tappable again immediately
+      // in settled (a redrop), replacing the old Reset tap.
+      await expect(page.getByRole("button", { name: "Drop" })).toHaveAttribute("aria-disabled", "false");
+      await page.getByRole("button", { name: "Drop" }).tap();
+      await waitForPhase(page, "falling");
+      await waitForPhase(page, "settled", { timeout: 15000 });
+      await expect(page.locator("#status")).toContainText("It held and bounced.");
 
       expect(errors).toEqual([]);
     });
@@ -317,7 +299,10 @@ test.describe("Splat Lab", () => {
     expect(errors).toEqual([]);
   });
 
-  test("twice in one session: drop -> settle -> reset -> drop -> settle -> reset gives matching results each time", async ({ page }) => {
+  // Replaces "twice in one session: drop -> settle -> reset -> drop ->
+  // settle -> reset" (step 1b §10: no Reset button). Drop is clicked again
+  // directly in settled instead.
+  test("twice in one session: drop -> settle -> Drop again -> settle gives matching results each time", async ({ page }) => {
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     // Pinned seed: every Drop otherwise draws a fresh random seed, which
@@ -330,24 +315,21 @@ test.describe("Splat Lab", () => {
     await waitForPhase(page, "settled", { timeout: 15000 });
     const firstText = await page.locator("#status").textContent();
 
-    await page.getByRole("button", { name: "Reset" }).click();
-    await waitForPhase(page, "ready");
-    await expect(page.locator("main")).toHaveAttribute("data-steps", "0");
-
+    await expect(page.getByRole("button", { name: "Drop" })).toHaveAttribute("aria-disabled", "false");
     await page.getByRole("button", { name: "Drop" }).click();
+    await waitForPhase(page, "falling");
     await waitForPhase(page, "settled", { timeout: 15000 });
     const secondText = await page.locator("#status").textContent();
 
     expect(secondText).toEqual(firstText);
 
-    await page.getByRole("button", { name: "Reset" }).click();
-    await waitForPhase(page, "ready");
-    await expect(page.locator("main")).toHaveAttribute("data-steps", "0");
-
     expect(errors).toEqual([]);
   });
 
-  test("fruit -> drop -> reset -> other fruit -> drop, twice in one session", async ({ page }) => {
+  // Replaces "fruit -> drop -> reset -> other fruit -> drop" (step 1b §10:
+  // no Reset button). Now: fruit -> drop -> settle -> change fruit -> drop,
+  // twice — the fruit change itself does the clearing (a settled edit).
+  test("fruit -> drop -> settle -> change fruit -> drop, twice in one session", async ({ page }) => {
     test.setTimeout(60000);
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
@@ -364,13 +346,11 @@ test.describe("Splat Lab", () => {
       await waitForPhase(page, "settled", { timeout: 20000 });
       const text = await page.locator("#status").textContent();
       expect(text.startsWith(`Dropped a`) || text.startsWith(`Dropped an`)).toBe(true);
-      await page.getByRole("button", { name: "Reset" }).click();
-      await waitForPhase(page, "ready");
       return text;
     }
 
     const firstTomato = await dropFruitAtPlane("tomato");
-    const firstCoconut = await dropFruitAtPlane("coconut");
+    const firstCoconut = await dropFruitAtPlane("coconut"); // changing fruit from settled clears tomato's debris
     const secondTomato = await dropFruitAtPlane("tomato");
     const secondCoconut = await dropFruitAtPlane("coconut");
 
@@ -410,14 +390,12 @@ test.describe("Splat Lab", () => {
       await expect(radio).toBeDisabled();
     }
 
+    // Step 1b §10: no Reset button — fruit radios are enabled again as soon
+    // as the UI itself reaches settled (no extra action needed).
     await waitForPhase(page, "settled", { timeout: 15000 });
     for (const radio of [watermelonRadio, tomatoRadio, appleRadio]) {
-      await expect(radio).toBeDisabled();
+      await expect(radio).toBeEnabled();
     }
-
-    await page.getByRole("button", { name: "Reset" }).click();
-    await waitForPhase(page, "ready");
-    await expect(appleRadio).toBeEnabled();
 
     expect(errors).toEqual([]);
   });
@@ -441,24 +419,29 @@ test.describe("Splat Lab", () => {
     expect(errors).toEqual([]);
   });
 
-  test("reset mid-fall returns to ready and no stale status appears later", async ({ page }) => {
+  // Replaces "reset mid-fall returns to ready and no stale status appears
+  // later" (step 1b §10: no Reset button). Now: in settled, changing
+  // toughness is the settled edit; wait and assert no stale callback later
+  // changes phase or text.
+  test("a settled edit (toughness change) returns to ready with no stale status appearing later", async ({ page }) => {
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
     await waitForPhase(page, "ready");
 
-    await setSliderValue(page.locator("#height-slider"), PLANE_V); // ~3.5s fall
+    await setSliderValue(page.locator("#height-slider"), KNEE_V);
     await page.getByRole("button", { name: "Drop" }).click();
-    await waitForPhase(page, "falling");
+    await waitForPhase(page, "settled", { timeout: 15000 });
 
-    await page.getByRole("button", { name: "Reset" }).click();
+    await setSliderValue(page.locator("#toughness-slider"), 1);
     await waitForPhase(page, "ready");
+    await expect(page.locator("main")).toHaveAttribute("data-steps", "0");
 
-    const statusAfterReset = await page.locator("#status").textContent();
+    const statusAfterEdit = await page.locator("#status").textContent();
     await page.waitForTimeout(2000);
     const statusLater = await page.locator("#status").textContent();
 
-    expect(statusLater).toEqual(statusAfterReset);
+    expect(statusLater).toEqual(statusAfterEdit);
     await expect(page.locator("main")).toHaveAttribute("data-phase", "ready");
 
     expect(errors).toEqual([]);
@@ -517,9 +500,9 @@ test.describe("Splat Lab", () => {
 
     await waitForPhase(page, "settled", { timeout: 15000 });
 
-    await page.getByRole("button", { name: "Reset" }).click();
-    await waitForPhase(page, "ready");
-    await expect(page.getByRole("button", { name: "Drop" })).toBeEnabled();
+    // Step 1b §10: no Reset button — controls are enabled again as soon as
+    // the UI itself reaches settled, with no control left stuck.
+    await expect(page.getByRole("button", { name: "Drop" })).toHaveAttribute("aria-disabled", "false");
     await expect(page.locator("#height-slider")).toBeEnabled();
     await expect(page.locator("#toughness-slider")).toBeEnabled();
 
@@ -541,13 +524,12 @@ test.describe("Splat Lab", () => {
     await waitForPhase(page, "settled", { timeout: 15000 });
     const normalText = await page.locator("#status").textContent();
     expect(normalText).toContain("smashed into 12 pieces");
-    await page.getByRole("button", { name: "Reset" }).click();
-    await waitForPhase(page, "ready");
 
+    // Step 1b §10: no Reset button — enable reduced motion, then Drop again
+    // directly from settled (the settings are unchanged; this is a redrop,
+    // not a settled edit).
     await page.emulateMedia({ reducedMotion: "reduce" });
 
-    await setSliderValue(page.locator("#height-slider"), PLANE_V);
-    await setSliderValue(page.locator("#toughness-slider"), 1);
     const skipButton = page.getByRole("button", { name: "Skip to result" });
     await expect(skipButton).toBeVisible();
     await expect(skipButton).toBeDisabled();
@@ -589,6 +571,11 @@ test.describe("Splat Lab", () => {
     expect(errors, `unexpected console/page errors: ${errors.join("; ")}`).toEqual([]);
   });
 
+  // Step 1b §10: no Reset button. Fruit/height/toughness/Drop are enabled
+  // in both `ready` and `settled`, disabled only while `falling`. Drop
+  // itself is never given the `disabled` attribute — only `aria-disabled`
+  // — so this test checks that directly instead of relying on
+  // toBeDisabled()/toBeEnabled() for Drop.
   test("D3: controls follow phase exactly (invariant 2), and #instructions matches rules.js per phase", async ({ page }) => {
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
@@ -598,44 +585,108 @@ test.describe("Splat Lab", () => {
     const heightSlider = page.locator("#height-slider");
     const toughnessSlider = page.locator("#toughness-slider");
     const dropButton = page.getByRole("button", { name: "Drop" });
-    const resetButton = page.getByRole("button", { name: "Reset" });
+    const soundToggle = page.locator("#sound-toggle");
     const skipButton = page.getByRole("button", { name: "Skip to result" });
     const instructions = page.locator("#instructions");
     const fruitRadio = page.locator('input[name="fruit"][value="watermelon"]');
 
-    // ready: Drop and sliders enabled; Skip hidden (no reduced motion here).
+    expect(await page.locator("#reset-button").count(), "no Reset button should exist").toBe(0);
+
+    // ready: fruit/height/toughness/Drop enabled; Skip hidden (no reduced
+    // motion here); sound toggle always enabled.
     await expect(heightSlider).toBeEnabled();
     await expect(toughnessSlider).toBeEnabled();
-    await expect(dropButton).toBeEnabled();
-    await expect(resetButton).toBeEnabled();
+    await expect(dropButton).toHaveAttribute("aria-disabled", "false");
+    await expect(dropButton).not.toBeDisabled();
     await expect(fruitRadio).toBeEnabled();
+    await expect(soundToggle).toBeEnabled();
     await expect(skipButton).toBeHidden();
     await expect(instructions).toHaveText(instructionsForPhase("ready"));
     const readyText = await instructions.textContent();
+
+    // Reads every relevant control's live state in ONE round trip. Chained
+    // per-locator assertions here were observed to occasionally take
+    // several real seconds each in this environment (likely CDP round-trip
+    // contention with the render loop) — long enough, cumulatively, for a
+    // Plane fall to run all the way to physics settle before the LAST of a
+    // chain of individual assertions even executed, which looks exactly
+    // like a stale-disabled-state bug but is actually a test-timing gap.
+    // Snapshotting once immediately after the phase transition removes that
+    // gap entirely.
+    function snapshotControls() {
+      return page.evaluate(() => ({
+        phase: document.querySelector("main").dataset.phase,
+        steps: Number(document.querySelector("main").dataset.steps),
+        dropAriaDisabled: document.getElementById("drop-button").getAttribute("aria-disabled"),
+        dropDisabledAttr: document.getElementById("drop-button").disabled,
+        heightDisabled: document.getElementById("height-slider").disabled,
+        toughnessDisabled: document.getElementById("toughness-slider").disabled,
+        fruitDisabled: document.querySelector('input[name="fruit"][value="watermelon"]').disabled,
+        soundToggleDisabled: document.getElementById("sound-toggle").disabled,
+        instructions: document.getElementById("instructions").textContent
+      }));
+    }
 
     await setSliderValue(page.locator("#height-slider"), PLANE_V); // long enough to observe "falling"
     await dropButton.click();
     await waitForPhase(page, "falling");
 
-    // falling: Drop disabled, both sliders disabled, fruit disabled, Reset enabled.
-    await expect(dropButton).toBeDisabled();
-    await expect(heightSlider).toBeDisabled();
-    await expect(toughnessSlider).toBeDisabled();
-    await expect(fruitRadio).toBeDisabled();
-    await expect(resetButton).toBeEnabled();
-    await expect(instructions).toHaveText(instructionsForPhase("falling"));
-    const fallingText = await instructions.textContent();
+    const fallingSnapshot = await snapshotControls();
+
+    expect(fallingSnapshot.phase).toBe("falling");
+    expect(fallingSnapshot.dropAriaDisabled).toBe("true");
+    expect(fallingSnapshot.dropDisabledAttr).toBe(false);
+    expect(fallingSnapshot.heightDisabled).toBe(true);
+    expect(fallingSnapshot.toughnessDisabled).toBe(true);
+    expect(fallingSnapshot.fruitDisabled).toBe(true);
+    expect(fallingSnapshot.soundToggleDisabled).toBe(false);
+    expect(fallingSnapshot.instructions).toEqual(instructionsForPhase("falling"));
+    const fallingText = fallingSnapshot.instructions;
+
+    // A click/Space during falling must not start a second drop: aria-disabled
+    // is a hint, not an enforcement mechanism, so the click handler itself
+    // must ignore it. A genuine redrop resets the fruit to the full drop
+    // height, so the height bar's own label (which tracks live fruit
+    // height, independent of physics-step counts that can vary with
+    // environmental timing) would jump back up near 60 m; checked here as
+    // the more robust signal instead of a raw step-count comparison.
+    async function heightBarMetres() {
+      const text = await page.locator("#height-bar-label").textContent();
+      return Number.parseFloat(text);
+    }
+
+    const phaseWhileFalling = await page.locator("main").getAttribute("data-phase");
+
+    expect(phaseWhileFalling, "should still be falling well before a 60m free fall completes").toBe("falling");
+
+    const heightBeforeIgnoredClick = await heightBarMetres();
+
+    await dropButton.click();
+    await page.waitForTimeout(50);
+
+    const heightAfterIgnoredClick = await heightBarMetres();
+    const phaseAfterIgnoredClick = await page.locator("main").getAttribute("data-phase");
+
+    expect(
+      heightAfterIgnoredClick,
+      "a click during falling must not reset the fruit back up near the full drop height"
+    ).toBeLessThanOrEqual(heightBeforeIgnoredClick + 0.5);
+    expect(phaseAfterIgnoredClick).toBe("falling");
 
     await waitForPhase(page, "settled", { timeout: 15000 });
 
-    // settled: Drop and sliders still disabled, Reset enabled.
-    await expect(dropButton).toBeDisabled();
-    await expect(heightSlider).toBeDisabled();
-    await expect(toughnessSlider).toBeDisabled();
-    await expect(fruitRadio).toBeDisabled();
-    await expect(resetButton).toBeEnabled();
-    await expect(instructions).toHaveText(instructionsForPhase("settled"));
-    const settledText = await instructions.textContent();
+    // settled: fruit/height/toughness/Drop enabled again; no Reset button
+    // needed to get there.
+    const settledSnapshot = await snapshotControls();
+
+    expect(settledSnapshot.dropAriaDisabled).toBe("false");
+    expect(settledSnapshot.dropDisabledAttr).toBe(false);
+    expect(settledSnapshot.heightDisabled).toBe(false);
+    expect(settledSnapshot.toughnessDisabled).toBe(false);
+    expect(settledSnapshot.fruitDisabled).toBe(false);
+    expect(settledSnapshot.soundToggleDisabled).toBe(false);
+    expect(settledSnapshot.instructions).toEqual(instructionsForPhase("settled"));
+    const settledText = settledSnapshot.instructions;
 
     expect(readyText).not.toEqual(fallingText);
     expect(fallingText).not.toEqual(settledText);
@@ -821,18 +872,22 @@ test.describe("Splat Lab", () => {
     expect(errors).toEqual([]);
   });
 
-  test("B2/B3: reset mid-fall at Plane returns the marker to the top and label to 60 m, twice in one session", async ({ page }) => {
+  // Replaces "B2/B3: reset mid-fall at Plane returns the marker to the top
+  // ..." (step 1b §10: no Reset button). Now: after a SETTLED Plane drop,
+  // changing height (a settled edit) returns the marker to the top and the
+  // label to the NEW height.
+  test("B2/B3: after a settled Plane drop, changing height returns the marker to the top and the label to the new height, twice", async ({ page }) => {
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
     await waitForPhase(page, "ready");
 
-    async function dropResetOnceAtPlane() {
+    async function dropThenEditHeight(targetSliderValue, targetLabel) {
       await setSliderValue(page.locator("#height-slider"), PLANE_V);
       await page.getByRole("button", { name: "Drop" }).click();
-      await waitForPhase(page, "falling");
-      await page.waitForTimeout(300);
-      await page.getByRole("button", { name: "Reset" }).click();
+      await waitForPhase(page, "settled", { timeout: 15000 });
+
+      await setSliderValue(page.locator("#height-slider"), targetSliderValue);
       await waitForPhase(page, "ready");
 
       const markerBox = await page.locator("#height-bar-marker").boundingBox();
@@ -840,11 +895,11 @@ test.describe("Splat Lab", () => {
       const markerCentreY = markerBox.y + markerBox.height / 2;
 
       expect(Math.abs(markerCentreY - trackBox.y)).toBeLessThanOrEqual(3);
-      await expect(page.locator("#height-bar-label")).toHaveText("60 m");
+      await expect(page.locator("#height-bar-label")).toHaveText(targetLabel);
     }
 
-    await dropResetOnceAtPlane();
-    await dropResetOnceAtPlane();
+    await dropThenEditHeight(PLANE_V, "60 m");
+    await dropThenEditHeight(ROOF_V, "10 m");
 
     expect(errors).toEqual([]);
   });
@@ -1153,9 +1208,7 @@ test.describe("Splat Lab", () => {
       const firstHash = await dropAndReadLayoutHash(page);
       expect(firstHash).not.toBeNull();
 
-      await page.getByRole("button", { name: "Reset" }).click();
-      await waitForPhase(page, "ready");
-
+      // Step 1b §10: no Reset button — Drop again directly from settled.
       const secondHash = await dropAndReadLayoutHash(page);
       expect(secondHash).not.toBeNull();
 
@@ -1176,9 +1229,7 @@ test.describe("Splat Lab", () => {
       const firstHash = await dropAndReadLayoutHash(page);
       expect(firstHash).not.toBeNull();
 
-      await page.getByRole("button", { name: "Reset" }).click();
-      await waitForPhase(page, "ready");
-
+      // Step 1b §10: no Reset button — Drop again directly from settled.
       const secondHash = await dropAndReadLayoutHash(page);
 
       expect(secondHash).toEqual(firstHash);
@@ -1335,7 +1386,9 @@ test.describe("Splat Lab", () => {
       expect(errors).toEqual([]);
     });
 
-    test("a Counter watermelon drop hides the incoming marker before settled, and it reappears after reset (twice in one session)", async ({ page }) => {
+    // Step 1b §10: no Reset button — "reappears after reset" becomes
+    // "reappears after a settled edit".
+    test("a Counter watermelon drop hides the incoming marker before settled, and it reappears after a settled edit (twice in one session)", async ({ page }) => {
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
       await page.goto(gamePath);
@@ -1378,7 +1431,10 @@ test.describe("Splat Lab", () => {
         await waitForPhase(page, "settled", { timeout: 15000 });
         await expect(page.locator("#incoming-marker")).toBeHidden();
 
-        await page.getByRole("button", { name: "Reset" }).click();
+        // Settled edit: re-affirming the height (dispatches "input" and
+        // "change" regardless of whether the numeric value differs) clears
+        // the debris and returns to ready, showing the incoming marker.
+        await setSliderValue(page.locator("#height-slider"), counterHeightSliderValue);
         await waitForPhase(page, "ready");
         await expect(page.locator("#incoming-marker")).toBeVisible();
       }
@@ -1488,6 +1544,403 @@ test.describe("Splat Lab", () => {
 
         expect(errors).toEqual([]);
       });
+    });
+  });
+
+  test.describe("step 1b §10: no Reset button, settled edits, synthesized sound, UI-phase timing", () => {
+    test("there is no Reset button in the DOM", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      expect(await page.getByRole("button", { name: "Reset" }).count()).toBe(0);
+      expect(await page.locator("#reset-button").count()).toBe(0);
+
+      expect(errors).toEqual([]);
+    });
+
+    // "1 body, 0 steps" proxies per the plan: data-phase=ready, data-steps=0,
+    // no data-layout-hash, #incoming-marker visible, and the bar label
+    // matches the new setting. The sim-level invariant-8 test keeps the
+    // true body count.
+    test("settled edits (fruit, height, toughness) return to ready with the new settings, twice in one session", async ({ page }) => {
+      test.setTimeout(30000);
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      async function dropThenEdit(editFn) {
+        await page.getByRole("button", { name: "Drop" }).click();
+        await waitForPhase(page, "settled", { timeout: 15000 });
+
+        await editFn();
+        await waitForPhase(page, "ready");
+        await expect(page.locator("main")).toHaveAttribute("data-steps", "0");
+        expect(await page.locator("main").getAttribute("data-layout-hash")).toBeNull();
+        await expect(page.locator("#incoming-marker")).toBeVisible();
+      }
+
+      await dropThenEdit(() => setFruit(page, "tomato"));
+      await expect(page.locator('input[name="fruit"][value="tomato"]')).toBeChecked();
+
+      await dropThenEdit(() => setSliderValue(page.locator("#height-slider"), ROOF_V));
+      await expect(page.locator("#height-bar-label")).toHaveText("10 m");
+
+      await dropThenEdit(() => setSliderValue(page.locator("#toughness-slider"), 8));
+      await expect(page.locator("#toughness-readout")).toHaveText("8");
+
+      // Twice in one session: a second fruit-change settled edit.
+      await dropThenEdit(() => setFruit(page, "coconut"));
+      await expect(page.locator('input[name="fruit"][value="coconut"]')).toBeChecked();
+
+      expect(errors).toEqual([]);
+    });
+
+    test("keyboard redrop in settled: pressing Space on Drop again produces a new drop with no stale text from the previous one", async ({ page }) => {
+      test.setTimeout(30000);
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      const dropButton = page.getByRole("button", { name: "Drop" });
+
+      await setSliderValue(page.locator("#height-slider"), KNEE_V);
+      await dropButton.focus();
+      await page.keyboard.press("Space");
+      await waitForPhase(page, "settled", { timeout: 15000 });
+      const firstText = await page.locator("#status").textContent();
+      expect(firstText).toContain("0.3 m");
+
+      const focusedBeforeRedrop = await dropButton.evaluate((element) => element === document.activeElement);
+      expect(focusedBeforeRedrop, "focus should stay on Drop through settled (aria-disabled, not disabled)").toBe(true);
+
+      await setSliderValue(page.locator("#height-slider"), PLANE_V);
+      await setSliderValue(page.locator("#toughness-slider"), 1);
+      await page.keyboard.press("Space");
+      await waitForPhase(page, "settled", { timeout: 15000 });
+      const secondText = await page.locator("#status").textContent();
+
+      expect(secondText).not.toEqual(firstText);
+      expect(secondText).toContain("60 m");
+
+      expect(errors).toEqual([]);
+    });
+
+    // --- UI-phase timing (CTO amendment) ---------------------------------
+
+    test("Counter watermelon crack: Drop to data-phase=settled takes under 2.5s of real time, with controls enabled", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), COUNTER_V);
+
+      const start = Date.now();
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "settled", { timeout: 15000 });
+      const elapsedMs = Date.now() - start;
+
+      // eslint-disable-next-line no-console
+      console.log("Counter watermelon crack: Drop-to-settled took", elapsedMs, "ms");
+      expect(elapsedMs, `Drop-to-settled took ${elapsedMs}ms`).toBeLessThan(2500);
+
+      const snapshot = await page.evaluate(() => ({
+        dropAriaDisabled: document.getElementById("drop-button").getAttribute("aria-disabled"),
+        heightDisabled: document.getElementById("height-slider").disabled,
+        toughnessDisabled: document.getElementById("toughness-slider").disabled
+      }));
+
+      expect(snapshot.dropAriaDisabled).toBe("false");
+      expect(snapshot.heightDisabled).toBe(false);
+      expect(snapshot.toughnessDisabled).toBe(false);
+
+      expect(errors).toEqual([]);
+    });
+
+    test("Plane watermelon smash: Drop to data-phase=settled takes under 5.5s of real time, with controls enabled", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), PLANE_V);
+      await setSliderValue(page.locator("#toughness-slider"), 1);
+
+      const start = Date.now();
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "settled", { timeout: 15000 });
+      const elapsedMs = Date.now() - start;
+
+      // eslint-disable-next-line no-console
+      console.log("Plane watermelon smash: Drop-to-settled took", elapsedMs, "ms");
+      expect(elapsedMs, `Drop-to-settled took ${elapsedMs}ms`).toBeLessThan(5500);
+
+      const snapshot = await page.evaluate(() => ({
+        dropAriaDisabled: document.getElementById("drop-button").getAttribute("aria-disabled"),
+        heightDisabled: document.getElementById("height-slider").disabled
+      }));
+
+      expect(snapshot.dropAriaDisabled).toBe("false");
+      expect(snapshot.heightDisabled).toBe(false);
+
+      expect(errors).toEqual([]);
+    });
+
+    test("editing during moving debris (right after UI settle, before physics settle) clears cleanly, with no stale change 9s later", async ({ page }) => {
+      test.setTimeout(40000);
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), PLANE_V);
+      await setSliderValue(page.locator("#toughness-slider"), 1);
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "settled", { timeout: 15000 });
+
+      // Confirm debris is still physically moving right after UI settle for
+      // a Plane smash (data-steps keeps rising even though data-phase
+      // already reads "settled").
+      const stepsAtUiSettle = Number(await page.locator("main").getAttribute("data-steps"));
+      await page.waitForTimeout(150);
+      const stepsLater = Number(await page.locator("main").getAttribute("data-steps"));
+
+      expect(
+        stepsLater,
+        "debris should still be physically moving right after UI settle for a Plane smash"
+      ).toBeGreaterThan(stepsAtUiSettle);
+
+      await setSliderValue(page.locator("#toughness-slider"), 3);
+      await waitForPhase(page, "ready");
+      await expect(page.locator("main")).toHaveAttribute("data-steps", "0");
+      expect(await page.locator("main").getAttribute("data-layout-hash")).toBeNull();
+      await expect(page.locator("#incoming-marker")).toBeVisible();
+
+      const phaseAfterEdit = await page.locator("main").getAttribute("data-phase");
+      const statusAfterEdit = await page.locator("#status").textContent();
+
+      await page.waitForTimeout(9000);
+
+      expect(await page.locator("main").getAttribute("data-phase")).toBe(phaseAfterEdit);
+      expect(await page.locator("main").getAttribute("data-steps")).toBe("0");
+      expect(await page.locator("#status").textContent()).toBe(statusAfterEdit);
+      expect(await page.locator("main").getAttribute("data-layout-hash")).toBeNull();
+
+      expect(errors).toEqual([]);
+    });
+
+    test("hidden tab mid-way between impact and UI settle (+72 steps) delays UI settle until visible again", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), KNEE_V);
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "falling");
+
+      // Knee's free fall is very short (~0.25s/~16 steps); wait a little
+      // past impact, roughly mid-way toward the 72-step UI-settle buffer
+      // (72 steps is 1.2s), then hide the tab.
+      await page.waitForTimeout(300);
+
+      await page.evaluate(() => {
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      await page.waitForTimeout(1500);
+      await expect(page.locator("main")).toHaveAttribute("data-phase", "falling");
+
+      await page.evaluate(() => {
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      await waitForPhase(page, "settled", { timeout: 15000 });
+
+      expect(errors).toEqual([]);
+    });
+
+    // --- synthesized splat sound ------------------------------------------
+
+    // Wraps AudioContext/webkitAudioContext (counting instantiations) and
+    // AudioBufferSourceNode/OscillatorNode's start() (recording node type,
+    // data-phase and data-steps at call time), all read back afterwards
+    // through window.__audioLog.
+    async function installAudioInstrumentation(page) {
+      await page.addInitScript(() => {
+        window.__audioLog = { contexts: 0, starts: [] };
+
+        function recordStart(type) {
+          const main = document.querySelector("main");
+
+          window.__audioLog.starts.push({
+            type,
+            phase: main ? main.dataset.phase : null,
+            steps: main ? Number(main.dataset.steps) : null
+          });
+        }
+
+        if (window.AudioBufferSourceNode) {
+          const originalStart = AudioBufferSourceNode.prototype.start;
+
+          AudioBufferSourceNode.prototype.start = function (...args) {
+            recordStart("AudioBufferSourceNode");
+            return originalStart.apply(this, args);
+          };
+        }
+
+        if (window.OscillatorNode) {
+          const originalStart = OscillatorNode.prototype.start;
+
+          OscillatorNode.prototype.start = function (...args) {
+            recordStart("OscillatorNode");
+            return originalStart.apply(this, args);
+          };
+        }
+
+        for (const name of ["AudioContext", "webkitAudioContext"]) {
+          const OriginalContext = window[name];
+
+          if (!OriginalContext) continue;
+
+          const WrappedContext = function (...args) {
+            window.__audioLog.contexts += 1;
+            return new OriginalContext(...args);
+          };
+
+          WrappedContext.prototype = OriginalContext.prototype;
+          window[name] = WrappedContext;
+        }
+      });
+    }
+
+    test("no AudioContext exists before the first Drop, not after page load and not after changing controls", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await installAudioInstrumentation(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      expect(await page.evaluate(() => window.__audioLog.contexts)).toBe(0);
+
+      await setFruit(page, "coconut");
+      await setSliderValue(page.locator("#height-slider"), COUNTER_V);
+      await setSliderValue(page.locator("#toughness-slider"), 3);
+
+      expect(await page.evaluate(() => window.__audioLog.contexts)).toBe(0);
+
+      expect(errors).toEqual([]);
+    });
+
+    test("one Counter watermelon crack (?seed=7) gives exactly one noise-source start and one oscillator start, both while falling", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await installAudioInstrumentation(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), COUNTER_V);
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "settled", { timeout: 15000 });
+      await page.waitForTimeout(300); // let any still-moving debris finish
+
+      const log = await page.evaluate(() => window.__audioLog);
+      const bufferStarts = log.starts.filter((entry) => entry.type === "AudioBufferSourceNode");
+      const oscillatorStarts = log.starts.filter((entry) => entry.type === "OscillatorNode");
+
+      expect(bufferStarts.length, JSON.stringify(log.starts)).toBe(1);
+      expect(oscillatorStarts.length, JSON.stringify(log.starts)).toBe(1);
+
+      for (const entry of [...bufferStarts, ...oscillatorStarts]) {
+        expect(entry.phase).toBe("falling");
+        expect(entry.steps).toBeGreaterThanOrEqual(1);
+      }
+
+      expect(errors).toEqual([]);
+    });
+
+    test("with the sound toggle off, a drop gives zero starts", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await installAudioInstrumentation(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      await page.locator("#sound-toggle").click();
+      await expect(page.locator("#sound-toggle")).toHaveAttribute("aria-pressed", "false");
+
+      await setSliderValue(page.locator("#height-slider"), COUNTER_V);
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "settled", { timeout: 15000 });
+
+      const log = await page.evaluate(() => window.__audioLog);
+      expect(log.starts.length, JSON.stringify(log.starts)).toBe(0);
+
+      expect(errors).toEqual([]);
+    });
+
+    test("with AudioContext and webkitAudioContext deleted, a full drop gives zero page/console errors and the correct result text", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.addInitScript(() => {
+        delete window.AudioContext;
+        delete window.webkitAudioContext;
+      });
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), COUNTER_V);
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "settled", { timeout: 15000 });
+
+      await expect(page.locator("#status")).toContainText("Dropped a watermelon from 1.0 m.");
+
+      expect(errors).toEqual([]);
+    });
+
+    test("the sound toggle works by keyboard, and aria-pressed flips both ways", async ({ page }) => {
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(gamePath);
+      await waitForPhase(page, "ready");
+
+      const soundToggle = page.locator("#sound-toggle");
+
+      await expect(soundToggle).toHaveAttribute("aria-pressed", "true");
+      await expect(soundToggle).toHaveText("Sound: on");
+
+      // Tab to it (starting from nothing focused), rather than .focus(),
+      // and use the locator's own .press() (which waits for actionability
+      // first) rather than a bare page.keyboard.press() — more reliable in
+      // this environment than a raw global key event after a scripted
+      // .focus() call.
+      await page.keyboard.press("Tab");
+      let soundToggleFocused = await soundToggle.evaluate((element) => element === document.activeElement);
+
+      for (let tabIndex = 0; tabIndex < 15 && !soundToggleFocused; tabIndex += 1) {
+        await page.keyboard.press("Tab");
+        soundToggleFocused = await soundToggle.evaluate((element) => element === document.activeElement);
+      }
+
+      expect(soundToggleFocused, "Tab (capped at 15 presses) never reached #sound-toggle").toBe(true);
+
+      await soundToggle.press("Space");
+      await expect(soundToggle).toHaveAttribute("aria-pressed", "false");
+      await expect(soundToggle).toHaveText("Sound: off");
+
+      await soundToggle.press("Space");
+      await expect(soundToggle).toHaveAttribute("aria-pressed", "true");
+      await expect(soundToggle).toHaveText("Sound: on");
+
+      expect(errors).toEqual([]);
     });
   });
 });

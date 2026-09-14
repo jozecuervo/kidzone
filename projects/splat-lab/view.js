@@ -21,7 +21,8 @@ import {
   instructionsForPhase,
   layoutHash,
   shellPiece,
-  sliderFromHeight
+  sliderFromHeight,
+  splatSoundFor
 } from "./rules.js";
 
 const MAX_STEPS_PER_FRAME = 5;
@@ -228,6 +229,166 @@ function createGroundTexture(fruit) {
   return texture;
 }
 
+// --- Step 1b §10: synthesized splat sound (Web Audio, no files) ------------
+//
+// Autoplay rules: the AudioContext is created (or resumed) ONLY inside the
+// Drop button's click handler — a native <button> click event fires for
+// both a mouse click and a Space/Enter keypress while it's focused, so one
+// listener covers both. The actual sound plays later, at the impact step
+// (well after the click returns); that's fine for autoplay policy, which
+// gates the CONTEXT itself, not each individual node scheduled on it once
+// unlocked.
+//
+// If AudioContext is missing, or its constructor throws, sound is marked
+// permanently unavailable and every playback call becomes a silent no-op —
+// never a console error.
+let audioContext = null;
+let audioAvailable = true;
+let noiseBufferCache = null;
+
+function ensureAudioContext() {
+  if (!audioAvailable) return null;
+
+  if (audioContext) {
+    if (audioContext.state === "suspended") {
+      audioContext.resume().catch(() => {});
+    }
+
+    return audioContext;
+  }
+
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContextCtor) {
+    audioAvailable = false;
+    return null;
+  }
+
+  try {
+    audioContext = new AudioContextCtor();
+    return audioContext;
+  } catch {
+    audioAvailable = false;
+    return null;
+  }
+}
+
+// A shared white-noise buffer, long enough for the longest noise burst
+// (splatSoundFor clamps noiseDuration <= 0.6s); each play uses only the
+// slice it needs via AudioBufferSourceNode.start(when, offset, duration).
+// A simple LCG (not Math.random), matching this project's other
+// deterministic-canvas-texture code, though audio timing/output isn't
+// itself asserted on in tests.
+function getNoiseBuffer(context) {
+  if (noiseBufferCache && noiseBufferCache.sampleRate === context.sampleRate) {
+    return noiseBufferCache;
+  }
+
+  const seconds = 0.6;
+  const length = Math.max(1, Math.round(context.sampleRate * seconds));
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  let state = 0x2545f491;
+
+  for (let i = 0; i < length; i += 1) {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    data[i] = (state / 0xffffffff) * 2 - 1;
+  }
+
+  noiseBufferCache = buffer;
+  return buffer;
+}
+
+const CRACK_DURATION_SECONDS = 0.03;
+const CRACK_CUTOFF_HZ = 6000;
+
+// Plays once per drop, at the impact step: a white-noise burst through a
+// lowpass filter with a falling cutoff (splatSoundFor's cutoffStart ->
+// cutoffEnd) and a gain envelope, an oscillator thud, and — for fruits with
+// crackGain > 0 (coconut) — a very short, high-cutoff noise click. Every
+// node is disconnected once it ends. Wrapped in try/catch so any Web Audio
+// failure never becomes a page/console error.
+function playSplatSound({ fruit, severity, impactSpeed }) {
+  const context = audioContext;
+
+  if (!context) return;
+
+  try {
+    const sound = splatSoundFor({ fruit, severity, impactSpeed });
+    const now = context.currentTime;
+
+    if (sound.noiseGain > 0) {
+      const noiseSource = context.createBufferSource();
+      const filter = context.createBiquadFilter();
+      const gain = context.createGain();
+
+      noiseSource.buffer = getNoiseBuffer(context);
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(sound.cutoffStart, now);
+      filter.frequency.exponentialRampToValueAtTime(Math.max(20, sound.cutoffEnd), now + sound.noiseDuration);
+      gain.gain.setValueAtTime(sound.noiseGain, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + sound.noiseDuration);
+
+      noiseSource.connect(filter);
+      filter.connect(gain);
+      gain.connect(context.destination);
+
+      noiseSource.onended = () => {
+        noiseSource.disconnect();
+        filter.disconnect();
+        gain.disconnect();
+      };
+
+      noiseSource.start(now, 0, sound.noiseDuration);
+    }
+
+    const oscillator = context.createOscillator();
+    const thudGainNode = context.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(sound.thudFreq, now);
+    thudGainNode.gain.setValueAtTime(sound.thudGain, now);
+    thudGainNode.gain.exponentialRampToValueAtTime(0.001, now + sound.thudDuration);
+
+    oscillator.connect(thudGainNode);
+    thudGainNode.connect(context.destination);
+
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      thudGainNode.disconnect();
+    };
+
+    oscillator.start(now);
+    oscillator.stop(now + sound.thudDuration);
+
+    if (sound.crackGain > 0) {
+      const crackSource = context.createBufferSource();
+      const crackFilter = context.createBiquadFilter();
+      const crackGainNode = context.createGain();
+
+      crackSource.buffer = getNoiseBuffer(context);
+      crackFilter.type = "lowpass";
+      crackFilter.frequency.setValueAtTime(CRACK_CUTOFF_HZ, now);
+      crackGainNode.gain.setValueAtTime(sound.crackGain, now);
+      crackGainNode.gain.exponentialRampToValueAtTime(0.001, now + CRACK_DURATION_SECONDS);
+
+      crackSource.connect(crackFilter);
+      crackFilter.connect(crackGainNode);
+      crackGainNode.connect(context.destination);
+
+      crackSource.onended = () => {
+        crackSource.disconnect();
+        crackFilter.disconnect();
+        crackGainNode.disconnect();
+      };
+
+      crackSource.start(now, 0, CRACK_DURATION_SECONDS);
+    }
+  } catch {
+    // Never let a Web Audio failure become a page/console error.
+  }
+}
+
 export function start(elements) {
   const {
     main,
@@ -239,8 +400,8 @@ export function start(elements) {
     toughnessSlider,
     toughnessReadout,
     dropButton,
-    resetButton,
     skipButton,
+    soundToggle,
     statusEl,
     instructionsEl,
     heightBarTrack,
@@ -249,8 +410,7 @@ export function start(elements) {
     heightBarLabel,
     heightBarMarker,
     incomingMarker,
-    incomingMarkerDot,
-    incomingMarkerLabel
+    incomingMarkerDot
   } = elements;
 
   const fruitRadios = Array.from(fruitFieldset.querySelectorAll('input[name="fruit"]'));
@@ -266,6 +426,12 @@ export function start(elements) {
   let currentHeightSliderValue = Number.parseInt(heightSlider.value, 10) || DEFAULT_HEIGHT_SLIDER_VALUE;
   let currentHeightM = heightFromSlider(currentHeightSliderValue);
   let currentToughness = Number.parseInt(toughnessSlider.value, 10) || DEFAULT_TOUGHNESS;
+  // Step 1b §10: default on, not persisted across reloads.
+  let soundEnabled = true;
+  // Guards playSplatSound to exactly once per drop; reset to false
+  // everywhere sim.reset() is called (every settled edit, and the Drop
+  // handler's own reset-before-drop).
+  let impactSoundPlayed = false;
 
   const sim = createSim({
     seed: pinnedSeed ?? 1,
@@ -593,8 +759,14 @@ export function start(elements) {
     toughnessReadout.textContent = String(currentToughness);
   }
 
+  // Step 1b §10: no Reset button — fruit/height/toughness/Drop follow
+  // sim.uiPhase (enabled in `ready` and `settled`, disabled only while
+  // `falling`). Drop is never given the `disabled` attribute (see the
+  // style.css comment on #drop-button[aria-disabled] for why) — its
+  // enabled/disabled state is carried by `aria-disabled` instead, always
+  // explicitly "true" or "false" (never absent).
   function updateControlsEnabled() {
-    const enabled = controlsEnabledForPhase(sim.phase);
+    const enabled = controlsEnabledForPhase(sim.uiPhase);
 
     for (const radio of fruitRadios) {
       radio.disabled = !enabled.fruitRadios;
@@ -602,8 +774,14 @@ export function start(elements) {
 
     heightSlider.disabled = !enabled.heightSlider;
     toughnessSlider.disabled = !enabled.toughnessSlider;
-    dropButton.disabled = !enabled.dropButton;
-    resetButton.disabled = !enabled.resetButton;
+
+    const dropAriaDisabled = enabled.dropButton ? "false" : "true";
+
+    if (dropButton.getAttribute("aria-disabled") !== dropAriaDisabled) {
+      dropButton.setAttribute("aria-disabled", dropAriaDisabled);
+    }
+
+    soundToggle.disabled = !enabled.soundToggle; // always false; never disabled
 
     const reducedMotion = reducedMotionQuery.matches;
 
@@ -613,8 +791,8 @@ export function start(elements) {
 
   function updateStatusText() {
     const nextStatusText =
-      sim.phase === "settled" && sim.summary ? sim.summary.text : instructionsForPhase(sim.phase);
-    const nextInstructionsText = instructionsForPhase(sim.phase);
+      sim.uiPhase === "settled" && sim.summary ? sim.summary.text : instructionsForPhase(sim.uiPhase);
+    const nextInstructionsText = instructionsForPhase(sim.uiPhase);
 
     // Only write these text nodes when the string actually changes: both are
     // aria-live (or read by assistive tech) and get checked every animation
@@ -629,12 +807,21 @@ export function start(elements) {
     }
   }
 
+  // Step 1b §10 (CTO amendment); D1 fix: data-phase follows the UI phase,
+  // not physics. data-steps keeps counting physics steps while debris still
+  // simulates after UI settle. data-layout-hash is derived from
+  // sim.uiSettleLayout — sim.js's own step-exact snapshot taken the moment
+  // uiPhase first becomes "settled" — rather than from sim.bodies() read at
+  // frame time, which drifted with frame timing (D1: MAX_STEPS_PER_FRAME
+  // lets a frame's steps land anywhere from +1 to +5 past the UI-settle
+  // step, so debris still in motion could be captured at different steps on
+  // different runs of the same seed).
   function updatePhaseAttributes() {
-    main.dataset.phase = sim.phase;
+    main.dataset.phase = sim.uiPhase;
     main.dataset.steps = String(sim.steps);
 
-    if (sim.phase === "settled" && main.dataset.layoutHash === undefined) {
-      main.dataset.layoutHash = layoutHash(sim.bodies().map((body) => body.position));
+    if (sim.uiSettleLayout !== null && main.dataset.layoutHash === undefined) {
+      main.dataset.layoutHash = layoutHash(sim.uiSettleLayout);
     }
   }
 
@@ -781,15 +968,18 @@ export function start(elements) {
     }
   }
 
-  // Step 1b §9: the "incoming" marker. Visible in `ready` and `falling`
-  // while the fruit's LOWEST point is above the frame's top edge (see
-  // rules.js incomingFor for the exact resolution of the plan's own
-  // wording contradiction). Hidden at `settled` and whenever there is no
+  // Step 1b §9/§10: the "incoming" marker (arrow + fruit-coloured dot only
+  // — step 1b §10 removed its metres label, "one height on screen": the
+  // height bar is the only height readout). Visible in UI `ready` and
+  // `falling` while the fruit's LOWEST point is above the frame's top edge
+  // (see rules.js incomingFor). Hidden at UI `settled` (§10 amendment: this
+  // follows sim.uiPhase, not sim.phase — a held fruit that bounces past UI
+  // settle must hide the marker even though its physics phase, and hence
+  // its fruit body, persists well past that point) and whenever there is no
   // fruit body (post-split) or incomingFor says it's not visible. Shares
   // the height bar's write discipline: a DOM write only on an actual
-  // visibility or label change, never every frame.
+  // visibility change, never every frame.
   let lastIncomingVisible = null;
-  let lastIncomingLabel = null;
 
   function setIncomingHidden(hidden) {
     if (incomingMarker.hidden !== hidden) {
@@ -798,27 +988,18 @@ export function start(elements) {
   }
 
   function updateIncomingMarker() {
-    const shownPhase = sim.phase === "ready" || sim.phase === "falling";
+    const shownPhase = sim.uiPhase === "ready" || sim.uiPhase === "falling";
     const fruitBody = shownPhase ? sim.bodies().find((body) => body.kind === "fruit") : null;
 
     let visible = false;
-    let label = null;
 
     if (fruitBody && currentView) {
-      const result = incomingFor({ fruitY: fruitBody.position[1], fruitRadius: fruitBody.radius, view: currentView });
-
-      visible = result.visible;
-      label = result.label;
+      visible = incomingFor({ fruitY: fruitBody.position[1], fruitRadius: fruitBody.radius, view: currentView }).visible;
     }
 
     if (visible !== lastIncomingVisible) {
       setIncomingHidden(!visible);
       lastIncomingVisible = visible;
-    }
-
-    if (visible && label !== lastIncomingLabel) {
-      incomingMarkerLabel.textContent = label;
-      lastIncomingLabel = label;
     }
   }
 
@@ -859,12 +1040,31 @@ export function start(elements) {
       stepsThisFrame += 1;
     }
 
+    checkImpactSound();
     syncSceneFromSim();
     updateDom();
     render();
 
     if (sim.phase !== "falling") {
       stopLoop();
+    }
+  }
+
+  // Step 1b §10: plays the splat once per drop, on the first frame
+  // sim.firstImpact is non-null (immediately, whether or not sound is
+  // currently enabled — the guard just governs whether the disabled state
+  // is skipped instead of stuck waiting for a later frame).
+  function checkImpactSound() {
+    if (impactSoundPlayed) return;
+
+    const impact = sim.firstImpact;
+
+    if (!impact) return;
+
+    impactSoundPlayed = true;
+
+    if (soundEnabled) {
+      playSplatSound(impact);
     }
   }
 
@@ -924,12 +1124,19 @@ export function start(elements) {
     render();
   }
 
+  // Step 1b §10: settled edit. Fruit/height changes above already do the
+  // equivalent (sim.reset + resetSceneMeshes); toughness previously didn't
+  // need resetSceneMeshes (toughness could only be edited in `ready`, where
+  // there was never any debris to clear) — now it can be edited from
+  // `settled` too, so it needs the same clearing.
   function applyToughnessChange() {
     currentToughness = Number.parseInt(toughnessSlider.value, 10);
     sim.reset({ toughness: currentToughness });
     clearLayoutHash();
+    resetSceneMeshes();
     updateReadouts();
     updateDom();
+    render();
   }
 
   fruitFieldset.addEventListener("change", (event) => {
@@ -938,8 +1145,22 @@ export function start(elements) {
   heightSlider.addEventListener("input", applyHeightChange);
   toughnessSlider.addEventListener("input", applyToughnessChange);
 
+  // Step 1b §10: no Reset button. Drop is enabled (via aria-disabled, never
+  // the `disabled` attribute — see updateControlsEnabled) in both `ready`
+  // and `settled`; in `settled` this clears the still-there (or still
+  // moving) debris and drops again immediately with a fresh seed, as one
+  // action — the same sim.reset()-then-drop() path `ready` already used.
+  // aria-disabled is checked explicitly here because it never actually
+  // blocks a click/synthetic activation the way the `disabled` attribute
+  // would (that's the whole point of using it instead).
   dropButton.addEventListener("click", () => {
-    if (sim.phase !== "ready") return;
+    if (dropButton.getAttribute("aria-disabled") === "true") return;
+    if (sim.uiPhase === "falling") return; // defensive; aria-disabled already prevents reaching here
+
+    // Autoplay rules (step 1b §10): create or resume the AudioContext only
+    // here, inside the Drop click/key handler — never on page load, never
+    // from the render loop where the sound actually plays later.
+    ensureAudioContext();
 
     // A fresh seed per drop (or the pinned ?seed= value for every drop),
     // applied via reset() immediately before drop() so this drop's wobble,
@@ -950,6 +1171,7 @@ export function start(elements) {
       heightM: currentHeightM,
       toughness: currentToughness
     });
+    impactSoundPlayed = false;
     clearLayoutHash();
     resetSceneMeshes();
 
@@ -958,17 +1180,8 @@ export function start(elements) {
     startLoop();
   });
 
-  resetButton.addEventListener("click", () => {
-    stopLoop();
-    sim.reset();
-    clearLayoutHash();
-    resetSceneMeshes();
-    updateDom();
-    render();
-  });
-
   skipButton.addEventListener("click", () => {
-    if (sim.phase !== "falling") return;
+    if (sim.uiPhase !== "falling") return;
 
     stopLoop();
 
@@ -979,9 +1192,21 @@ export function start(elements) {
       guard += 1;
     }
 
+    checkImpactSound();
     syncSceneFromSim();
     updateDom();
     render();
+  });
+
+  // Step 1b §10: default on, not persisted, enabled in every phase.
+  function updateSoundToggleUI() {
+    soundToggle.setAttribute("aria-pressed", String(soundEnabled));
+    soundToggle.textContent = soundEnabled ? "Sound: on" : "Sound: off";
+  }
+
+  soundToggle.addEventListener("click", () => {
+    soundEnabled = !soundEnabled;
+    updateSoundToggleUI();
   });
 
   // --- lifecycle: visibility, resize, reduced motion ---------------------
@@ -1011,6 +1236,7 @@ export function start(elements) {
   // --- initial paint -------------------------------------------------------
   renderHeightSliderTicks();
   updateFruitColor();
+  updateSoundToggleUI();
   resizeRendererToDisplaySize();
   syncSceneFromSim();
   updateReadouts();

@@ -199,7 +199,7 @@
       "safety": {
         "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
         "adultHelp": "None required for ordinary play.",
-        "notes": "No gore: broken melon shows flat-colored rind chunks, flesh cubes, and seeds only."
+        "notes": "No gore: broken melon shows flat-colored rind chunks, flesh cubes, and seeds only. Splat sound effects are generated in the browser with Web Audio (no audio files, no network request); a visible on/off sound toggle is provided, defaults to on, and is not persisted between visits."
       },
       "runtime": {
         "type": "static",

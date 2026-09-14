@@ -2,7 +2,11 @@
 
 Pick a fruit, a drop height (0.3-60 m, a continuous slider with named
 landmarks like Knee, Roof and Plane), and a toughness, then find out whether
-it survives the fall or smashes into rind/shell pieces and seeds.
+it survives the fall or smashes into rind/shell pieces and seeds, with a
+synthesized splat sound (toggle it off any time). Fruit, height and
+toughness stay editable after a drop settles — there's no Reset button;
+changing a control or pressing Drop again clears the debris and starts
+fresh.
 
 ## Fruits
 
@@ -30,13 +34,20 @@ toughest.
   No engine, no DOM, no imports.
 - `sim.js`: the only module that imports `cannon-es`. Runs the physics at a
   fixed 1/60 s step and exposes plain data (`bodies()`, `summary`, `phase`,
-  `steps`, `lastSplit`) — no cannon-es object ever leaves this file.
+  `uiPhase`, `steps`, `lastSplit`, `firstImpact`) — no cannon-es object ever
+  leaves this file. `phase` is the true physics state (settles once every
+  piece sleeps or the 480-step limit is hit); `uiPhase` settles 72 steps
+  (1.2s) after the impact step, so the UI doesn't wait out debris that keeps
+  moving for several more seconds.
 - `view.js`: the only module that imports `three`. Owns the render loop,
   every DOM listener, the fruit selector, the height/toughness sliders, the
   height bar, per-drop seeding (`crypto.getRandomValues`, with a `?seed=`
-  URL override for reproducible sessions), and the mapping from sim bodies
-  to meshes (procedurally built `BufferGeometry` chunks/shells, no external
-  models).
+  URL override for reproducible sessions), the mapping from sim bodies to
+  meshes (procedurally built `BufferGeometry` chunks/shells, no external
+  models), and the synthesized splat sound (Web Audio: a white-noise burst
+  through a lowpass filter, an oscillator thud, and a coconut crack — no
+  audio files). The `AudioContext` is created only inside the Drop click/key
+  handler, per autoplay rules.
 - `index.html` / `style.css`: markup and layout. `three.js` and `cannon-es`
   load from pinned jsDelivr URLs through an import map — there is no build
   step. `three.module.js` itself imports `three.core.js` from the same

@@ -71,6 +71,17 @@ export const FIXED_STEP = 1 / 60;
 export const MAX_SIMULATED_SECONDS = 8;
 export const MAX_SETTLE_STEPS = Math.round(MAX_SIMULATED_SECONDS / FIXED_STEP);
 
+// Step 1b §10 (CTO amendment, "two phases, two layers"): the UI's own phase
+// no longer waits for every piece to physically settle (up to
+// MAX_SETTLE_STEPS/480 — 8s — since the §7 wobble spin can keep debris
+// awake that whole time). UI settle begins this many simulation steps after
+// the impact step (72 steps = 1.2s at 60Hz), counted in steps rather than
+// wall-clock time so it stays deterministic and a hidden tab (which pauses
+// stepping) delays it correctly. The physics phase and MAX_SETTLE_STEPS are
+// unchanged: containment, energy, determinism and spawn tests keep
+// stepping to the physics end.
+export const UI_SETTLE_STEPS_AFTER_IMPACT = 72;
+
 // Step 1b (2026-09-12): five fruits, each a playful approximation (see
 // README). breakSpeed here is "at normal toughness" (t = 5); the actual
 // threshold used at drop time is breakSpeedFor(fruit, toughness).
@@ -376,14 +387,24 @@ export function instructionsForPhase(phase) {
   return "Read the result below, then press Reset to try again.";
 }
 
+// Step 1b §10: no Reset button. Fruit/height/toughness/Drop are enabled in
+// both `ready` and `settled` (a settled edit clears the debris and
+// re-drops, or returns to ready with the new setting), and disabled only
+// while `falling`. Drop is never given the `disabled` attribute (Chromium
+// moves focus to <body> when a focused button becomes disabled, which
+// would break "focus stays on Drop so Space repeats drops") — view.js uses
+// this same `dropButton` boolean to drive `aria-disabled` instead. The
+// sound toggle is enabled in every phase.
 export function controlsEnabledForPhase(phase) {
+  const controlsEnabled = phase !== "falling";
+
   return {
-    fruitRadios: phase === "ready",
-    heightSlider: phase === "ready",
-    toughnessSlider: phase === "ready",
-    dropButton: phase === "ready",
-    resetButton: true,
-    skipButton: phase === "falling"
+    fruitRadios: controlsEnabled,
+    heightSlider: controlsEnabled,
+    toughnessSlider: controlsEnabled,
+    dropButton: controlsEnabled,
+    skipButton: phase === "falling",
+    soundToggle: true
   };
 }
 
@@ -725,5 +746,84 @@ export function shellPiece(seed, fruit) {
     outerNormals,
     outerColor: fruit.shellOuterColor,
     innerColor: fruit.shellInnerColor
+  };
+}
+
+// --- Step 1b §10: synthesized splat sound parameters (pure numbers only; --
+// view.js does the actual Web Audio synthesis). Character per fruit, picked
+// by ear from the plan's descriptions:
+// - tomato, watermelon: soft and wet — a bright-to-dull noise burst (a
+//   falling low-pass cutoff reads as "wet squelch"), a soft low thud, no
+//   crack. Watermelon is the bigger of the two: longer/gainier burst, a
+//   lower (bigger-sounding) thud.
+// - apple: crisp — a short noise burst that STAYS bright (cutoff barely
+//   falls, unlike the wet fruits), and a higher-pitched, snappy thud. No
+//   crack (a bite/snap reads through brightness and shortness, not a
+//   separate click).
+// - orange: juicy — between tomato and apple: a brighter, shorter burst
+//   than the melon-family fruits (a "spray" rather than a "splat"), a
+//   mid-pitched thud. No crack (juice is a burst, not a shell breaking).
+// - coconut: the only fruit with a crack (`crackGain > 0`) — a hard shell
+//   breaking — plus a deep, hollow thud. Its own noise burst is quiet and
+//   short; the crack carries the character.
+const SPLAT_SOUND_MAX_GAIN = 0.6;
+const SPLAT_SOUND_MAX_NOISE_DURATION = 0.6;
+const SPLAT_SOUND_MAX_THUD_DURATION = 0.3;
+const SPLAT_SOUND_MIN_FREQ_HZ = 60;
+const SPLAT_SOUND_MAX_FREQ_HZ = 4000;
+
+const SPLAT_SOUND_CHARACTER = {
+  tomato: { noiseGainBase: 0.35, noiseDurationBase: 0.22, cutoffStart: 3000, cutoffEnd: 400, thudFreq: 150, crackGain: 0 },
+  watermelon: { noiseGainBase: 0.4, noiseDurationBase: 0.3, cutoffStart: 2500, cutoffEnd: 300, thudFreq: 100, crackGain: 0 },
+  apple: { noiseGainBase: 0.25, noiseDurationBase: 0.12, cutoffStart: 4000, cutoffEnd: 1200, thudFreq: 300, crackGain: 0 },
+  orange: { noiseGainBase: 0.3, noiseDurationBase: 0.18, cutoffStart: 3500, cutoffEnd: 800, thudFreq: 220, crackGain: 0 },
+  coconut: { noiseGainBase: 0.15, noiseDurationBase: 0.1, cutoffStart: 2000, cutoffEnd: 600, thudFreq: 90, crackGain: 0.35 }
+};
+
+function clampSplatNumber(value, min, max) {
+  return Math.max(min, Math.min(value, max));
+}
+
+// Pure: no engine, no Web Audio API. severity < 1 (held) is always a short
+// dull thud with zero noise gain and zero crack, regardless of fruit — the
+// fruit character (above) only applies once something has actually broken.
+// `growth` scales monotonically with severity above 1 (clamped), so
+// noiseGain/noiseDuration/thudGain/thudDuration/crackGain never decrease as
+// severity rises through the tiers for a given fruit (unit-tested).
+export function splatSoundFor({ fruit, severity, impactSpeed }) {
+  void impactSpeed; // not currently used in the formula, kept for the call shape/future tuning
+
+  const character = SPLAT_SOUND_CHARACTER[fruit] ?? SPLAT_SOUND_CHARACTER.watermelon;
+  const held = severity < 1;
+  const growth = clampSplatNumber((severity - 1) / 5, 0, 1); // 0 just past breaking, 1 by severity=6+
+
+  if (held) {
+    return {
+      noiseGain: 0,
+      noiseDuration: 0,
+      cutoffStart: clampSplatNumber(character.cutoffStart, SPLAT_SOUND_MIN_FREQ_HZ, SPLAT_SOUND_MAX_FREQ_HZ),
+      cutoffEnd: clampSplatNumber(character.cutoffEnd, SPLAT_SOUND_MIN_FREQ_HZ, SPLAT_SOUND_MAX_FREQ_HZ),
+      thudFreq: clampSplatNumber(character.thudFreq, SPLAT_SOUND_MIN_FREQ_HZ, SPLAT_SOUND_MAX_FREQ_HZ),
+      thudGain: clampSplatNumber(0.2, 0, SPLAT_SOUND_MAX_GAIN),
+      thudDuration: clampSplatNumber(0.1, 0, SPLAT_SOUND_MAX_THUD_DURATION),
+      crackGain: 0
+    };
+  }
+
+  const noiseGain = clampSplatNumber(character.noiseGainBase + 0.15 * growth, 0, SPLAT_SOUND_MAX_GAIN);
+  const noiseDuration = clampSplatNumber(character.noiseDurationBase + 0.2 * growth, 0, SPLAT_SOUND_MAX_NOISE_DURATION);
+  const thudGain = clampSplatNumber(0.3 + 0.25 * growth, 0, SPLAT_SOUND_MAX_GAIN);
+  const thudDuration = clampSplatNumber(0.14 + 0.08 * growth, 0, SPLAT_SOUND_MAX_THUD_DURATION);
+  const crackGain = character.crackGain > 0 ? clampSplatNumber(character.crackGain + 0.1 * growth, 0, SPLAT_SOUND_MAX_GAIN) : 0;
+
+  return {
+    noiseGain,
+    noiseDuration,
+    cutoffStart: clampSplatNumber(character.cutoffStart, SPLAT_SOUND_MIN_FREQ_HZ, SPLAT_SOUND_MAX_FREQ_HZ),
+    cutoffEnd: clampSplatNumber(character.cutoffEnd, SPLAT_SOUND_MIN_FREQ_HZ, SPLAT_SOUND_MAX_FREQ_HZ),
+    thudFreq: clampSplatNumber(character.thudFreq, SPLAT_SOUND_MIN_FREQ_HZ, SPLAT_SOUND_MAX_FREQ_HZ),
+    thudGain,
+    thudDuration,
+    crackGain
   };
 }

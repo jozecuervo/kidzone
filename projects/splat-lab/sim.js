@@ -12,6 +12,7 @@ import {
   FIXED_STEP,
   MAX_DYNAMIC_BODIES,
   MAX_SETTLE_STEPS,
+  UI_SETTLE_STEPS_AFTER_IMPACT,
   breakSpeedFor,
   createRng,
   fruitByKey,
@@ -220,7 +221,19 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
       steps: 0,
       summary: null,
       lastSplit: null,
+      // Step 1b §10: read-only impact signal for view.js (plays the splat
+      // sound once, on the frame this first becomes non-null). Set exactly
+      // once per drop, in step(), on the same frame the first ground
+      // contact is decided (held or broken); reset() sets it back to null.
+      firstImpact: null,
       firstCollisionDecided: false,
+      // D1 fix: a step-exact snapshot of every dynamic body's position,
+      // taken on the exact step uiPhase first becomes "settled" (whichever
+      // comes first: UI settle at firstImpact.step + UI_SETTLE_STEPS_AFTER_IMPACT,
+      // or physics settle for a fast-sleeping held fruit). null before that
+      // step and after reset(). Debris kept moving after this step must not
+      // change it — see the guard in step() below.
+      uiSettleLayout: null,
       getPendingImpact: () => pendingImpact,
       clearPendingImpact: () => {
         pendingImpact = null;
@@ -411,13 +424,32 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     return true;
   }
 
-  function finishSettling() {
+  // D1 fix: plain-data position snapshot, in bodies() order, for the
+  // uiSettleLayout getter.
+  function snapshotUiSettleLayout() {
+    const layout = [];
+
+    for (const body of state.kinds.keys()) {
+      layout.push([body.position.x, body.position.y, body.position.z]);
+    }
+
+    return layout;
+  }
+
+  // Step 1b §10 (CTO amendment): everything in the summary is known at the
+  // impact step (firstImpact), so this is called once, whichever happens
+  // first — the UI-settle step (impact + UI_SETTLE_STEPS_AFTER_IMPACT) or
+  // physics settle (finishSettling, e.g. a held fruit that sleeps fast).
+  // Both call sites guard on state.summary === null, so it is computed
+  // exactly once per drop and is deep-equal (the same data) whichever path
+  // sets it.
+  function computeSummaryFromImpact() {
     const pending = state.getPendingImpact();
     const severity = pending ? severityFor(pending.impactSpeed, state.fruit, state.toughness) : 0;
     const tier = pending ? tierForSeverity(severity) : "held";
     const counts = pieceCountsForTier(state.fruit, tier);
 
-    state.summary = {
+    return {
       fruit: state.fruit.key,
       heightM: state.heightM,
       toughness: state.toughness,
@@ -438,6 +470,12 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
         seedCount: counts.seeds
       })
     };
+  }
+
+  function finishSettling() {
+    if (state.summary === null) {
+      state.summary = computeSummaryFromImpact();
+    }
 
     state.phase = phaseAfter(state.phase, "settle");
   }
@@ -462,10 +500,18 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
       state.firstCollisionDecided = true;
       state.breakSpeedValue = breakSpeedFor(state.fruit, state.toughness);
 
-      if (shouldBreakFruit(pending.impactSpeed, state.fruit, state.toughness)) {
-        const severity = severityFor(pending.impactSpeed, state.fruit, state.toughness);
-        const tier = tierForSeverity(severity);
+      const severity = severityFor(pending.impactSpeed, state.fruit, state.toughness);
+      const tier = tierForSeverity(severity);
 
+      state.firstImpact = {
+        step: state.steps,
+        impactSpeed: pending.impactSpeed,
+        severity,
+        tier,
+        fruit: state.fruit.key
+      };
+
+      if (shouldBreakFruit(pending.impactSpeed, state.fruit, state.toughness)) {
         splitFruit(pending, tier);
       } else {
         restoreFruitDamping(state.fruitBody);
@@ -492,6 +538,30 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
 
     if (settledBySleep || settledByTimeout) {
       finishSettling();
+    } else if (
+      state.summary === null &&
+      state.firstImpact !== null &&
+      state.steps >= state.firstImpact.step + UI_SETTLE_STEPS_AFTER_IMPACT
+    ) {
+      // Step 1b §10 (CTO amendment): the UI phase settles here, well before
+      // physics necessarily does (debris can keep moving for up to
+      // MAX_SETTLE_STEPS more steps). state.phase stays "falling" — only
+      // uiPhase (below) reflects this early settle.
+      state.summary = computeSummaryFromImpact();
+    }
+
+    // D1 fix: snapshot positions on the exact step uiPhase first becomes
+    // "settled" — whichever branch above fired this step (physics settle via
+    // finishSettling, or the UI-settle-only branch just above). Guarded by
+    // uiSettleLayout === null so it is captured exactly once per drop, and
+    // never drifts as debris keeps moving afterward.
+    if (
+      state.uiSettleLayout === null &&
+      (settledBySleep ||
+        settledByTimeout ||
+        (state.firstImpact !== null && state.steps >= state.firstImpact.step + UI_SETTLE_STEPS_AFTER_IMPACT))
+    ) {
+      state.uiSettleLayout = snapshotUiSettleLayout();
     }
   }
 
@@ -539,6 +609,18 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     get phase() {
       return state.phase;
     },
+    // Step 1b §10 (CTO amendment): the UI's own phase, decoupled from
+    // physics settle (see UI_SETTLE_STEPS_AFTER_IMPACT in rules.js).
+    get uiPhase() {
+      if (state.phase === "ready") return "ready";
+      if (state.phase === "settled") return "settled";
+
+      if (state.firstImpact !== null && state.steps >= state.firstImpact.step + UI_SETTLE_STEPS_AFTER_IMPACT) {
+        return "settled";
+      }
+
+      return "falling";
+    },
     get summary() {
       return state.summary;
     },
@@ -547,6 +629,15 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     },
     get lastSplit() {
       return state.lastSplit;
+    },
+    get firstImpact() {
+      return state.firstImpact;
+    },
+    // D1 fix: read-only, step-exact position snapshot (plain [x, y, z]
+    // arrays, in bodies() order) taken on the step uiPhase first becomes
+    // "settled". null before that step and after reset().
+    get uiSettleLayout() {
+      return state.uiSettleLayout;
     }
   };
 }
