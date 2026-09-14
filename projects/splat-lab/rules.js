@@ -59,10 +59,6 @@ export function heightSliderLabel(heightMeters) {
   return nearestRelativeDelta <= 0.1 ? `${base} (about ${nearestName})` : base;
 }
 
-export const MIN_TOUGHNESS = 1;
-export const MAX_TOUGHNESS = 10;
-export const DEFAULT_TOUGHNESS = 5;
-
 export const MAX_DYNAMIC_BODIES = 150;
 export const MAX_PIECES_PER_FRUIT = 64;
 
@@ -83,8 +79,8 @@ export const MAX_SETTLE_STEPS = Math.round(MAX_SIMULATED_SECONDS / FIXED_STEP);
 export const UI_SETTLE_STEPS_AFTER_IMPACT = 72;
 
 // Step 1b (2026-09-12): five fruits, each a playful approximation (see
-// README). breakSpeed here is "at normal toughness" (t = 5); the actual
-// threshold used at drop time is breakSpeedFor(fruit, toughness).
+// README). breakSpeed here is the real break speed used at drop time via
+// breakSpeedFor(fruit).
 // outerCount/innerCount/seedCount are each fruit's SMASHED (100%) piece
 // counts; cracked/split scale them down (see pieceCountsForTier).
 export const FRUITS = {
@@ -208,33 +204,32 @@ export function createRng(seed) {
 
 // Pure phase transitions shared by sim.js (source of truth) and view.js
 // (status text and control enablement).
+// Step 1b §11b (spawn ruling v3, decision 5): phases are `ready` / `active`
+// / `settled` only ("falling" is gone). `active` covers both "something is
+// falling" and "an impact happened under 72 steps ago" — sim.js computes
+// that directly rather than through this reducer, since it now depends on
+// elapsed steps, not just the action taken. `drop` never changes phase
+// coming from `ready` by itself; the scene becomes `active` because a fruit
+// is now falling, which sim.js derives from its own state.
 export function phaseAfter(phase, action) {
   if (action === "reset") return "ready";
-  if (phase === "ready" && action === "drop") return "falling";
-  if (phase === "falling" && action === "settle") return "settled";
+  if (phase === "ready" && action === "drop") return "active";
+  if (phase === "active" && action === "settle") return "settled";
   return phase;
 }
 
-// Toughness multiplier m(t): piecewise-geometric (CTO-accepted; one
-// geometric sequence can't hit all three pins m(1)=0.4, m(5)=1, m(10)=4).
-// Both branches agree at t = 5 (each gives 1), so m is continuous and
-// strictly increasing over the whole 1-10 range.
-export function toughnessMultiplier(t) {
-  if (t <= 5) return 0.4 * Math.pow(2.5, (t - 1) / 4);
-
-  return Math.pow(4, (t - 5) / 5);
+// Step 1b §11a: every fruit uses its real break speed (formerly "t = 5,
+// multiplier 1.0" before that control was removed).
+export function breakSpeedFor(fruit) {
+  return fruit.breakSpeed;
 }
 
-export function breakSpeedFor(fruit, toughness) {
-  return fruit.breakSpeed * toughnessMultiplier(toughness);
+export function shouldBreakFruit(impactSpeed, fruit) {
+  return Math.abs(impactSpeed) >= breakSpeedFor(fruit);
 }
 
-export function shouldBreakFruit(impactSpeed, fruit, toughness) {
-  return Math.abs(impactSpeed) >= breakSpeedFor(fruit, toughness);
-}
-
-export function severityFor(impactSpeed, fruit, toughness) {
-  return Math.abs(impactSpeed) / breakSpeedFor(fruit, toughness);
+export function severityFor(impactSpeed, fruit) {
+  return Math.abs(impactSpeed) / breakSpeedFor(fruit);
 }
 
 // Severity tiers (invariant 4 replaced, step 1b §3). Boundaries are
@@ -381,29 +376,166 @@ export function resultText({ fruit, heightMeters, impactSpeed, tier, outerCount,
   return `${opening} It ${verb} into ${outerCount} pieces and ${seedCount} seeds ${flyWord}.`;
 }
 
+function batchFruitClause({ fruit, tier, outerCount, seedCount }) {
+  if (tier === "held") {
+    return `The ${fruit.name} held.`;
+  }
+
+  const verb = TIER_VERBS[tier];
+  const flyWord = TIER_FLY_WORDS[tier];
+
+  if (seedCount === 0) {
+    return `The ${fruit.name} ${verb} into ${outerCount} pieces.`;
+  }
+
+  return `The ${fruit.name} ${verb} into ${outerCount} pieces and ${seedCount} seeds ${flyWord}.`;
+}
+
+// Step 1b §11b: announced once per settle, for every fruit that landed since
+// the last announcement (removed fruit are never mentioned — callers must
+// filter those out before calling this). One fruit keeps today's
+// `resultText` wording verbatim (height + impact speed); several fruit use
+// the shorter per-fruit clause above, joined after a lead sentence.
+// CTO ruling 2026-09-14 (replaces decision 2 in the original handoff):
+// `heightMeters` here is always the height the player chose (the slider
+// value at press time), never a spawn height raised to avoid an overlap —
+// callers must pass the chosen height, not the actual release y.
+export function batchResultText(results) {
+  if (results.length === 1) {
+    const [r] = results;
+
+    return resultText({
+      fruit: r.fruit,
+      heightMeters: r.heightMeters,
+      impactSpeed: r.impactSpeed,
+      tier: r.tier,
+      outerCount: r.outerCount,
+      seedCount: r.seedCount
+    });
+  }
+
+  const clauses = results.map((r) => batchFruitClause(r));
+
+  return `Dropped ${results.length} fruit. ${clauses.join(" ")}`;
+}
+
+// Step 1b §11b (spawn ruling v3): body budget of 200. Removes the oldest
+// fruit first (never the breaking fruit itself), then — if that alone is
+// not enough — trims the breaking fruit's own pieces: seeds first, then
+// inner chunks, keeping at least 2 outer pieces. Pure: takes plain counts,
+// returns a plan; sim.js is responsible for actually removing bodies.
+//
+// `existingCounts`: [{ id, bodyCount }] for every other fruit currently in
+// the scene, oldest first (press order). `breakingCounts`: the newly
+// broken fruit's own { outer, inner, seeds } piece counts (bodyCount =
+// outer+inner+seeds), not yet added to the world when this runs.
+export function budgetTrimPlan({ existingCounts, breakingCounts, limit = 200 }) {
+  const breakingTotal = () => breakingCounts.outer + breakingCounts.inner + breakingCounts.seeds;
+
+  let total = existingCounts.reduce((sum, entry) => sum + entry.bodyCount, 0) + breakingTotal();
+  const removeFruitIds = [];
+  const trimmed = { ...breakingCounts };
+
+  for (const entry of existingCounts) {
+    if (total <= limit) break;
+
+    removeFruitIds.push(entry.id);
+    total -= entry.bodyCount;
+  }
+
+  while (total > limit && trimmed.seeds > 0) {
+    trimmed.seeds -= 1;
+    total -= 1;
+  }
+
+  while (total > limit && trimmed.inner > 0) {
+    trimmed.inner -= 1;
+    total -= 1;
+  }
+
+  while (total > limit && trimmed.outer > 2) {
+    trimmed.outer -= 1;
+    total -= 1;
+  }
+
+  return { removeFruitIds, trimmedBreakingCounts: trimmed };
+}
+
+// Step 1b §11b (spawn ruling v3, decision 3): a new drop's spawn point and
+// what it displaces. `bodies` is plain data:
+// { id, fruitId, kind, position:[x,y,z], radius, falling:boolean }, where
+// "falling" means an unbroken fruit that has not yet made its first
+// contact. Pure and deterministic — no world access.
+export function spawnPlanFor({ fruit, heightM, bodies }) {
+  const Rnew = fruit.radius;
+  let y = heightM + Rnew;
+
+  function clearance(other) {
+    const Rother = other.radius;
+    const dx = other.position[0] - 0;
+    const dz = other.position[2] - 0;
+    const dy = other.position[1] - y;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+    return dist - Rother - Rnew - 0.02;
+  }
+
+  // Raise above falling fruit in the way, re-checking after each raise
+  // since raising the spawn can bring it into range of a different falling
+  // fruit than the one that triggered the raise.
+  let raised = true;
+
+  while (raised) {
+    raised = false;
+
+    for (const other of bodies) {
+      if (!other.falling) continue;
+
+      if (clearance(other) < 0) {
+        const candidateY = other.position[1] + other.radius + Rnew + 0.02;
+
+        if (candidateY > y) {
+          y = candidateY;
+          raised = true;
+        }
+      }
+    }
+  }
+
+  // Landed bodies overlapping the final spawn point are removed (whole
+  // fruit if unbroken, or the individual piece if broken) rather than
+  // raising further.
+  const removeIds = [];
+
+  for (const other of bodies) {
+    if (other.falling) continue;
+
+    if (clearance(other) < 0) {
+      removeIds.push(other.id);
+    }
+  }
+
+  return { y, removeIds };
+}
+
 export function instructionsForPhase(phase) {
-  if (phase === "ready") return "Pick a fruit, a height and a toughness, then press Drop.";
-  if (phase === "falling") return "Watch it fall...";
+  if (phase === "ready") return "Pick a fruit and a height, then press Drop.";
+  if (phase === "active") return "Watch it fall... Drop still works for more fruit.";
   return "Read the result below, then change anything or press Drop to try again.";
 }
 
-// Step 1b §10: no Reset button. Fruit/height/toughness/Drop are enabled in
-// both `ready` and `settled` (a settled edit clears the debris and
-// re-drops, or returns to ready with the new setting), and disabled only
-// while `falling`. Drop is never given the `disabled` attribute (Chromium
-// moves focus to <body> when a focused button becomes disabled, which
-// would break "focus stays on Drop so Space repeats drops") — view.js uses
-// this same `dropButton` boolean to drive `aria-disabled` instead. The
-// sound toggle is enabled in every phase.
+// Step 1b §11b: Drop always works, instantly, in every phase.
+// Fruit/height/Drop/sound are all enabled in every phase and a control
+// change never clears the scene; it only affects the next drop.
+// `skipButton` (reduced-motion "Skip to result") is the one control still
+// limited: it only makes sense, and is only enabled, while something is
+// `active`.
 export function controlsEnabledForPhase(phase) {
-  const controlsEnabled = phase !== "falling";
-
   return {
-    fruitRadios: controlsEnabled,
-    heightSlider: controlsEnabled,
-    toughnessSlider: controlsEnabled,
-    dropButton: controlsEnabled,
-    skipButton: phase === "falling",
+    fruitRadios: true,
+    heightSlider: true,
+    dropButton: true,
+    skipButton: phase === "active",
     soundToggle: true
   };
 }

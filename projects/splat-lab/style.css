@@ -306,14 +306,6 @@ body {
   transform: translateX(-50%);
 }
 
-.toughness-ends {
-  display: flex;
-  justify-content: space-between;
-  margin: -0.5rem 0 0;
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
 .control-row label {
   font-weight: 600;
 }
@@ -342,15 +334,6 @@ body {
 }
 
 .action-row button:disabled {
-  background: #a9b6bd;
-  cursor: not-allowed;
-}
-
-/* Step 1b §10: Drop is never given the `disabled` attribute (Chromium moves
-   focus to <body> when a focused button becomes disabled, which would break
-   "focus stays on Drop so Space repeats drops" for a settled redrop) —
-   `aria-disabled` carries the same visual/semantic meaning instead. */
-#drop-button[aria-disabled="true"] {
   background: #a9b6bd;
   cursor: not-allowed;
 }
@@ -393,9 +376,9 @@ body {
   /* Keep the controls compact enough that Drop/Reset stay on-screen at
      390x844 without scrolling (touch test): tighter gaps and a smaller
      fruit-option font, not a layout change. Step 1b §1 added the fruit
-     fieldset and toughness-ends row, which pushed the total page height
-     back past 844px on top of the earlier D6/V5 compaction (round 4) —
-     shrink the lab-shell's own gap/padding and the canvas height cap too. */
+     fieldset, which pushed the total page height back past 844px on top
+     of the earlier D6/V5 compaction (round 4) — shrink the lab-shell's
+     own gap/padding and the canvas height cap too. */
   .lab-shell {
     gap: 0.6rem;
     padding: 0.6rem 0 0.75rem;
@@ -417,10 +400,6 @@ body {
 
   .fruit-option {
     font-size: 0.85rem;
-  }
-
-  .toughness-ends {
-    margin-top: -0.3rem;
   }
 }
 

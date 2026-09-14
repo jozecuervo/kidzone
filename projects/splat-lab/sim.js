@@ -6,29 +6,37 @@ import * as CANNON from "cannon-es";
 import {
   BURST_K,
   DEFAULT_FRUIT_KEY,
-  DEFAULT_TOUGHNESS,
   E_BOUNCE,
   GRAVITY,
   FIXED_STEP,
-  MAX_DYNAMIC_BODIES,
   MAX_SETTLE_STEPS,
   UI_SETTLE_STEPS_AFTER_IMPACT,
+  batchResultText,
   breakSpeedFor,
+  budgetTrimPlan,
   createRng,
   fruitByKey,
   jitterFactor,
   kFruitFor,
-  phaseAfter,
   pieceCountsForTier,
   pieceVelocity,
   releaseWobble,
   resultText,
   severityFor,
   shouldBreakFruit,
+  spawnPlanFor,
   tierForSeverity
 } from "./rules.js";
 
 const GROUND_HALF_THICKNESS = 5;
+
+// Step 1b §11b (spawn ruling v3, decision 2): body budget across the whole
+// scene, enforced at break time via budgetTrimPlan.
+const BODY_BUDGET = 200;
+
+// Step 1b §11b (spawn ruling v3, decision 1): the scene holds at most this
+// many non-removed fruit at once (the rolling window).
+const FRUIT_WINDOW = 5;
 
 // Piece geometry fractions (of the fruit's own radius), shared by every
 // fruit, per the engineer's sweep model in the step-1b correction:
@@ -41,8 +49,7 @@ const SEED_MAX_RADIUS_FRACTION = 0.95;
 
 // Mass split across a fruit's total mass at the smashed (100%) piece
 // counts: outer 40%, inner 55%, seeds 5%. Cracked/split use fewer pieces of
-// the same per-piece mass (not a re-split of a smaller total), which is
-// simpler and keeps individual piece masses independent of toughness.
+// the same per-piece mass (not a re-split of a smaller total).
 const OUTER_MASS_SHARE = 0.4;
 const INNER_MASS_SHARE = 0.55;
 const SEED_MASS_SHARE = 0.05;
@@ -136,12 +143,23 @@ function restoreFruitDamping(body) {
 
 const DEFAULT_TUNING = { burstK: BURST_K, bounceE: E_BOUNCE, lift: true };
 
-export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit = DEFAULT_FRUIT_KEY, tuning }) {
+// A piece body's effective radius for spawn-clearance purposes (decision 2a):
+// spheres report their own radius; boxes (outer/rind pieces) report their
+// placement bounding radius (halfExtent * sqrt(3), the same value used when
+// they were placed non-overlapping at split time).
+function clearanceRadiusOf(meta) {
+  return meta.radius !== undefined ? meta.radius : meta.boundingRadius;
+}
+
+export function createSim({ seed, heightM, fruit = DEFAULT_FRUIT_KEY, tuning }) {
   let state = null;
   const resolvedTuning = { ...DEFAULT_TUNING, ...tuning };
 
-  function buildFreshState(nextSeed, nextHeightM, nextToughness, nextFruitKey) {
-    const fruitData = fruitByKey(nextFruitKey);
+  // Step 1b §11b (spawn ruling v3): reset()/createSim() build an *empty*
+  // ready scene now (decision 7: "ready: empty scene") — nothing spawns
+  // until drop() actually runs. initialDropDefaults is what a parameterless
+  // drop() uses (decision 11: single-drop compatibility).
+  function buildFreshState(nextSeed, nextHeightM, nextFruitKey) {
     const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -GRAVITY, 0) });
 
     world.allowSleep = true;
@@ -155,112 +173,290 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     noDamping(ground);
     world.addBody(ground);
 
-    const rng = createRng(nextSeed);
+    return {
+      world,
+      ground,
+      initialDropDefaults: { fruit: nextFruitKey, heightM: nextHeightM, seed: nextSeed },
+      records: [], // press order, never reordered; removed fruit stay with state "removed"
+      recordsById: new Map(),
+      kinds: new Map(), // cannon body -> meta { kind, id, fruitId, ...sizeFields }
+      bodiesById: new Map(), // body id (number) -> cannon body
+      nextBodyId: 1,
+      nextFruitId: 1,
+      nextPressIndex: 0,
+      everDropped: false,
+      steps: 0,
+      lastPressStep: 0,
+      lastImpactStep: null,
+      impactsQueue: [],
+      removalsQueue: [],
+      pendingAnnouncementText: null,
+      settleLayout: null,
+      lastSplit: null,
+      legacySummary: null,
+      freshPieceIdsThisStep: new Set()
+    };
+  }
 
-    const fruitBody = new CANNON.Body({
-      mass: fruitData.mass,
-      shape: new CANNON.Sphere(fruitData.radius)
-    });
+  function bodyOf(id) {
+    return state.bodiesById.get(id);
+  }
 
-    fruitBody.position.set(0, nextHeightM + fruitData.radius, 0);
-    // Step 1b §7: a small release wobble (replacing the old fixed spin
-    // range) drawn first from the seeded PRNG, before any placement/jitter
-    // draws later. Vertical velocity is always 0 (free fall still applies).
-    const wobble = releaseWobble(rng);
+  function registerBody(body, meta) {
+    state.kinds.set(body, meta);
+    state.bodiesById.set(meta.id, body);
+  }
 
-    fruitBody.quaternion.set(wobble.quaternion[0], wobble.quaternion[1], wobble.quaternion[2], wobble.quaternion[3]);
-    fruitBody.angularVelocity.set(wobble.angularVelocity[0], wobble.angularVelocity[1], wobble.angularVelocity[2]);
-    fruitBody.velocity.set(wobble.velocity[0], wobble.velocity[1], wobble.velocity[2]);
-    noDamping(fruitBody);
-    world.addBody(fruitBody);
+  function detachBody(body) {
+    state.kinds.delete(body);
+    state.bodiesById.delete(state.kinds.get(body)?.id);
+  }
 
-    let nextLocalId = 1;
-    const kinds = new Map(); // cannon body -> { kind, id, sizeField }
+  function countBodiesOf(record) {
+    if (record.state === "broken") return record.pieceBodyIds.size;
+    if (record.state === "falling" || record.state === "landed") return 1;
 
-    kinds.set(fruitBody, { kind: "fruit", id: nextLocalId++, radius: fruitData.radius });
+    return 0;
+  }
 
-    let pendingImpact = null;
-    let firstImpactCaptured = false;
+  // Removes every body a record currently owns, unconditionally, marking it
+  // "removed" (decision 3: removed fruit produce no impact/result/splat, and
+  // any pending contact is dropped by never being processed again — the
+  // guard in processContacts checks record.state).
+  function removeFruitEntirely(record) {
+    if (record.state === "removed") return;
 
-    function onFruitCollide(event) {
-      if (firstImpactCaptured) return;
+    if (record.fruitBodyId !== null) {
+      const body = bodyOf(record.fruitBodyId);
 
-      firstImpactCaptured = true;
+      if (body) {
+        record.detachListener?.();
+        state.world.removeBody(body);
+        detachBody(body);
+        state.removalsQueue.push(record.fruitBodyId);
+      }
 
-      const impactSpeed = Math.abs(event.contact.getImpactVelocityAlongNormal());
+      record.fruitBodyId = null;
+    }
 
-      pendingImpact = {
-        impactSpeed,
-        position: fruitBody.position.clone(),
-        quaternion: fruitBody.quaternion.clone(),
-        velocity: fruitBody.velocity.clone(),
-        angularVelocity: fruitBody.angularVelocity.clone()
+    if (record.pieceBodyIds) {
+      for (const id of record.pieceBodyIds) {
+        const body = bodyOf(id);
+
+        if (body) {
+          state.world.removeBody(body);
+          detachBody(body);
+          state.removalsQueue.push(id);
+        }
+      }
+
+      record.pieceBodyIds.clear();
+    }
+
+    record.state = "removed";
+  }
+
+  function removeSinglePiece(record, bodyId) {
+    const body = bodyOf(bodyId);
+
+    if (!body) return;
+
+    state.world.removeBody(body);
+    detachBody(body);
+    record.pieceBodyIds.delete(bodyId);
+    state.removalsQueue.push(bodyId);
+
+    if (record.pieceBodyIds.size === 0) {
+      record.state = "removed";
+    }
+  }
+
+  function buildBodiesDataForSpawnPlan() {
+    const data = [];
+
+    for (const [body, meta] of state.kinds.entries()) {
+      const record = state.recordsById.get(meta.fruitId);
+      const falling = meta.kind === "fruit" && record.state === "falling";
+
+      data.push({
+        id: meta.id,
+        position: [body.position.x, body.position.y, body.position.z],
+        radius: clearanceRadiusOf(meta),
+        falling
+      });
+    }
+
+    return data;
+  }
+
+  function attachContactListener(record, body) {
+    function onCollide(event) {
+      if (record.stepContactCaptured) return;
+
+      record.stepContactCaptured = true;
+      record.contactSeq += 1;
+      record.pendingContact = {
+        impactSpeed: Math.abs(event.contact.getImpactVelocityAlongNormal()),
+        position: body.position.clone(),
+        quaternion: body.quaternion.clone(),
+        velocity: body.velocity.clone(),
+        angularVelocity: body.angularVelocity.clone(),
+        seq: record.contactSeq
       };
     }
 
-    fruitBody.addEventListener("collide", onFruitCollide);
-
-    // Lifecycle safety for invariant 8 (no stale callbacks): every drop/reset
-    // calls buildFreshState, which creates a brand-new world, fruit body and
-    // closures. `state` (the enclosing variable) is reassigned wholesale, so
-    // step()/drop()/bodies() always dereference the current generation only.
-    // On split and on reset we additionally detach the fruit's own listener
-    // (below / in reset) so a body that outlives its world cannot act.
-    const nextState = {
-      world,
-      ground,
-      fruitBody,
-      fruit: fruitData,
-      heightM: nextHeightM,
-      toughness: nextToughness,
-      seed: nextSeed,
-      rng,
-      kinds,
-      nextLocalIdRef: { current: nextLocalId },
-      phase: "ready",
-      steps: 0,
-      summary: null,
-      lastSplit: null,
-      // Step 1b §10: read-only impact signal for view.js (plays the splat
-      // sound once, on the frame this first becomes non-null). Set exactly
-      // once per drop, in step(), on the same frame the first ground
-      // contact is decided (held or broken); reset() sets it back to null.
-      firstImpact: null,
-      firstCollisionDecided: false,
-      // D1 fix: a step-exact snapshot of every dynamic body's position,
-      // taken on the exact step uiPhase first becomes "settled" (whichever
-      // comes first: UI settle at firstImpact.step + UI_SETTLE_STEPS_AFTER_IMPACT,
-      // or physics settle for a fast-sleeping held fruit). null before that
-      // step and after reset(). Debris kept moving after this step must not
-      // change it — see the guard in step() below.
-      uiSettleLayout: null,
-      getPendingImpact: () => pendingImpact,
-      clearPendingImpact: () => {
-        pendingImpact = null;
-      },
-      detachFruitListener: () => {
-        fruitBody.removeEventListener("collide", onFruitCollide);
-      }
-    };
-
-    return nextState;
+    body.addEventListener("collide", onCollide);
+    record.detachListener = () => body.removeEventListener("collide", onCollide);
   }
 
-  function splitFruit(snapshot, tier) {
-    const { world, fruitBody, fruit: fruitData, kinds, nextLocalIdRef, rng } = state;
+  function spawnFruitRecord({ fruitKey, heightM, seed, spawnY }) {
+    const fruitData = fruitByKey(fruitKey);
+    const rng = createRng(seed);
 
-    world.removeBody(fruitBody);
-    kinds.delete(fruitBody);
-    state.detachFruitListener();
+    const record = {
+      id: state.nextFruitId++,
+      pressIndex: state.nextPressIndex++,
+      fruitKey,
+      fruitData,
+      heightM,
+      spawnY,
+      seed,
+      rng,
+      state: "falling",
+      fruitBodyId: null,
+      pieceBodyIds: null,
+      firstContactStep: null,
+      firstImpact: null,
+      result: null,
+      announced: false,
+      contactSeq: 0,
+      processedContactSeq: 0,
+      stepContactCaptured: false,
+      pendingContact: null,
+      detachListener: null
+    };
 
-    const { position, quaternion, velocity, angularVelocity, impactSpeed } = snapshot;
+    state.records.push(record);
+    state.recordsById.set(record.id, record);
+
+    const body = new CANNON.Body({ mass: fruitData.mass, shape: new CANNON.Sphere(fruitData.radius) });
+
+    body.position.set(0, spawnY, 0);
+
+    // Step 1b §7: a small release wobble drawn first from the seeded PRNG,
+    // before any placement/jitter draws later. Vertical velocity is always
+    // 0 (free fall still applies).
+    const wobble = releaseWobble(rng);
+
+    body.quaternion.set(wobble.quaternion[0], wobble.quaternion[1], wobble.quaternion[2], wobble.quaternion[3]);
+    body.angularVelocity.set(wobble.angularVelocity[0], wobble.angularVelocity[1], wobble.angularVelocity[2]);
+    body.velocity.set(wobble.velocity[0], wobble.velocity[1], wobble.velocity[2]);
+    noDamping(body);
+    state.world.addBody(body);
+
+    const bodyId = state.nextBodyId++;
+
+    record.fruitBodyId = bodyId;
+    registerBody(body, { kind: "fruit", id: bodyId, fruitId: record.id, radius: fruitData.radius });
+    attachContactListener(record, body);
+
+    return record;
+  }
+
+  // Step 1b §11b (spawn ruling v3, decision 2): a drop always works,
+  // instantly, in any phase and at any step.
+  function drop(opts) {
+    const base = state.initialDropDefaults;
+    const chosen = opts
+      ? {
+          fruit: opts.fruit ?? base.fruit,
+          heightM: opts.heightM ?? base.heightM,
+          seed: opts.seed ?? base.seed
+        }
+      : { ...base };
+
+    const fruitData = fruitByKey(chosen.fruit);
+
+    state.everDropped = true;
+    state.settleLayout = null;
+    state.lastPressStep = state.steps;
+
+    // (a) plain bodies data for the pre-removal scene.
+    const bodiesData = buildBodiesDataForSpawnPlan();
+
+    // (b) spawn plan: raise above falling fruit in the way, remove landed
+    // bodies (whole fruit or individual pieces) overlapping the final spot.
+    const plan = spawnPlanFor({ fruit: fruitData, heightM: chosen.heightM, bodies: bodiesData });
+
+    for (const removeId of plan.removeIds) {
+      const body = bodyOf(removeId);
+
+      if (!body) continue; // already removed by an earlier id in this same plan
+
+      const meta = state.kinds.get(body);
+      const record = state.recordsById.get(meta.fruitId);
+
+      if (meta.kind === "fruit") {
+        removeFruitEntirely(record);
+      } else {
+        removeSinglePiece(record, removeId);
+      }
+    }
+
+    // (c) rolling window of 5: dropping a 6th removes the oldest entirely.
+    function nonRemovedOldestFirst() {
+      return state.records.filter((r) => r.state !== "removed").sort((a, b) => a.pressIndex - b.pressIndex);
+    }
+
+    let existing = nonRemovedOldestFirst();
+
+    while (existing.length >= FRUIT_WINDOW) {
+      removeFruitEntirely(existing[0]);
+      existing = nonRemovedOldestFirst();
+    }
+
+    // (d) spawn the new fruit at (0, plan.y, 0) with its own seeded wobble.
+    spawnFruitRecord({ fruitKey: chosen.fruit, heightM: chosen.heightM, seed: chosen.seed, spawnY: plan.y });
+  }
+
+  function splitRecord(record, snapshot, tier, impactSpeed) {
+    const { rng, fruitData } = record;
+    const body = bodyOf(record.fruitBodyId);
+
+    record.detachListener?.();
+    state.world.removeBody(body);
+    detachBody(body);
+    record.fruitBodyId = null;
+    record.pieceBodyIds = new Set();
+
+    const { position, quaternion, velocity, angularVelocity } = snapshot;
     const centre = [position.x, position.y, position.z];
     const preImpactVelocity = [velocity.x, velocity.y, velocity.z];
     const preImpactAngularVelocity = [angularVelocity.x, angularVelocity.y, angularVelocity.z];
-    const breakSpeedValue = state.breakSpeedValue;
+    const breakSpeedValue = breakSpeedFor(fruitData);
     const kFruit = kFruitFor(fruitData, resolvedTuning.burstK);
 
-    const counts = pieceCountsForTier(fruitData, tier);
+    // Step 1b §11b (spawn ruling v3, decision 2/4): body budget of 200,
+    // applied at break time — remove other fruit oldest-first, then trim
+    // this fruit's own seeds/inner/outer (never the breaking fruit's own
+    // fruit-id itself).
+    const existingCounts = state.records
+      .filter((r) => r.state !== "removed" && r.id !== record.id)
+      .sort((a, b) => a.pressIndex - b.pressIndex)
+      .map((r) => ({ id: r.id, bodyCount: countBodiesOf(r) }));
+
+    const rawCounts = pieceCountsForTier(fruitData, tier);
+    const { removeFruitIds, trimmedBreakingCounts } = budgetTrimPlan({
+      existingCounts,
+      breakingCounts: rawCounts,
+      limit: BODY_BUDGET
+    });
+
+    for (const id of removeFruitIds) {
+      removeFruitEntirely(state.recordsById.get(id));
+    }
+
+    const counts = trimmedBreakingCounts;
     const R = fruitData.radius;
     const outerHalfExtent = OUTER_HALF_EXTENT_FRACTION * R;
     const outerShellRadius = OUTER_SHELL_RADIUS_FRACTION * R;
@@ -291,7 +487,7 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
           OUTER_BOUNDING_RADIUS,
           new CANNON.Box(new CANNON.Vec3(outerHalfExtent, outerHalfExtent, outerHalfExtent)),
           outerMassEach,
-          { halfExtent: outerHalfExtent }
+          { boundingRadius: OUTER_BOUNDING_RADIUS, halfExtent: outerHalfExtent }
         );
       }
     }
@@ -337,13 +533,10 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
       return { ...descriptor, worldOffset, r, velocity: velocityVector, jitter };
     });
 
-    // Lift: pieces spawn packed inside the fruit's small volume, so some
-    // can start below the ground (their world y minus bounding radius is
-    // negative) even after non-overlap placement. Raise the whole group by
-    // the same amount so the lowest piece just clears the ground;
-    // velocities are unaffected. `tuning.lift = false` exists only for the
-    // dead-control test (removing lift is guarded by the spawn test, not
-    // the energy guard).
+    // Lift: pieces spawn packed inside the fruit's small volume, so some can
+    // start below the ground even after non-overlap placement. Raise the
+    // whole group by the same amount so the lowest piece just clears the
+    // ground; velocities are unaffected.
     let lift = 0;
 
     if (resolvedTuning.lift && computedPieces.length > 0) {
@@ -361,28 +554,42 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     const lastSplitPieces = [];
 
     for (const piece of computedPieces) {
-      const body = new CANNON.Body({ mass: piece.mass, shape: piece.shape });
+      const pieceBody = new CANNON.Body({ mass: piece.mass, shape: piece.shape });
 
-      body.position.set(
+      pieceBody.position.set(
         position.x + piece.worldOffset.x,
         position.y + piece.worldOffset.y + lift,
         position.z + piece.worldOffset.z
       );
-      body.velocity.set(piece.velocity[0], piece.velocity[1], piece.velocity[2]);
-      body.angularVelocity.set(
+      pieceBody.velocity.set(piece.velocity[0], piece.velocity[1], piece.velocity[2]);
+      pieceBody.angularVelocity.set(
         preImpactAngularVelocity[0],
         preImpactAngularVelocity[1],
         preImpactAngularVelocity[2]
       );
-      restoreFruitDamping(body);
+      restoreFruitDamping(pieceBody);
 
-      world.addBody(body);
+      state.world.addBody(pieceBody);
 
-      const id = nextLocalIdRef.current++;
+      const id = state.nextBodyId++;
 
-      kinds.set(body, { kind: piece.kind, id, ...piece.sizeField });
+      registerBody(pieceBody, { kind: piece.kind, id, fruitId: record.id, ...piece.sizeField });
+      record.pieceBodyIds.add(id);
+      state.freshPieceIdsThisStep.add(id);
       lastSplitPieces.push({ id, jitter: piece.jitter });
     }
+
+    record.state = "broken";
+    record.result = {
+      fruit: fruitData,
+      heightMeters: record.heightM,
+      impactSpeed,
+      tier,
+      severity: severityFor(impactSpeed, fruitData),
+      outerCount: counts.outer,
+      innerCount: counts.inner,
+      seedCount: counts.seeds
+    };
 
     state.lastSplit = {
       fruit: fruitData.key,
@@ -400,9 +607,83 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     };
   }
 
+  function processContacts() {
+    for (const record of state.records) {
+      if (record.state !== "falling" && record.state !== "landed") continue;
+
+      const pending = record.pendingContact;
+
+      if (!pending || pending.seq === record.processedContactSeq) continue;
+
+      record.processedContactSeq = pending.seq;
+
+      const impactSpeed = pending.impactSpeed;
+
+      if (record.firstContactStep === null) {
+        // First contact ever for this fruit (decision 5i): always one
+        // impact event, regardless of whether it breaks right away.
+        record.firstContactStep = state.steps;
+
+        const severity = severityFor(impactSpeed, record.fruitData);
+        const tier = tierForSeverity(severity);
+
+        record.firstImpact = { step: state.steps, impactSpeed, severity, tier, fruit: record.fruitKey };
+
+        state.impactsQueue.push({
+          fruitId: record.id,
+          fruit: record.fruitKey,
+          tier,
+          severity,
+          impactSpeed,
+          step: state.steps
+        });
+        state.lastImpactStep = state.steps;
+
+        if (shouldBreakFruit(impactSpeed, record.fruitData)) {
+          splitRecord(record, pending, tier, impactSpeed);
+        } else {
+          record.state = "landed";
+          restoreFruitDamping(bodyOf(record.fruitBodyId));
+
+          const counts = pieceCountsForTier(record.fruitData, tier);
+
+          record.result = {
+            fruit: record.fruitData,
+            heightMeters: record.heightM,
+            impactSpeed,
+            tier,
+            severity,
+            outerCount: counts.outer,
+            innerCount: counts.inner,
+            seedCount: counts.seeds
+          };
+        }
+      } else if (record.state === "landed") {
+        // A later contact on an already-held fruit (decision 5ii/4): one
+        // more impact event only if this contact now breaks it.
+        const severity = severityFor(impactSpeed, record.fruitData);
+        const tier = tierForSeverity(severity);
+
+        if (shouldBreakFruit(impactSpeed, record.fruitData)) {
+          state.impactsQueue.push({
+            fruitId: record.id,
+            fruit: record.fruitKey,
+            tier,
+            severity,
+            impactSpeed,
+            step: state.steps
+          });
+          state.lastImpactStep = state.steps;
+          splitRecord(record, pending, tier, impactSpeed);
+        }
+      }
+    }
+  }
+
   function clampPieceVelocities() {
     for (const [body, meta] of state.kinds.entries()) {
       if (meta.kind === "fruit") continue;
+      if (state.freshPieceIdsThisStep.has(meta.id)) continue;
 
       const linSpeed = body.velocity.length();
       if (linSpeed > MAX_PIECE_LINEAR_SPEED) {
@@ -424,9 +705,7 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     return true;
   }
 
-  // D1 fix: plain-data position snapshot, in bodies() order, for the
-  // uiSettleLayout getter.
-  function snapshotUiSettleLayout() {
+  function snapshotLayout() {
     const layout = [];
 
     for (const body of state.kinds.keys()) {
@@ -436,25 +715,54 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     return layout;
   }
 
-  // Step 1b §10 (CTO amendment): everything in the summary is known at the
-  // impact step (firstImpact), so this is called once, whichever happens
-  // first — the UI-settle step (impact + UI_SETTLE_STEPS_AFTER_IMPACT) or
-  // physics settle (finishSettling, e.g. a held fruit that sleeps fast).
-  // Both call sites guard on state.summary === null, so it is computed
-  // exactly once per drop and is deep-equal (the same data) whichever path
-  // sets it.
-  function computeSummaryFromImpact() {
-    const pending = state.getPendingImpact();
-    const severity = pending ? severityFor(pending.impactSpeed, state.fruit, state.toughness) : 0;
-    const tier = pending ? tierForSeverity(severity) : "held";
-    const counts = pieceCountsForTier(state.fruit, tier);
+  // Step 1b §11b (spawn ruling v3, decision 7): phases are for status and
+  // announcements only. `active` = anything falling, or an impact under
+  // UI_SETTLE_STEPS_AFTER_IMPACT steps ago. `settled` otherwise.
+  function computePhase() {
+    if (!state.everDropped) return "ready";
+
+    const anyFalling = state.records.some((r) => r.state === "falling");
+
+    if (anyFalling) return "active";
+
+    const recentImpact = state.lastImpactStep !== null && state.steps - state.lastImpactStep < UI_SETTLE_STEPS_AFTER_IMPACT;
+
+    if (!recentImpact) return "settled";
+
+    // Physics-idle (every body asleep) freezes the step counter (see
+    // isPhysicsIdle/step()) — if that happens before the 72-step window
+    // closes, no further step() call will ever advance steps to close the
+    // gap. Treat "already asleep" as settled too, mirroring the old
+    // phase/uiPhase "whichever comes first" behaviour for a fast-sleeping
+    // held fruit.
+    if (allDynamicBodiesAsleep()) return "settled";
+
+    return "active";
+  }
+
+  // Step 1b §11b (decision 8): step() advances the world unless the phase
+  // is "ready", or the scene is physics-idle (every dynamic body asleep, or
+  // steps − lastPressStep ≥ 480).
+  function isPhysicsIdle() {
+    const asleep = allDynamicBodiesAsleep();
+    const timedOut = state.steps - state.lastPressStep >= MAX_SETTLE_STEPS;
+
+    return asleep || timedOut;
+  }
+
+  function buildLegacySummary(record) {
+    const severity = record.result ? record.result.severity : 0;
+    const tier = record.result ? record.result.tier : "held";
+    const impactSpeed = record.result ? record.result.impactSpeed : 0;
+    const counts = record.result
+      ? { outer: record.result.outerCount, inner: record.result.innerCount, seeds: record.result.seedCount }
+      : { outer: 0, inner: 0, seeds: 0 };
 
     return {
-      fruit: state.fruit.key,
-      heightM: state.heightM,
-      toughness: state.toughness,
-      seed: state.seed,
-      impactSpeed: pending ? pending.impactSpeed : 0,
+      fruit: record.fruitKey,
+      heightM: record.heightM,
+      seed: record.seed,
+      impactSpeed,
       severity,
       tier,
       broke: tier !== "held",
@@ -462,9 +770,9 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
       innerCount: counts.inner,
       seedCount: counts.seeds,
       text: resultText({
-        fruit: state.fruit,
-        heightMeters: state.heightM,
-        impactSpeed: pending ? pending.impactSpeed : 0,
+        fruit: record.fruitData,
+        heightMeters: record.heightM,
+        impactSpeed,
         tier,
         outerCount: counts.outer,
         seedCount: counts.seeds
@@ -472,120 +780,92 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     };
   }
 
-  function finishSettling() {
-    if (state.summary === null) {
-      state.summary = computeSummaryFromImpact();
+  // Step 1b §11b (decision 11): `summary` stays a single-fruit-only alias
+  // of "today's summary object at settle", revealed at the same delayed
+  // moment as before (UI settle at firstContact+72, or earlier physics
+  // settle by sleep) — not the instant a result is known. Only meaningful
+  // (and only tested) while exactly one fruit has ever been dropped.
+  function updateLegacySummary() {
+    if (state.legacySummary !== null) return;
+    if (state.records.length !== 1) return;
+
+    const record = state.records[0];
+
+    if (record.result === null) return;
+
+    const uiSettleReached = state.steps >= record.firstContactStep + UI_SETTLE_STEPS_AFTER_IMPACT;
+    const physicsSettled = allDynamicBodiesAsleep();
+
+    if (uiSettleReached || physicsSettled) {
+      state.legacySummary = buildLegacySummary(record);
     }
-
-    state.phase = phaseAfter(state.phase, "settle");
-  }
-
-  function drop() {
-    if (state.phase !== "ready") return;
-
-    state.phase = phaseAfter(state.phase, "drop");
   }
 
   function step() {
-    if (state.phase !== "falling") return;
+    if (!state.everDropped) return;
+    if (isPhysicsIdle()) return;
 
-    const wasDecidedBeforeThisStep = state.firstCollisionDecided;
+    const prevPhase = computePhase();
+
+    for (const record of state.records) record.stepContactCaptured = false;
+    state.freshPieceIdsThisStep = new Set();
 
     state.world.step(FIXED_STEP);
     state.steps += 1;
 
-    const pending = state.getPendingImpact();
+    processContacts();
+    clampPieceVelocities();
 
-    if (pending && !state.firstCollisionDecided) {
-      state.firstCollisionDecided = true;
-      state.breakSpeedValue = breakSpeedFor(state.fruit, state.toughness);
+    const newPhase = computePhase();
 
-      const severity = severityFor(pending.impactSpeed, state.fruit, state.toughness);
-      const tier = tierForSeverity(severity);
+    if (prevPhase !== "settled" && newPhase === "settled") {
+      const eligible = state.records.filter(
+        (r) => !r.announced && (r.state === "landed" || r.state === "broken")
+      );
 
-      state.firstImpact = {
-        step: state.steps,
-        impactSpeed: pending.impactSpeed,
-        severity,
-        tier,
-        fruit: state.fruit.key
-      };
+      if (eligible.length > 0) {
+        const results = eligible.map((r) => ({
+          fruit: r.result.fruit,
+          heightMeters: r.result.heightMeters,
+          impactSpeed: r.result.impactSpeed,
+          tier: r.result.tier,
+          outerCount: r.result.outerCount,
+          seedCount: r.result.seedCount
+        }));
 
-      if (shouldBreakFruit(pending.impactSpeed, state.fruit, state.toughness)) {
-        splitFruit(pending, tier);
-      } else {
-        restoreFruitDamping(state.fruitBody);
+        state.pendingAnnouncementText = batchResultText(results);
+
+        for (const r of eligible) r.announced = true;
       }
+
+      state.settleLayout = snapshotLayout();
     }
 
-    // Pieces spawn lifted clear of the ground and non-overlapping, with
-    // velocity from the amended v_t - e*v_n + ω × r + burst formula, so this
-    // clamp is only a safety net against solver spikes the first few steps
-    // after a close-but-not-overlapping spawn can still produce. It never
-    // runs on the split step itself (`wasDecidedBeforeThisStep` is false
-    // there), so the spawn velocities T1 reads are exactly the formula,
-    // unclamped.
-    if (wasDecidedBeforeThisStep) {
-      clampPieceVelocities();
-    }
-
-    if (state.kinds.size > MAX_DYNAMIC_BODIES) {
-      throw new Error(`dynamic body count ${state.kinds.size} exceeded ${MAX_DYNAMIC_BODIES}`);
-    }
-
-    const settledBySleep = state.firstCollisionDecided && allDynamicBodiesAsleep();
-    const settledByTimeout = state.steps >= MAX_SETTLE_STEPS;
-
-    if (settledBySleep || settledByTimeout) {
-      finishSettling();
-    } else if (
-      state.summary === null &&
-      state.firstImpact !== null &&
-      state.steps >= state.firstImpact.step + UI_SETTLE_STEPS_AFTER_IMPACT
-    ) {
-      // Step 1b §10 (CTO amendment): the UI phase settles here, well before
-      // physics necessarily does (debris can keep moving for up to
-      // MAX_SETTLE_STEPS more steps). state.phase stays "falling" — only
-      // uiPhase (below) reflects this early settle.
-      state.summary = computeSummaryFromImpact();
-    }
-
-    // D1 fix: snapshot positions on the exact step uiPhase first becomes
-    // "settled" — whichever branch above fired this step (physics settle via
-    // finishSettling, or the UI-settle-only branch just above). Guarded by
-    // uiSettleLayout === null so it is captured exactly once per drop, and
-    // never drifts as debris keeps moving afterward.
-    if (
-      state.uiSettleLayout === null &&
-      (settledBySleep ||
-        settledByTimeout ||
-        (state.firstImpact !== null && state.steps >= state.firstImpact.step + UI_SETTLE_STEPS_AFTER_IMPACT))
-    ) {
-      state.uiSettleLayout = snapshotUiSettleLayout();
-    }
+    updateLegacySummary();
   }
 
   function reset(opts = {}) {
-    const nextSeed = opts.seed ?? state.seed;
-    const nextHeightM = opts.heightM ?? state.heightM;
-    const nextToughness = opts.toughness ?? state.toughness;
-    const nextFruitKey = opts.fruit ?? state.fruit.key;
+    const base = state.initialDropDefaults;
+    const nextSeed = opts.seed ?? base.seed;
+    const nextHeightM = opts.heightM ?? base.heightM;
+    const nextFruitKey = opts.fruit ?? base.fruit;
 
-    if (!state.firstCollisionDecided) {
-      state.detachFruitListener();
+    for (const record of state.records) {
+      record.detachListener?.();
     }
 
-    state = buildFreshState(nextSeed, nextHeightM, nextToughness, nextFruitKey);
+    state = buildFreshState(nextSeed, nextHeightM, nextFruitKey);
   }
 
   function bodies() {
     const result = [];
 
     for (const [body, meta] of state.kinds.entries()) {
-      const { kind, id, ...sizeFields } = meta;
+      const { kind, id, fruitId, ...sizeFields } = meta;
 
       result.push({
         id,
+        fruitId,
         kind,
         position: [body.position.x, body.position.y, body.position.z],
         quaternion: [body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w],
@@ -599,30 +879,66 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
     return result;
   }
 
-  state = buildFreshState(seed, heightM, toughness, fruit);
+  function fruits() {
+    return state.records
+      .filter((r) => r.state !== "removed")
+      .map((r) => ({
+        id: r.id,
+        fruit: r.fruitKey,
+        heightM: r.heightM,
+        spawnY: r.spawnY,
+        state: r.state,
+        pressIndex: r.pressIndex
+      }));
+  }
+
+  function consumeRemovals() {
+    const drained = state.removalsQueue;
+
+    state.removalsQueue = [];
+
+    return drained;
+  }
+
+  function consumeImpacts() {
+    const drained = state.impactsQueue;
+
+    state.impactsQueue = [];
+
+    return drained;
+  }
+
+  function consumeAnnouncement() {
+    const text = state.pendingAnnouncementText;
+
+    state.pendingAnnouncementText = null;
+
+    return text;
+  }
+
+  state = buildFreshState(seed, heightM, fruit);
 
   return {
     drop,
     step,
     reset,
     bodies,
-    get phase() {
-      return state.phase;
+    fruits,
+    consumeRemovals,
+    consumeImpacts,
+    consumeAnnouncement,
+    get fruitCount() {
+      return state.records.filter((r) => r.state !== "removed").length;
     },
-    // Step 1b §10 (CTO amendment): the UI's own phase, decoupled from
-    // physics settle (see UI_SETTLE_STEPS_AFTER_IMPACT in rules.js).
+    get phase() {
+      return computePhase();
+    },
+    // Step 1b §11b (decision 11): uiPhase is now identical to phase.
     get uiPhase() {
-      if (state.phase === "ready") return "ready";
-      if (state.phase === "settled") return "settled";
-
-      if (state.firstImpact !== null && state.steps >= state.firstImpact.step + UI_SETTLE_STEPS_AFTER_IMPACT) {
-        return "settled";
-      }
-
-      return "falling";
+      return computePhase();
     },
     get summary() {
-      return state.summary;
+      return state.legacySummary;
     },
     get steps() {
       return state.steps;
@@ -631,13 +947,18 @@ export function createSim({ seed, heightM, toughness = DEFAULT_TOUGHNESS, fruit 
       return state.lastSplit;
     },
     get firstImpact() {
-      return state.firstImpact;
+      return state.records.length ? state.records[0].firstImpact : null;
     },
-    // D1 fix: read-only, step-exact position snapshot (plain [x, y, z]
-    // arrays, in bodies() order) taken on the step uiPhase first becomes
-    // "settled". null before that step and after reset().
+    get settleLayout() {
+      return state.settleLayout;
+    },
+    // Step 1b §11b (decision 11): uiSettleLayout is now identical to
+    // settleLayout.
     get uiSettleLayout() {
-      return state.uiSettleLayout;
+      return state.settleLayout;
+    },
+    get tuning() {
+      return resolvedTuning;
     }
   };
 }

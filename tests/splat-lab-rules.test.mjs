@@ -12,10 +12,10 @@ import {
   HEIGHT_SLIDER_MAX,
   HEIGHT_SLIDER_MIN,
   LANDMARKS,
-  MAX_TOUGHNESS,
-  MIN_TOUGHNESS,
+  batchResultText,
   bounceVelocity,
   breakSpeedFor,
+  budgetTrimPlan,
   burstDirection,
   burstSpeed,
   burstVelocity,
@@ -42,31 +42,14 @@ import {
   shellPiece,
   shouldBreakFruit,
   sliderFromHeight,
+  spawnPlanFor,
   splatSoundFor,
-  tierForSeverity,
-  toughnessMultiplier
+  tierForSeverity
 } from "../projects/splat-lab/rules.js";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
-// --- toughness multiplier m(t) ---------------------------------------------
-
-test("toughnessMultiplier: exact pins at t=1, t=5, t=10", () => {
-  assert.ok(Math.abs(toughnessMultiplier(1) - 0.4) < 1e-9);
-  assert.ok(Math.abs(toughnessMultiplier(5) - 1) < 1e-9);
-  assert.ok(Math.abs(toughnessMultiplier(10) - 4) < 1e-9);
-});
-
-test("toughnessMultiplier: strictly increasing over 1-10, continuous at t=5", () => {
-  for (let t = MIN_TOUGHNESS; t < MAX_TOUGHNESS; t += 1) {
-    assert.ok(
-      toughnessMultiplier(t + 1) > toughnessMultiplier(t),
-      `m(${t + 1}) should exceed m(${t})`
-    );
-  }
-});
-
-test("margin rule: at t=5, no landmark's sqrt(2gh) is within 10% of any fruit's break speed", () => {
+test("margin rule: no landmark's sqrt(2gh) is within 10% of any fruit's real break speed", () => {
   const presetSpeeds = LANDMARKS.map((landmark) => ({
     name: landmark.name,
     speed: expectedImpactSpeed(landmark.meters)
@@ -74,7 +57,7 @@ test("margin rule: at t=5, no landmark's sqrt(2gh) is within 10% of any fruit's 
 
   for (const key of FRUIT_KEYS) {
     const fruit = fruitByKey(key);
-    const bs = breakSpeedFor(fruit, 5);
+    const bs = breakSpeedFor(fruit);
 
     for (const preset of presetSpeeds) {
       const relToBreakSpeed = Math.abs(preset.speed - bs) / bs;
@@ -100,19 +83,19 @@ test("severity tier boundaries are exactly at 1.0, 1.6 and 3.0", () => {
   assert.equal(tierForSeverity(10), "smashed");
 });
 
-test("severityFor divides impact speed by the fruit's break speed at that toughness", () => {
+test("severityFor divides impact speed by the fruit's real break speed", () => {
   const fruit = fruitByKey("watermelon");
-  const bs = breakSpeedFor(fruit, 5);
+  const bs = breakSpeedFor(fruit);
 
-  assert.ok(Math.abs(severityFor(bs * 2, fruit, 5) - 2) < 1e-9);
+  assert.ok(Math.abs(severityFor(bs * 2, fruit) - 2) < 1e-9);
 });
 
 test("shouldBreakFruit matches the tier boundary at severity 1", () => {
   const fruit = fruitByKey("apple");
-  const bs = breakSpeedFor(fruit, 5);
+  const bs = breakSpeedFor(fruit);
 
-  assert.equal(shouldBreakFruit(bs, fruit, 5), true);
-  assert.equal(shouldBreakFruit(bs - 0.001, fruit, 5), false);
+  assert.equal(shouldBreakFruit(bs, fruit), true);
+  assert.equal(shouldBreakFruit(bs - 0.001, fruit), false);
 });
 
 // --- piece counts per tier and fruit -----------------------------------------
@@ -832,30 +815,23 @@ test("layoutHash: order-sensitive (different piece order gives a different hash)
   assert.notEqual(layoutHash(a), layoutHash(b));
 });
 
-// --- step 1b §10: no Reset button — controls follow phase ---------------------
+// --- step 1b §11b (spawn ruling v3): Drop always works — controls never disable ---
+// Replaces "controlsEnabledForPhase: fruit/height/Drop enabled in ready and
+// settled, disabled only while falling; sound toggle always enabled".
 
-test("controlsEnabledForPhase: fruit/height/toughness/Drop enabled in ready and settled, disabled only while falling; sound toggle always enabled", () => {
-  for (const phase of ["ready", "settled"]) {
+test("controlsEnabledForPhase: fruit/height/Drop/sound enabled in every phase (ready/active/settled); only skipButton is phase-gated, to active", () => {
+  for (const phase of ["ready", "active", "settled"]) {
     const enabled = controlsEnabledForPhase(phase);
 
     assert.equal(enabled.fruitRadios, true, phase);
     assert.equal(enabled.heightSlider, true, phase);
-    assert.equal(enabled.toughnessSlider, true, phase);
     assert.equal(enabled.dropButton, true, phase);
-    assert.equal(enabled.skipButton, false, phase);
     assert.equal(enabled.soundToggle, true, phase);
+    assert.equal(enabled.skipButton, phase === "active", phase);
   }
 
-  const falling = controlsEnabledForPhase("falling");
-
-  assert.equal(falling.fruitRadios, false);
-  assert.equal(falling.heightSlider, false);
-  assert.equal(falling.toughnessSlider, false);
-  assert.equal(falling.dropButton, false);
-  assert.equal(falling.skipButton, true);
-  assert.equal(falling.soundToggle, true);
-
   assert.equal(controlsEnabledForPhase("ready").resetButton, undefined, "resetButton must not exist");
+  assert.equal(controlsEnabledForPhase("ready").toughnessSlider, undefined, "toughnessSlider must not exist");
 });
 
 // --- step 1b §10: splatSoundFor -------------------------------------------------
@@ -867,7 +843,7 @@ test("splatSoundFor: every gain is within [0, 0.6], durations and frequencies st
     const fruit = fruitByKey(key);
 
     for (const severity of severities) {
-      const impactSpeed = severity * breakSpeedFor(fruit, 5);
+      const impactSpeed = severity * breakSpeedFor(fruit);
       const sound = splatSoundFor({ fruit: key, severity, impactSpeed });
 
       for (const gainField of ["noiseGain", "thudGain", "crackGain"]) {
@@ -893,7 +869,7 @@ test("splatSoundFor: every gain is within [0, 0.6], durations and frequencies st
 test("splatSoundFor: held (severity < 1) is a thud only — zero noise gain and zero crack, for every fruit", () => {
   for (const key of FRUIT_KEYS) {
     const fruit = fruitByKey(key);
-    const sound = splatSoundFor({ fruit: key, severity: 0.7, impactSpeed: 0.7 * breakSpeedFor(fruit, 5) });
+    const sound = splatSoundFor({ fruit: key, severity: 0.7, impactSpeed: 0.7 * breakSpeedFor(fruit) });
 
     assert.equal(sound.noiseGain, 0, key);
     assert.equal(sound.crackGain, 0, key);
@@ -905,8 +881,8 @@ test("splatSoundFor: coconut has crackGain > 0, tomato has crackGain === 0", () 
   const coconut = fruitByKey("coconut");
   const tomato = fruitByKey("tomato");
 
-  const coconutSound = splatSoundFor({ fruit: "coconut", severity: 2, impactSpeed: 2 * breakSpeedFor(coconut, 5) });
-  const tomatoSound = splatSoundFor({ fruit: "tomato", severity: 2, impactSpeed: 2 * breakSpeedFor(tomato, 5) });
+  const coconutSound = splatSoundFor({ fruit: "coconut", severity: 2, impactSpeed: 2 * breakSpeedFor(coconut) });
+  const tomatoSound = splatSoundFor({ fruit: "tomato", severity: 2, impactSpeed: 2 * breakSpeedFor(tomato) });
 
   assert.ok(coconutSound.crackGain > 0);
   assert.equal(tomatoSound.crackGain, 0);
@@ -921,7 +897,7 @@ test("splatSoundFor: noiseDuration and noiseGain never decrease as severity rise
     let previousDuration = -Infinity;
 
     for (const severity of tierSeverities) {
-      const impactSpeed = severity * breakSpeedFor(fruit, 5);
+      const impactSpeed = severity * breakSpeedFor(fruit);
       const sound = splatSoundFor({ fruit: key, severity, impactSpeed });
 
       assert.ok(sound.noiseGain >= previousGain, `${key} at severity ${severity}: noiseGain decreased`);
@@ -964,9 +940,176 @@ test("devDependency versions match the CDN URL versions declared in project.json
 test("instructions never mention a Reset button, which §10 removed", async () => {
   const { instructionsForPhase } = await import("../projects/splat-lab/rules.js");
 
-  for (const phase of ["ready", "falling", "settled"]) {
+  for (const phase of ["ready", "active", "settled"]) {
     assert.doesNotMatch(instructionsForPhase(phase), /reset/i, `${phase} instructions mention Reset`);
   }
   assert.match(instructionsForPhase("settled"), /Drop/);
+});
+
+// --- step 1b §11b (spawn ruling v3): spawnPlanFor --------------------------------
+
+test("spawnPlanFor: empty scene spawns at the chosen height with no removals", () => {
+  const fruit = fruitByKey("watermelon");
+  const plan = spawnPlanFor({ fruit, heightM: 10, bodies: [] });
+
+  assert.equal(plan.y, 10 + fruit.radius);
+  assert.deepEqual(plan.removeIds, []);
+});
+
+test("spawnPlanFor: raises above a falling fruit directly below the spawn point", () => {
+  const fruit = fruitByKey("watermelon");
+  const other = {
+    id: 1,
+    fruitId: 1,
+    kind: "fruit",
+    position: [0, 10 + fruit.radius, 0],
+    radius: fruit.radius,
+    falling: true
+  };
+  const plan = spawnPlanFor({ fruit, heightM: 10, bodies: [other] });
+
+  assert.ok(plan.y > 10 + fruit.radius, "spawn should be raised above the base height");
+  assert.equal(plan.y, other.position[1] + other.radius + fruit.radius + 0.02);
+  assert.deepEqual(plan.removeIds, [], "falling fruit are never removed, only avoided");
+
+  // The new spawn must actually clear the falling fruit.
+  const dist = Math.abs(plan.y - other.position[1]);
+  assert.ok(dist >= fruit.radius + other.radius + 0.02 - 1e-9);
+});
+
+test("spawnPlanFor: removes landed blockers overlapping the spawn instead of raising", () => {
+  const fruit = fruitByKey("watermelon");
+  const blocker = {
+    id: 2,
+    fruitId: 2,
+    kind: "fruit",
+    position: [0, fruit.radius, 0],
+    radius: fruit.radius,
+    falling: false
+  };
+  const plan = spawnPlanFor({ fruit, heightM: 0.3, bodies: [blocker] });
+
+  assert.equal(plan.y, 0.3 + fruit.radius, "landed blockers are removed, not raised over");
+  assert.deepEqual(plan.removeIds, [2]);
+});
+
+test("spawnPlanFor: a landed piece far to the side is left alone (no overlap, no removal)", () => {
+  const fruit = fruitByKey("watermelon");
+  const farAway = {
+    id: 3,
+    fruitId: 3,
+    kind: "outer",
+    position: [5, 0.05, 0],
+    radius: 0.05,
+    falling: false
+  };
+  const plan = spawnPlanFor({ fruit, heightM: 10, bodies: [farAway] });
+
+  assert.equal(plan.y, 10 + fruit.radius);
+  assert.deepEqual(plan.removeIds, []);
+});
+
+// --- step 1b §11b (spawn ruling v3): batchResultText -----------------------------
+
+test("batchResultText: one fruit keeps today's resultText wording", () => {
+  const fruit = fruitByKey("watermelon");
+  const text = batchResultText([
+    { fruit, heightMeters: 10, impactSpeed: 14, tier: "smashed", outerCount: 12, seedCount: 40 }
+  ]);
+
+  assert.equal(
+    text,
+    resultText({ fruit, heightMeters: 10, impactSpeed: 14, tier: "smashed", outerCount: 12, seedCount: 40 })
+  );
+});
+
+test("batchResultText: three fruit, mixed tiers, matches the spec's example wording", () => {
+  const watermelon = fruitByKey("watermelon");
+  const tomato = fruitByKey("tomato");
+  const coconut = fruitByKey("coconut");
+
+  const text = batchResultText([
+    { fruit: watermelon, heightMeters: 10, impactSpeed: 14, tier: "smashed", outerCount: 12, seedCount: 40 },
+    { fruit: tomato, heightMeters: 1, impactSpeed: 4, tier: "cracked", outerCount: 2, seedCount: 0 },
+    { fruit: coconut, heightMeters: 0.3, impactSpeed: 2, tier: "held", outerCount: 0, seedCount: 0 }
+  ]);
+
+  assert.equal(
+    text,
+    "Dropped 3 fruit. The watermelon smashed into 12 pieces and 40 seeds flew out. " +
+      "The tomato cracked into 2 pieces. The coconut held."
+  );
+});
+
+test("batchResultText: five fruit produces five clauses after the lead sentence", () => {
+  const fruit = fruitByKey("apple");
+  const results = Array.from({ length: 5 }, () => ({
+    fruit,
+    heightMeters: 1,
+    impactSpeed: 3,
+    tier: "cracked",
+    outerCount: 2,
+    seedCount: 0
+  }));
+
+  const text = batchResultText(results);
+
+  assert.match(text, /^Dropped 5 fruit\. /);
+  assert.equal((text.match(/The apple cracked into 2 pieces\./g) || []).length, 5);
+});
+
+// --- step 1b §11b (spawn ruling v3): budgetTrimPlan ------------------------------
+
+test("budgetTrimPlan: under budget removes nothing and trims nothing", () => {
+  const plan = budgetTrimPlan({
+    existingCounts: [{ id: 1, bodyCount: 10 }],
+    breakingCounts: { outer: 12, inner: 20, seeds: 40 }
+  });
+
+  assert.deepEqual(plan.removeFruitIds, []);
+  assert.deepEqual(plan.trimmedBreakingCounts, { outer: 12, inner: 20, seeds: 40 });
+});
+
+test("budgetTrimPlan: removes the oldest fruit first, never the breaking fruit", () => {
+  const plan = budgetTrimPlan({
+    existingCounts: [
+      { id: 1, bodyCount: 100 },
+      { id: 2, bodyCount: 100 }
+    ],
+    breakingCounts: { outer: 12, inner: 20, seeds: 40 }
+  });
+
+  // total = 100 + 100 + 72 = 272; removing id 1 (oldest) brings it to 172.
+  assert.deepEqual(plan.removeFruitIds, [1]);
+  assert.deepEqual(plan.trimmedBreakingCounts, { outer: 12, inner: 20, seeds: 40 });
+});
+
+test("budgetTrimPlan: trims the breaking fruit's seeds, then inner, keeping at least 2 outer, only after every other fruit is gone", () => {
+  const plan = budgetTrimPlan({
+    existingCounts: [{ id: 1, bodyCount: 5 }],
+    breakingCounts: { outer: 12, inner: 20, seeds: 190 }
+  });
+
+  // total = 5 + 12 + 20 + 190 = 227; removing id 1 -> 222; still over 200,
+  // so seeds get trimmed by 22 (190 -> 168), landing exactly at 200.
+  assert.deepEqual(plan.removeFruitIds, [1]);
+  assert.equal(plan.trimmedBreakingCounts.outer, 12);
+  assert.equal(plan.trimmedBreakingCounts.inner, 20);
+  assert.equal(plan.trimmedBreakingCounts.seeds, 168);
+
+  const total =
+    plan.trimmedBreakingCounts.outer + plan.trimmedBreakingCounts.inner + plan.trimmedBreakingCounts.seeds;
+  assert.ok(total <= 200);
+});
+
+test("budgetTrimPlan: never trims outer below 2, even under extreme pressure", () => {
+  const plan = budgetTrimPlan({
+    existingCounts: [],
+    breakingCounts: { outer: 12, inner: 0, seeds: 0 },
+    limit: 1
+  });
+
+  assert.deepEqual(plan.removeFruitIds, [], "no other fruit exists to remove");
+  assert.equal(plan.trimmedBreakingCounts.outer, 2, "outer floors at 2 rather than trimming to the limit of 1");
 });
 

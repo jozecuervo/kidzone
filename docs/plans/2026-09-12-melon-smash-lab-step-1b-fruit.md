@@ -409,6 +409,294 @@ controls were locked 8 s. The UI no longer waits for physics:
 arrow and the fruit-coloured dot. The height bar is the only height readout. Update the
 incoming tests to match. Ground-texture seams: leave as is.
 
+## 11. Remove toughness; rapid Drop puts up to 5 fruit in the air (Jose, 2026-09-14)
+
+> "Remove it [the toughness slider]. And make it so I fast click the drop button to
+> deploy multiple fruit at once, up to 5."
+
+### 11a. Toughness removed
+
+- **Controls:** remove the slider, its label, its tests and `m(t)`. Every fruit uses its
+  real break speed (the old t = 5). `breakSpeedFor(fruit)` takes no toughness argument.
+- **Guarantees:** the §2 guarantees stand unchanged, since they were already written at
+  t = 5. Tests that used t = 1 (containment, energy guard, burst ordering) move to real
+  toughness.
+  - **Burst ordering:** needs three breaking cases with strictly ordered excess. Use
+    watermelon at Plane, Crane and Roof.
+  - **Containment and energy:** re-measured at Plane with real toughness, keeping
+    e = 0.3 and K = 0.01. The worst case is milder than t = 1, so no re-tune is expected.
+    **Stop** if the energy guard falls below 2.2× on any seed.
+- **Copy:** result text, instructions, README, `project.json` summary and the PR
+  description drop every mention of toughness.
+
+### 11b. A batch of up to 5 fruit
+
+**Model.**
+- **Batch:** every fruit in the scene since the last clear. At most 5.
+- **Each Drop press adds one fruit** with the current fruit, current height and a fresh
+  seed. Each fruit has its own impact, break check, tier, pieces and splat.
+- **Spawn spread:** each fruit spawns at a seeded horizontal offset. The first is at the
+  centre; later ones are placed within 35% of the view half-width, at least 2.5 fruit
+  diameters from every other fruit in the batch, with seeded retries. Impacts stay
+  visible and fruit don't stack in the air.
+- **Spawn ruling v3, the current one (Jose, 2026-09-14: "That's silly. Spheres won't
+  'stack' in nature. They roll off each other right away. Just delete the oldest fruit
+  (or its pieces) as the newest fruit is dropped. Make it work. Make it fun!").** It
+  **replaces v2's queue, stacking, backstop, 5-fruit block, `aria-disabled` note and
+  batch clear.** v2's every-contact break check and the same-drop-zone rule stay.
+  - **Drop always works, instantly.** No queue, no waiting, no disabled state, no max
+    note. Fruit and height are enabled in every phase and never clear anything.
+  - **Rolling window of 5.** The scene holds at most 5 fruit. Dropping a 6th removes the
+    **oldest** fruit entirely: its unbroken body, or every piece it broke into, plus its
+    markers and pending bookkeeping. A fruit removed before it lands produces no splat
+    and no result.
+  - **Body budget of 200.** If a break would push the total over 200, remove the oldest
+    fruit, repeating as needed but never the breaking fruit itself. Only then trim that
+    fruit's seeds and inner chunks, keeping at least 2 outer pieces.
+  - **Spawn never overlaps.** The new fruit's spawn is the centre at its chosen height.
+    - **Falling fruit in the way** (rapid clicks): raise the spawn to just above the
+      highest overlapping falling fruit, at `y + Rother + Rnew + 0.02`. Falling fruit
+      accelerate equally, so the stream keeps its gaps.
+    - **Landed bodies in the way** (a low drop onto a pile): remove those bodies first,
+      whole fruit if unbroken, individual pieces if broken.
+    - A pure `spawnPlanFor(...)` in `rules.js` returns `{ y, removeIds }`.
+  - **Removal looks like a pop:** a 150 ms shrink to zero, cosmetic only, since the
+    physics bodies are removed at once. With reduced motion it is instant.
+  - **Phases** are for status and announcements only:
+    - `ready`: empty scene.
+    - `active`: anything falling, or an impact under 72 steps ago.
+    - `settled`: quiet, meaning nothing falling and 72 steps since the last impact.
+  - **Result text:** on entering `settled`, announce the fruit that landed since the last
+    announcement, once, using `batchResultText`. The same single-fruit wording applies
+    for one fruit. Removed fruit are never mentioned.
+  - **Sound:** one splat per impact, through the master gain and compressor.
+  - **Camera and markers:** `Rmax` framing covers the fruit currently in the scene, with
+    the same instant snap. Incoming and bar markers are shown per falling fruit.
+  - **Determinism:** the same sequence of `(step, fruit, heightM, seed)` gives identical
+    results.
+  - **Tests** (replacing v2's):
+    - **Rolling window:** 6 scripted drops. After the 6th spawns, the oldest fruit's
+      body IDs are all gone, the fruit count is 5, and it never appears in any result.
+    - **Removed before landing:** a fruit removed mid-air produces no splat start and no
+      result.
+    - **Rapid clicks:** 5 presses in 5 consecutive steps give no body overlap at any
+      spawn, strictly increasing spawn heights, and an impact for each.
+    - **Low drop onto a pile:** a watermelon at Knee over a resting watermelon. The
+      overlapping landed bodies are removed, the new fruit spawns at 0.3 m + R, lands,
+      and gets a result.
+    - **Held then smashed:** carried over from v2. A Knee watermelon later struck by a
+      Plane coconut ends in a broken tier.
+    - **Fuzz:** seeds 1-20, each a script of 40 random presses (random fruit, full
+      height range, random gaps of 0-30 steps). At every step there are at most 5 fruit,
+      at most 200 bodies, finite values, and no overlap at spawn. It reaches `settled`
+      within 600 steps of the last press. Determinism holds over two runs.
+    - **Playwright:**
+      - 8 rapid clicks give `data-fruit-count` 5, and Drop is never disabled.
+      - The live region is written once per quiet period.
+      - No page errors.
+      - Space ×8 on Drop gives the same result.
+      - Touch: 6 quick taps.
+  - **Mutations:**
+    - Skip removal of the oldest fruit: the rolling-window test must fail.
+    - Skip spawn raising: the rapid-click overlap test must fail.
+    - Skip removal of landed blockers: the low-drop test must fail.
+    - Check first contact only: the held-then-smashed test must fail.
+  - **Stop:** frame-cost p95 above 16 ms at 4x throttle on 5 watermelons clicked rapidly
+    from Plane. Keep the naive broadphase; SAP needs a CTO ruling.
+- ~~**Spawn ruling v2 (Jose, 2026-09-14: "That's no fun. I want to aim all the fruit at
+  the same drop zone.")** This **replaces both** the spread rule and the fixed-slot ruling
+  below, which is kept struck for history. Every fruit drops at the same point, and
+  pile-ups are the point.
+  - **Same spot:** every fruit spawns at the centre of the drop zone. §7's release
+    wobble goes back to its original absolute values, with no size scaling.
+  - **Spawn queue.** A Drop press never spawns a body overlapping another body. If
+    anything is within `Rnew + Rother + 0.02 m` of the spawn point, the new fruit waits
+    in a queue and releases on the first step the space is clear.
+    - The queue counts toward the 5-fruit limit, and releases in press order.
+    - Waiting is counted in steps, so it is deterministic and a hidden tab pauses it.
+    - Five fast clicks therefore release as a quick stream, about 0.25 s apart for
+      watermelons.
+    - Clearing empties the queue.
+  - **No soft-lock (CTO, from the xo's finding).** With the plain queue, a fruit resting
+    at the centre blocks every drop below `2·Rrest + 0.02` (0.32 m for a watermelon), and
+    the batch never settles. The fix is option A plus a hard backstop:
+    - **Stack over a resting blocker.** If a queued fruit is still blocked after 30 steps
+      and every blocking body is asleep or slower than 0.1 m/s, release it at the centre
+      directly above the highest blocker, at `blocker.y + Rblocker + Rnew + 0.02`. The
+      result text and the height bar use that actual release height above the ground.
+    - **Backstop.** A queued fruit still unreleased after 240 steps (4 s) is dropped from
+      the queue, with the visible note "No room to drop — try again when it lands". The
+      batch can then settle.
+    - **Invariant:** every batch reaches `settled` within a bounded number of steps.
+    - **Tests:**
+      - Two watermelons at Knee: the second releases stacked and lands on the first.
+      - The backstop fires when a scripted blocker is kept moving, and the batch then
+        settles.
+      - Seeds 1-20 of random scripted batches (random fruit, heights across the full
+        range including Knee, random press steps) all reach `settled` within 1500 steps.
+    - **Mutations:**
+      - Remove the stacking: the Knee test must fail.
+      - Remove the backstop: the moving-blocker test must fail.
+  - **Fruit hitting fruit.** An unbroken fruit gets a break check on **every** contact,
+    not only its first, using the relative normal speed of that contact against its own
+    break speed. A fruit that held on the ground can therefore be smashed by the next
+    fruit landing on it, and the falling fruit gets its own check too. The result text
+    reports each fruit's final outcome and the speed of the contact that broke it; a
+    fruit that never broke reports its first ground impact.
+  - **Camera:** the `Rmax` batch framing stays: selected fruit in `ready`, a one-time
+    instant snap out when a larger fruit joins.
+  - **Tests** (replacing the crowding test):
+    - **Spawn overlap:** five watermelon presses in the same step give no body overlap
+      at any spawn step, five releases in press order, and every release step strictly
+      after the previous one. The same holds for a mixed batch.
+    - **Held then smashed:** a scripted watermelon that holds from Knee is then struck
+      by a coconut from Plane. The watermelon's result changes from held to a broken
+      tier, and it appears in the batch result.
+    - **Pile-up physics:** five watermelons from Plane released as a stream. Checks the
+      200-body budget, finite values, the ground clauses and determinism.
+    - **Playwright:** five rapid clicks give `data-fruit-count` 5 and five splat starts.
+      The `data-queued` attribute rises and then drains to 0.
+  - **Mutations:**
+    - Remove the spawn queue: the overlap test must fail.
+    - Check breaks on first contact only: the held-then-smashed test must fail.
+- ~~**Spawn ruling (CTO, 2026-09-14; replaces the spread rule above).**~~ *Superseded
+  by v2.* The xo showed that
+  "within 35% of the half-width" and "2.5 diameters apart" can't both hold at the §8
+  framing, where the half-width is 4R. The replacement is option A, made deterministic:
+  - **Fixed slots.** Fruit 1 drops at the centre. Fruits 2-5 take four fixed slots at
+    90° intervals on a ring of radius `3·Rmax`, where `Rmax` is the largest radius in the
+    batch at the moment of that drop. The ring gets one seeded rotation per batch, and
+    slots are never reused.
+  - **Spacing is guaranteed, with no retries.** For any two fruit i and j, the centre
+    distance is at least `1.5·(Ri + Rj)`, and this holds even when a larger fruit joins
+    later.
+  - **Framing follows the batch.** In `ready` it frames the selected fruit. During a batch
+    it frames `Rmax`, snapping out once, instantly, when a larger fruit is added. The
+    camera never animates.
+  - **Wobble scaled to size (amends §7).** Horizontal release speed is at most
+    `0.02 · R / 0.15` m/s, so drift at Plane is at most about 0.47R. The gap left at spawn
+    is `0.5·(Ri + Rj)`, which is more than both fruit's worst-case drift combined, so they
+    cannot touch before landing. Tilt and spin are unchanged.
+  - **Crowding test** (replaces the stop condition): for each fruit type, and for a mixed
+    batch of tomato, watermelon, coconut, apple and orange, drop 5 fruit at Plane in the
+    same step over seeds 1-20. No fruit-to-fruit contact happens before both fruit have
+    touched the ground, and every impact point is inside the batch framing.
+- **Break check:** the first contact with anything (ground, another fruit, debris).
+  Impact speed is the relative normal speed at that contact. A fruit landing on debris
+  can still break.
+- **Body budget:** 200 dynamic bodies across the batch. At each break, trim the new
+  pieces to fit, seeds first, then inner chunks, keeping at least 2 outer pieces. The
+  result counts report what was actually spawned.
+
+**Phases and controls.**
+- **`ready`:** the scene is empty.
+- **`active`:** at least one fruit is falling, or the last impact was under 72 steps ago.
+  This replaces `falling`.
+- **`settled`:** no fruit is falling and 72 steps have passed since the last impact.
+- **Drop:**
+  - in `ready` or `active` it adds a fruit, while the batch has fewer than 5;
+  - in `settled` it clears the scene and starts a new batch with this fruit, as one
+    action;
+  - at 5 fruits it sets `aria-disabled="true"`, not the `disabled` attribute, so
+    keyboard focus stays on it. Presses are ignored, and a visible note reads "5 fruit
+    in the air — wait for them to land". It becomes available again in `settled`.
+- **Fruit and height:** enabled in every phase.
+  - During `ready` or `active`, a change applies to the next fruit dropped and clears
+    nothing, so batches can mix fruit and heights.
+  - During `settled`, a change clears the scene to `ready`, as in §10.
+- **Rapid presses:** `touch-action: manipulation` on Drop, so fast taps don't zoom or lag.
+  Each `click` counts, and so does each Enter or Space press, but not key auto-repeat
+  (`event.repeat` is ignored).
+
+**Output.**
+- **Result text:** written once, at batch `settled`, into the live region. For one fruit
+  the wording is unchanged. For a batch, one sentence per fruit, in drop order, for
+  example "Dropped 3 fruit. The watermelon smashed into 12 pieces and 40 seeds flew out.
+  The tomato cracked into 2 pieces. The coconut held."
+  - A pure `batchResultText(results)` in `rules.js` builds it.
+  - Nothing is announced per impact, so the live region isn't spammed.
+- **Sound:** one splat per impact. All splats pass through a shared master `GainNode`
+  plus a `DynamicsCompressorNode`, so 5 overlapping splats don't clip. The toggle and
+  the no-context-before-first-Drop rules stand.
+- **Incoming markers:** one per fruit that is still above the frame, at its horizontal
+  offset, in its fruit colour.
+- **Height bar:** one fruit-coloured marker per falling fruit. The bar's top is the
+  largest height in the batch, or the slider height in `ready`.
+
+**Determinism.**
+- **Sim API:** `sim.drop({ fruit, heightM, seed })` can be called at any step. Given the
+  same sequence of `(step, fruit, heightM, seed)`, results and positions are identical.
+- **Layout hash:** taken at batch UI-settle from the sim snapshot.
+- **Pinned seeds:** with `?seed=<n>`, the k-th drop of a batch uses seed `n + k`.
+
+**Lifecycle.** One owner for every fruit's bodies, pieces, sounds and markers. Clearing
+disposes all of them and invalidates pending impact or settle bookkeeping. No stale
+splat or result text can arrive after a clear.
+
+### Tests (none loosened)
+
+**Rules unit tests:**
+- `batchResultText` for 1, 3 and 5 fruit, with mixed tiers.
+- The spawn-offset rule: seeded, within 35% of the half-width, at least 2.5 diameters
+  apart, for 5 fruit of each type.
+- The body-budget trimming order.
+
+**Sim tests:**
+- A scripted batch of 5 watermelons from Plane, dropped 9 steps apart (0.15 s):
+  - body count ≤ 200 at every step;
+  - all values finite;
+  - no centre below −0.5 m during flight, and none below −0.01 m at settle;
+  - 5 impacts recorded;
+  - determinism over two runs.
+- A tomato landing on a settled watermelon's debris still gets a break check, reporting
+  its tier.
+- Mixed batches (fruit A at 5 m, then fruit B at 1 m) record the right fruit and height
+  per result.
+- Batch UI-settle happens exactly 72 steps after the last impact, and not while any
+  fruit is still falling.
+- Clearing mid-batch leaves 0 bodies, and no pending impact survives.
+
+**Playwright:**
+- **Rapid clicks:** 5 quick clicks from `ready`, all within 1 s, give 5 fruit (count via
+  `data-fruit-count`). A 6th click is ignored, Drop shows `aria-disabled="true"` and
+  keeps focus, and the max note is visible.
+- **Keyboard:** Space pressed 3 times quickly on Drop gives 3 fruit. A held Space (auto
+  repeat) gives only 1.
+- **Touch:** 3 quick taps at 390x844 give 3 fruit.
+- **Mixed batch:** choose tomato, Drop, choose coconut, Drop. The result text names both
+  in order.
+- **Settled redrop:** a Drop press in `settled` clears and starts a new batch of 1.
+  Repeat twice in one session.
+- **Sound:** a batch of 3 makes exactly 3 splat starts with the fake AudioContext, and
+  the master compressor exists.
+- **Live region:** it is written once per batch.
+- **Existing tests:** single-drop behaviour, undeclared-URL, reduced-motion,
+  hidden-tab and page-error checks still pass. Tests that reference toughness are
+  removed.
+
+**Mutations:**
+- Allow a 6th fruit: the rapid-click test must fail.
+- Use `disabled` instead of `aria-disabled`: the focus assertion must fail.
+- Remove the body budget: the ≤ 200 sim test must fail.
+- Count key auto-repeat: the held-Space test must fail.
+
+### Stop conditions
+
+- **Frame cost:** p95 above 16 ms at 4x throttle for the 5-watermelon Plane batch at
+  390x844. Report the numbers; don't cut the batch size or the budget on your own.
+- **Energy guard:** below 2.2× at real toughness.
+- **Crowding:** fruit colliding mid-air or overlapping at spawn despite the 2.5-diameter
+  rule. Report it and propose a fix.
+- **Determinism:** fails for scripted batches.
+
+### Process note for the xo
+
+- **Engineer stalls:** the spec file is about 2,000 lines, and two engineers stalled
+  reading it. Give the engineer targeted `grep` and line ranges, not whole-file reads.
+- **Test runs:** keep Playwright runs in chunks of 5 minutes or less.
+- **Dispatch:** 11a and 11b may go as one task. Verify 11a on its own first, with node
+  tests and the toughness-free guarantees, before starting 11b.
+
 ## Tests (added or replaced; none loosened)
 
 **Rules unit tests:**

@@ -16,7 +16,7 @@
     </script>
   </head>
   <body>
-    <main class="lab-shell" data-phase="ready" data-steps="0">
+    <main class="lab-shell" data-phase="ready" data-steps="0" data-fruit-count="0" data-mesh-count="0">
       <a class="back-link" href="../../">Back to Kidzone</a>
 
       <header class="lab-header">
@@ -26,10 +26,17 @@
         </div>
       </header>
 
-      <p class="instructions" id="instructions">Pick a fruit, a height and a toughness, then press Drop.</p>
+      <p class="instructions" id="instructions">Pick a fruit and a height, then press Drop.</p>
 
       <section class="stage-panel" aria-label="Drop scene">
         <canvas id="scene-canvas"></canvas>
+        <!-- Step 1b §11b Stage 3: up to 5 fruit can be falling at once (the
+             rolling window). The oldest falling fruit uses this static,
+             id'd marker (kept for every pre-Stage-3 single-fruit test);
+             any additional simultaneously-falling fruit get dynamically
+             created `.incoming-marker` siblings appended alongside it
+             (view.js), so a single-fruit drop's DOM shape here is
+             unchanged. -->
         <div id="incoming-marker" class="incoming-marker" aria-hidden="true" hidden>
           <span class="incoming-marker-arrow" aria-hidden="true">&#9660;</span>
           <span id="incoming-marker-dot" class="incoming-marker-dot"></span>
@@ -41,6 +48,11 @@
               <span id="height-bar-marker" class="height-bar-marker"></span>
               <span id="height-bar-label" class="height-bar-label">10 m</span>
             </div>
+            <!-- Step 1b §11b Stage 3: additional falling fruit (beyond the
+                 primary one above) get dynamically created
+                 `.height-bar-indicator` siblings appended directly here by
+                 view.js, so a single-fruit drop's track shape stays
+                 exactly (ticks, indicator) — see the B3 Playwright test. -->
           </div>
         </div>
       </section>
@@ -87,21 +99,14 @@
           <span id="height-readout" class="control-readout">10 m (about Roof)</span>
         </div>
 
-        <div class="control-row">
-          <label for="toughness-slider">Toughness</label>
-          <input id="toughness-slider" type="range" min="1" max="10" step="1" value="5" aria-valuetext="5, medium">
-          <span id="toughness-readout" class="control-readout">5</span>
-        </div>
-        <p class="toughness-ends" aria-hidden="true"><span>squishy</span><span>super tough</span></p>
-
         <div class="action-row">
-          <button id="drop-button" type="button" aria-disabled="false">Drop</button>
+          <button id="drop-button" type="button">Drop</button>
           <button id="skip-button" type="button" hidden>Skip to result</button>
           <button id="sound-toggle" type="button" aria-pressed="true">Sound: on</button>
         </div>
       </section>
 
-      <p id="status" class="status" role="status" aria-live="polite">Pick a fruit, a height and a toughness, then press Drop.</p>
+      <p id="status" class="status" role="status" aria-live="polite">Pick a fruit and a height, then press Drop.</p>
 
       <p id="load-failure" class="load-failure" hidden>
         The 3D engine couldn't load. Check the internet connection and reload.
@@ -117,8 +122,6 @@
           heightSlider: document.getElementById("height-slider"),
           heightSliderTicks: document.getElementById("height-slider-ticks"),
           heightReadout: document.getElementById("height-readout"),
-          toughnessSlider: document.getElementById("toughness-slider"),
-          toughnessReadout: document.getElementById("toughness-readout"),
           dropButton: document.getElementById("drop-button"),
           skipButton: document.getElementById("skip-button"),
           soundToggle: document.getElementById("sound-toggle"),

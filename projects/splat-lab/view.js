@@ -6,12 +6,12 @@ import * as THREE from "three";
 import { createSim } from "./sim.js";
 import {
   DEFAULT_FRUIT_KEY,
-  DEFAULT_TOUGHNESS,
   FIXED_STEP,
   HEIGHT_SLIDER_MAX,
   LANDMARKS,
   chunkShape,
   controlsEnabledForPhase,
+  formatHeight,
   fruitByKey,
   heightBarFor,
   heightFromSlider,
@@ -24,6 +24,12 @@ import {
   sliderFromHeight,
   splatSoundFor
 } from "./rules.js";
+
+// Step 1b §11b Stage 3: a 150ms shrink-to-zero pop for removed bodies
+// (rolling-window eviction or budget trimming), cosmetic only — the
+// physics bodies are already gone from the sim. Instant with reduced
+// motion.
+const POP_DURATION_MS = 150;
 
 const MAX_STEPS_PER_FRAME = 5;
 const DEFAULT_HEIGHT_SLIDER_VALUE = 662; // Roof (see rules.js sliderFromHeight)
@@ -245,6 +251,13 @@ function createGroundTexture(fruit) {
 let audioContext = null;
 let audioAvailable = true;
 let noiseBufferCache = null;
+// Step 1b §11b Stage 3: one shared master GainNode -> DynamicsCompressorNode
+// -> destination, so up to 5 overlapping splats (one per rapid-drop impact)
+// don't clip. Created once, lazily, alongside the context itself; every
+// splat node below connects into masterGain instead of context.destination
+// directly.
+let masterGain = null;
+let masterCompressor = null;
 
 function ensureAudioContext() {
   if (!audioAvailable) return null;
@@ -266,6 +279,10 @@ function ensureAudioContext() {
 
   try {
     audioContext = new AudioContextCtor();
+    masterGain = audioContext.createGain();
+    masterCompressor = audioContext.createDynamicsCompressor();
+    masterGain.connect(masterCompressor);
+    masterCompressor.connect(audioContext.destination);
     return audioContext;
   } catch {
     audioAvailable = false;
@@ -331,7 +348,7 @@ function playSplatSound({ fruit, severity, impactSpeed }) {
 
       noiseSource.connect(filter);
       filter.connect(gain);
-      gain.connect(context.destination);
+      gain.connect(masterGain);
 
       noiseSource.onended = () => {
         noiseSource.disconnect();
@@ -351,7 +368,7 @@ function playSplatSound({ fruit, severity, impactSpeed }) {
     thudGainNode.gain.exponentialRampToValueAtTime(0.001, now + sound.thudDuration);
 
     oscillator.connect(thudGainNode);
-    thudGainNode.connect(context.destination);
+    thudGainNode.connect(masterGain);
 
     oscillator.onended = () => {
       oscillator.disconnect();
@@ -374,7 +391,7 @@ function playSplatSound({ fruit, severity, impactSpeed }) {
 
       crackSource.connect(crackFilter);
       crackFilter.connect(crackGainNode);
-      crackGainNode.connect(context.destination);
+      crackGainNode.connect(masterGain);
 
       crackSource.onended = () => {
         crackSource.disconnect();
@@ -397,8 +414,6 @@ export function start(elements) {
     heightSlider,
     heightSliderTicks,
     heightReadout,
-    toughnessSlider,
-    toughnessReadout,
     dropButton,
     skipButton,
     soundToggle,
@@ -406,12 +421,20 @@ export function start(elements) {
     instructionsEl,
     heightBarTrack,
     heightBarTicks,
-    heightBarIndicator,
     heightBarLabel,
+    heightBarIndicator,
     heightBarMarker,
     incomingMarker,
     incomingMarkerDot
   } = elements;
+
+  // Step 1b §11b Stage 3: additional simultaneously-falling fruit (beyond
+  // the primary, static, id'd marker) get dynamically created siblings
+  // appended directly next to it — a sibling of #incoming-marker under the
+  // stage panel, a sibling of #height-bar-indicator under the track — so a
+  // single-fruit drop's DOM shape is byte-for-byte the pre-Stage-3 shape
+  // (see the B3 Playwright test for the height bar's exact-children check).
+  const incomingMarkersContainer = incomingMarker.parentElement;
 
   const fruitRadios = Array.from(fruitFieldset.querySelectorAll('input[name="fruit"]'));
 
@@ -425,18 +448,16 @@ export function start(elements) {
   let currentFruitKey = checkedFruitKey();
   let currentHeightSliderValue = Number.parseInt(heightSlider.value, 10) || DEFAULT_HEIGHT_SLIDER_VALUE;
   let currentHeightM = heightFromSlider(currentHeightSliderValue);
-  let currentToughness = Number.parseInt(toughnessSlider.value, 10) || DEFAULT_TOUGHNESS;
   // Step 1b §10: default on, not persisted across reloads.
   let soundEnabled = true;
-  // Guards playSplatSound to exactly once per drop; reset to false
-  // everywhere sim.reset() is called (every settled edit, and the Drop
-  // handler's own reset-before-drop).
-  let impactSoundPlayed = false;
+  // Step 1b §11b Stage 3: the k-th press since page load (k starting 0) is
+  // used to derive the pinned seed (`n + k`); an unpinned run ignores this
+  // and draws fresh crypto randomness on every press instead.
+  let pressCount = 0;
 
   const sim = createSim({
     seed: pinnedSeed ?? 1,
     heightM: currentHeightM,
-    toughness: currentToughness,
     fruit: currentFruitKey
   });
 
@@ -463,13 +484,13 @@ export function start(elements) {
   scene.add(groundMesh);
 
   // Ground texture (step 1b §9): view.js is the sole owner, and disposes
-  // the previous texture whenever it replaces it on a fruit change.
+  // the previous texture whenever it replaces it on a framing change.
   let groundTexture = createGroundTexture(fruitByKey(currentFruitKey));
   groundMaterial.map = groundTexture;
   groundMaterial.needsUpdate = true;
 
-  function applyGroundTexture() {
-    const nextTexture = createGroundTexture(fruitByKey(currentFruitKey));
+  function applyGroundTexture(fruitKey) {
+    const nextTexture = createGroundTexture(fruitByKey(fruitKey));
 
     groundTexture.dispose();
     groundTexture = nextTexture;
@@ -477,20 +498,20 @@ export function start(elements) {
     groundMaterial.needsUpdate = true;
   }
 
-  // Camera framing per fruit (step 1b §5): position/target/fov come from
-  // impactViewFor, recomputed at start, on resize, and whenever the fruit
-  // changes (in ready). Never during a drop.
-  // Step 1b §9: cached so the incoming marker (recomputed every frame while
-  // shown) reuses the same view the camera itself is using, rather than
-  // recomputing impactViewFor from scratch each frame. Recomputed only
-  // where applyImpactView is called: on resize and on fruit change, in
-  // `ready`, never during a drop (no camera motion).
+  // Camera framing (step 1b §11b Stage 3, replacing the single-fruit step
+  // 1b §5/§8 camera): Rmax over the fruit CURRENTLY IN THE SCENE, falling
+  // back to the selected radio fruit in `ready` (an empty scene, per the
+  // v3 spawn ruling). Snaps once, instantly, whenever a larger fruit
+  // appears; never shrinks back mid-batch (avoids camera flicker as the
+  // biggest fruit settles or leaves the rolling window) — it only resets
+  // to the selected fruit on a genuine return to `ready`.
   let currentView = null;
+  let framingFruitKey = currentFruitKey;
 
-  function applyImpactView() {
+  function applyImpactView(fruitKey) {
     const width = canvas.clientWidth || 1;
     const height = canvas.clientHeight || 1;
-    const view = impactViewFor({ width, height, fruit: fruitByKey(currentFruitKey) });
+    const view = impactViewFor({ width, height, fruit: fruitByKey(fruitKey) });
 
     currentView = view;
     camera.position.set(view.position[0], view.position[1], view.position[2]);
@@ -499,12 +520,48 @@ export function start(elements) {
     camera.fov = view.fov;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+  }
+
+  function largestPresentFruitKey() {
+    let best = null;
+
+    for (const body of sim.bodies()) {
+      if (body.kind !== "fruit") continue;
+      if (!best || body.radius > best.radius) best = body;
+    }
+
+    if (!best) return null;
+
+    const record = sim.fruits().find((f) => f.id === best.fruitId);
+
+    return record ? record.fruit : null;
+  }
+
+  function updateFraming() {
+    if (sim.phase === "ready") {
+      if (framingFruitKey !== currentFruitKey) {
+        framingFruitKey = currentFruitKey;
+        applyImpactView(framingFruitKey);
+        applyGroundTexture(framingFruitKey);
+      }
+      return;
+    }
+
+    const candidateKey = largestPresentFruitKey();
+
+    if (candidateKey && fruitByKey(candidateKey).radius > fruitByKey(framingFruitKey).radius) {
+      framingFruitKey = candidateKey;
+      applyImpactView(framingFruitKey);
+      applyGroundTexture(framingFruitKey);
+    }
   }
 
   // Blob shadow: a single flat mesh, the sole owner of its texture,
   // material and geometry for the page's lifetime (never recreated, so no
   // runtime dispose call is needed in normal operation — the ground mesh
-  // and lights above follow the same reuse pattern).
+  // and lights above follow the same reuse pattern). Follows the fruit
+  // closest to the ground among the falling ones.
   function createShadowTexture() {
     const size = 128;
     const shadowCanvas = document.createElement("canvas");
@@ -538,20 +595,30 @@ export function start(elements) {
   shadowMesh.visible = false;
   scene.add(shadowMesh);
 
-  function updateShadow(fruitBody) {
-    if (!fruitBody) {
+  function updateShadow(fruitBodies) {
+    // The lowest (closest to landing) falling fruit gets the shadow; with
+    // none falling, no shadow.
+    let lowest = null;
+
+    for (const body of fruitBodies) {
+      const y = body.position[1] - body.radius;
+
+      if (!lowest || y < lowest.position[1] - lowest.radius) lowest = body;
+    }
+
+    if (!lowest) {
       shadowMesh.visible = false;
       return;
     }
 
     shadowMesh.visible = true;
 
-    const fruitY = Math.max(0, fruitBody.position[1] - fruitBody.radius);
+    const fruitY = Math.max(0, lowest.position[1] - lowest.radius);
     const closeness = 1 - Math.min(1, fruitY / SHADOW_CLOSE_DISTANCE_M);
-    const scale = fruitBody.radius * (SHADOW_MIN_SCALE + (SHADOW_MAX_SCALE - SHADOW_MIN_SCALE) * closeness);
+    const scale = lowest.radius * (SHADOW_MIN_SCALE + (SHADOW_MAX_SCALE - SHADOW_MIN_SCALE) * closeness);
 
     shadowMesh.scale.set(scale, scale, 1);
-    shadowMesh.position.set(fruitBody.position[0], GROUND_TOP_Y + 0.002, fruitBody.position[2]);
+    shadowMesh.position.set(lowest.position[0], GROUND_TOP_Y + 0.002, lowest.position[2]);
     shadowMaterial.opacity = SHADOW_MIN_OPACITY + (SHADOW_MAX_OPACITY - SHADOW_MIN_OPACITY) * closeness;
   }
 
@@ -657,11 +724,14 @@ export function start(elements) {
     return geometry;
   }
 
-  function meshFor(body) {
-    const fruit = fruitByKey(currentFruitKey);
+  // Step 1b §11b Stage 3: meshFor now takes the OWNING body's own fruit key
+  // (from sim.fruits(), keyed by body.fruitId) rather than the globally
+  // selected radio — several different fruit can be in the scene at once.
+  function meshFor(body, fruitKey) {
+    const fruit = fruitByKey(fruitKey);
 
     if (body.kind === "fruit") {
-      const mesh = new THREE.Mesh(fruitSphereGeometry(body.radius), fruitSkinMaterial(currentFruitKey));
+      const mesh = new THREE.Mesh(fruitSphereGeometry(body.radius), fruitSkinMaterial(fruitKey));
       mesh.userData.ownsGeometry = false;
       return mesh;
     }
@@ -677,19 +747,23 @@ export function start(elements) {
 
     if (body.kind === "inner") {
       const geometry = buildChunkGeometry(body.id, body.radius);
-      const mesh = new THREE.Mesh(geometry, flatMaterialFor("inner", currentFruitKey, fruit.fleshColor));
+      const mesh = new THREE.Mesh(geometry, flatMaterialFor("inner", fruitKey, fruit.fleshColor));
       mesh.userData.ownsGeometry = true;
       return mesh;
     }
 
     // seed
-    const mesh = new THREE.Mesh(seedGeometryFor(body.radius), flatMaterialFor("seed", currentFruitKey, fruit.seedColor));
+    const mesh = new THREE.Mesh(seedGeometryFor(body.radius), flatMaterialFor("seed", fruitKey, fruit.seedColor));
     mesh.scale.set(1, 1, 1.4);
     mesh.userData.ownsGeometry = false;
     return mesh;
   }
 
   const meshesById = new Map();
+  // Step 1b §11b Stage 3: bodies removed by the sim (rolling-window
+  // eviction, body-budget trimming) get a 150ms shrink-to-zero pop here
+  // before disposal, cosmetic only — the physics bodies are already gone.
+  const poppingMeshes = new Map(); // id -> { mesh, startTime }
 
   function disposeMesh(mesh) {
     if (mesh.userData.ownsGeometry) {
@@ -697,20 +771,76 @@ export function start(elements) {
     }
   }
 
+  function reducedMotionActive() {
+    return reducedMotionQuery.matches;
+  }
+
+  function popMesh(id) {
+    const mesh = meshesById.get(id);
+
+    if (!mesh) return;
+
+    meshesById.delete(id);
+
+    if (reducedMotionActive()) {
+      scene.remove(mesh);
+      disposeMesh(mesh);
+      return;
+    }
+
+    scene.add(mesh); // already in the scene, but harmless/no-op if so
+    poppingMeshes.set(id, { mesh, startTime: performance.now() });
+  }
+
+  // Drains sim.consumeRemovals() and starts a pop for each removed body.
+  // Called right after every sim.drop() (removals can happen synchronously
+  // at press time: spawn-overlap clearing, rolling-window eviction) and
+  // once per frame after stepping (later removals: body-budget trimming on
+  // a break).
+  function processRemovals() {
+    for (const id of sim.consumeRemovals()) {
+      popMesh(id);
+    }
+  }
+
+  function advancePops() {
+    if (poppingMeshes.size === 0) return;
+
+    const now = performance.now();
+
+    for (const [id, entry] of poppingMeshes.entries()) {
+      const elapsed = now - entry.startTime;
+      const t = Math.min(1, elapsed / POP_DURATION_MS);
+      const scale = Math.max(0, 1 - t);
+
+      entry.mesh.scale.set(scale, scale, scale);
+
+      if (t >= 1) {
+        scene.remove(entry.mesh);
+        disposeMesh(entry.mesh);
+        poppingMeshes.delete(id);
+      }
+    }
+  }
+
   function syncSceneFromSim() {
     const bodies = sim.bodies();
+    const fruitKeyById = new Map(sim.fruits().map((f) => [f.id, f.fruit]));
     const seenIds = new Set();
-    let fruitBody = null;
+    const fruitBodies = [];
 
     for (const body of bodies) {
       seenIds.add(body.id);
 
-      if (body.kind === "fruit") fruitBody = body;
+      if (body.kind === "fruit") fruitBodies.push(body);
 
       let mesh = meshesById.get(body.id);
 
       if (!mesh) {
-        mesh = meshFor(body);
+        const fruitKey = fruitKeyById.get(body.fruitId) ?? currentFruitKey;
+
+        mesh = meshFor(body, fruitKey);
+        mesh.scale.set(1, 1, 1);
         meshesById.set(body.id, mesh);
         scene.add(mesh);
       }
@@ -719,6 +849,9 @@ export function start(elements) {
       mesh.quaternion.set(body.quaternion[0], body.quaternion[1], body.quaternion[2], body.quaternion[3]);
     }
 
+    // Defensive net: a body that vanished from sim.bodies() without coming
+    // through consumeRemovals() (should not happen per the sim's contract)
+    // still gets cleaned up, instantly (no animation) rather than leaking.
     for (const [id, mesh] of meshesById.entries()) {
       if (seenIds.has(id)) continue;
 
@@ -727,17 +860,7 @@ export function start(elements) {
       meshesById.delete(id);
     }
 
-    updateShadow(fruitBody);
-  }
-
-  // fruitY for the height bar: the fruit's lowest point above the ground
-  // while it exists, 0 once it has split (per heightBarFor's contract).
-  function currentFruitY() {
-    const fruit = sim.bodies().find((body) => body.kind === "fruit");
-
-    if (!fruit) return 0;
-
-    return Math.max(0, fruit.position[1] - fruit.radius);
+    updateShadow(fruitBodies);
   }
 
   function resetSceneMeshes() {
@@ -745,8 +868,13 @@ export function start(elements) {
       scene.remove(mesh);
       disposeMesh(mesh);
     }
+    for (const entry of poppingMeshes.values()) {
+      scene.remove(entry.mesh);
+      disposeMesh(entry.mesh);
+    }
 
     meshesById.clear();
+    poppingMeshes.clear();
     syncSceneFromSim();
   }
 
@@ -756,108 +884,96 @@ export function start(elements) {
 
     heightReadout.textContent = label;
     heightSlider.setAttribute("aria-valuetext", label);
-    toughnessReadout.textContent = String(currentToughness);
   }
 
-  // Step 1b §10: no Reset button — fruit/height/toughness/Drop follow
-  // sim.uiPhase (enabled in `ready` and `settled`, disabled only while
-  // `falling`). Drop is never given the `disabled` attribute (see the
-  // style.css comment on #drop-button[aria-disabled] for why) — its
-  // enabled/disabled state is carried by `aria-disabled` instead, always
-  // explicitly "true" or "false" (never absent).
+  // Step 1b §11b Stage 3: Drop always works, in every phase.
+  // Fruit/height/Drop/sound stay enabled in every phase. `skipButton`
+  // (reduced-motion "Skip to result") is the one control still limited: it
+  // only makes sense, and is only enabled, while something is `active`.
   function updateControlsEnabled() {
-    const enabled = controlsEnabledForPhase(sim.uiPhase);
+    const enabled = controlsEnabledForPhase(sim.phase);
 
     for (const radio of fruitRadios) {
       radio.disabled = !enabled.fruitRadios;
     }
 
     heightSlider.disabled = !enabled.heightSlider;
-    toughnessSlider.disabled = !enabled.toughnessSlider;
-
-    const dropAriaDisabled = enabled.dropButton ? "false" : "true";
-
-    if (dropButton.getAttribute("aria-disabled") !== dropAriaDisabled) {
-      dropButton.setAttribute("aria-disabled", dropAriaDisabled);
-    }
-
     soundToggle.disabled = !enabled.soundToggle; // always false; never disabled
 
-    const reducedMotion = reducedMotionQuery.matches;
+    const reducedMotion = reducedMotionActive();
 
     skipButton.hidden = !reducedMotion;
     skipButton.disabled = !enabled.skipButton;
   }
 
+  // Step 1b §11b Stage 3: the live region is written once per quiet
+  // period, from sim.consumeAnnouncement() (non-null exactly once, on
+  // entry to `settled`) — never derived from a "summary" snapshot re-read
+  // every frame, which would re-announce unchanged text. Instructions
+  // still follow the phase and are written only when the text changes.
   function updateStatusText() {
-    const nextStatusText =
-      sim.uiPhase === "settled" && sim.summary ? sim.summary.text : instructionsForPhase(sim.uiPhase);
-    const nextInstructionsText = instructionsForPhase(sim.uiPhase);
+    const announcement = sim.consumeAnnouncement();
 
-    // Only write these text nodes when the string actually changes: both are
-    // aria-live (or read by assistive tech) and get checked every animation
-    // frame, so an unconditional write would make screen readers re-announce
-    // unchanged text up to 60 times a second (D5).
-    if (statusEl.textContent !== nextStatusText) {
-      statusEl.textContent = nextStatusText;
+    if (announcement !== null && statusEl.textContent !== announcement) {
+      statusEl.textContent = announcement;
     }
+
+    const nextInstructionsText = instructionsForPhase(sim.phase);
 
     if (instructionsEl.textContent !== nextInstructionsText) {
       instructionsEl.textContent = nextInstructionsText;
     }
   }
 
-  // Step 1b §10 (CTO amendment); D1 fix: data-phase follows the UI phase,
-  // not physics. data-steps keeps counting physics steps while debris still
-  // simulates after UI settle. data-layout-hash is derived from
-  // sim.uiSettleLayout — sim.js's own step-exact snapshot taken the moment
-  // uiPhase first becomes "settled" — rather than from sim.bodies() read at
-  // frame time, which drifted with frame timing (D1: MAX_STEPS_PER_FRAME
-  // lets a frame's steps land anywhere from +1 to +5 past the UI-settle
-  // step, so debris still in motion could be captured at different steps on
-  // different runs of the same seed).
+  // data-phase follows sim.phase (ready/active/settled). data-steps keeps
+  // counting physics steps. data-fruit-count mirrors sim.fruitCount.
+  // data-mesh-count is the number of body meshes currently rendered
+  // (including ones still mid-pop), so a Playwright test can inspect the
+  // pop animation's actual completion instead of only fruit count.
+  // data-layout-hash is set once, from sim.settleLayout, the moment phase
+  // first becomes `settled`, and cleared on the next press.
   function updatePhaseAttributes() {
-    main.dataset.phase = sim.uiPhase;
+    main.dataset.phase = sim.phase;
     main.dataset.steps = String(sim.steps);
+    main.dataset.fruitCount = String(sim.fruitCount);
+    main.dataset.meshCount = String(meshesById.size + poppingMeshes.size);
 
-    if (sim.uiSettleLayout !== null && main.dataset.layoutHash === undefined) {
-      main.dataset.layoutHash = layoutHash(sim.uiSettleLayout);
+    if (sim.settleLayout !== null && main.dataset.layoutHash === undefined) {
+      main.dataset.layoutHash = layoutHash(sim.settleLayout);
     }
   }
 
-  // Height bar: writes to the DOM only when the label text changes or the
-  // marker moves by at least 1% of the track, and rebuilds tick marks only
-  // when the height preset itself changes. Never touches #status or
-  // #instructions.
-  //
-  // Tick-name collision avoidance (step 1 review V1, extended step 1b §5):
-  // every tick keeps its dash mark, but its name is only shown if showing it
-  // would not sit within one label-height (in px) of the last SHOWN name
-  // above it (walking top-down), and ALSO not within one label-height of the
-  // moving metres label itself (which can land anywhere on the track, not
-  // just at a fixed tick position) — fixing the "Tab'e 0 m" overlap seen at
-  // settled. The top tick (the chosen height preset) always shows its name.
+  // --- Height bar: one fruit-coloured marker per falling fruit -----------
+  // (step 1b §11b Stage 3). The bar's top is the largest chosen height
+  // among the fruit currently in the scene, or the slider height in
+  // `ready` (an empty scene, so there is nothing to take a max over).
+  // The FIRST (oldest, by press order) falling fruit uses the static,
+  // id'd elements from index.html (`#height-bar-indicator` /
+  // `#height-bar-marker`), so every pre-Stage-3 single-fruit Playwright
+  // test keeps working unchanged; any additional simultaneously-falling
+  // fruit get dynamically created siblings (same classes, no id) appended
+  // directly to heightBarTrack, right next to the primary indicator.
   let lastBarLabel = null;
-  let lastBarFraction = null;
   let lastBarHeightM = null;
-  let tickNameEntries = []; // { tick, nameEl } for the current height preset
+  let tickNameEntries = []; // { tick, nameEl } for the current top height
 
   function setHidden(nameEl, hidden) {
-    // Write only on an actual change: this runs on every fraction-changed
-    // frame, and an unconditional write here blew the bar's DOM-mutation
-    // budget (each write is an observed attribute mutation, even when the
-    // value doesn't change).
     if (nameEl.hidden !== hidden) {
       nameEl.hidden = hidden;
     }
   }
 
+  // movingLabelFraction: the primary #height-bar-label's own current
+  // fraction (it can land anywhere on the track, not just at a fixed tick
+  // position) — a tick name within one label-height of it is hidden too,
+  // same as a pre-Stage-3 single-fruit run (see the "moving label never
+  // intersects a visible tick name" kept Playwright test).
   function layoutHeightBarNames(movingLabelFraction) {
     if (tickNameEntries.length === 0) return;
 
     const trackHeightPx = heightBarTrack.clientHeight || 1;
     const labelHeightPx = tickNameEntries[tickNameEntries.length - 1].nameEl.getBoundingClientRect().height || 14;
-    const movingLabelPx = movingLabelFraction * trackHeightPx;
+    const movingLabelPx = movingLabelFraction === null ? null : movingLabelFraction * trackHeightPx;
     let lastShownPx = null;
 
     for (let i = tickNameEntries.length - 1; i >= 0; i -= 1) {
@@ -865,15 +981,8 @@ export function start(elements) {
       const px = tick.fraction * trackHeightPx;
       const isTopTick = i === tickNameEntries.length - 1;
       const tooCloseToShownTick = lastShownPx !== null && Math.abs(lastShownPx - px) < labelHeightPx;
-      const tooCloseToMovingLabel = Math.abs(movingLabelPx - px) < labelHeightPx;
+      const tooCloseToMovingLabel = movingLabelPx !== null && Math.abs(movingLabelPx - px) < labelHeightPx;
 
-      // The top tick always sits at fraction 1 (it names the currently
-      // chosen preset), which is exactly where the moving label sits in
-      // `ready` (fruit at full height) — a permanent, not occasional,
-      // coincidence. It stays visible (per the runtime rule) but gets a
-      // fixed CSS offset (`.height-bar-tick--top`) so its box clears the
-      // label's box even when they share the same fraction; no JS
-      // proximity check is needed for it specifically.
       if (isTopTick) {
         setHidden(nameEl, false);
         lastShownPx = px;
@@ -934,76 +1043,359 @@ export function start(elements) {
     }
   }
 
-  function updateHeightBar() {
-    const heightM = currentHeightM;
-    const fruitY = currentFruitY();
-    const { fraction, label, ticks } = heightBarFor({ melonY: fruitY, heightM });
+  // Falling-fruit entries used by the incoming marker (falling only — it
+  // hides on landing). In `ready` (an empty scene) this synthesizes a
+  // single preview entry for the selected-but-not-yet-dropped fruit, at
+  // the full chosen height (centre = heightM + radius, matching
+  // spawnPlanFor's own `y = heightM + Rnew`, so the lowest point sits
+  // exactly at heightM) — matching what the single-fruit sim used to show
+  // before the v3 spawn ruling made `ready` genuinely empty.
+  function fallingFruitEntries() {
+    if (sim.phase === "ready") {
+      const radius = fruitByKey(currentFruitKey).radius;
 
-    if (heightM !== lastBarHeightM) {
-      renderHeightBarTicks(ticks);
-      lastBarHeightM = heightM;
-      lastBarFraction = null; // force a fresh layout pass below
+      return [
+        {
+          id: "__preview__",
+          fruitKey: currentFruitKey,
+          heightM: currentHeightM,
+          centerY: currentHeightM + radius,
+          radius,
+          x: 0,
+          z: 0
+        }
+      ];
     }
 
-    // Endpoints (0 = settled/ground, 1 = ready/full height) always write,
-    // regardless of the epsilon: otherwise the coarser threshold (raised to
-    // fix the write-budget test) can leave the marker short of the track's
-    // bottom edge at settled if the second-to-last update landed within the
-    // threshold of exactly 0.
-    const fractionChanged =
-      lastBarFraction === null ||
-      fraction === 0 ||
-      fraction === 1 ||
-      Math.abs(fraction - lastBarFraction) >= HEIGHT_BAR_FRACTION_EPSILON;
-
-    if (label !== lastBarLabel) {
-      heightBarLabel.textContent = label;
-      lastBarLabel = label;
-    }
-
-    if (fractionChanged) {
-      heightBarIndicator.style.setProperty("--fraction", String(fraction));
-      lastBarFraction = fraction;
-      layoutHeightBarNames(fraction);
-    }
+    return sceneFruitEntries().filter((entry) => entry.state === "falling");
   }
 
-  // Step 1b §9/§10: the "incoming" marker (arrow + fruit-coloured dot only
-  // — step 1b §10 removed its metres label, "one height on screen": the
-  // height bar is the only height readout). Visible in UI `ready` and
-  // `falling` while the fruit's LOWEST point is above the frame's top edge
-  // (see rules.js incomingFor). Hidden at UI `settled` (§10 amendment: this
-  // follows sim.uiPhase, not sim.phase — a held fruit that bounces past UI
-  // settle must hide the marker even though its physics phase, and hence
-  // its fruit body, persists well past that point) and whenever there is no
-  // fruit body (post-split) or incomingFor says it's not visible. Shares
-  // the height bar's write discipline: a DOM write only on an actual
-  // visibility change, never every frame.
-  let lastIncomingVisible = null;
+  // All non-removed fruit currently in the scene, for the height bar
+  // (step 1b §11b Stage 3): unlike the incoming marker, a landed or broken
+  // fruit's marker STAYS at the bar's bottom (see the kept B2/B3
+  // Playwright test), it just stops moving. Only eviction from the
+  // rolling window removes its marker (handled by the caller diffing
+  // against this list's ids).
+  function sceneFruitEntries() {
+    if (sim.phase === "ready") return fallingFruitEntries();
 
-  function setIncomingHidden(hidden) {
-    if (incomingMarker.hidden !== hidden) {
-      incomingMarker.hidden = hidden;
+    const bodyByFruitId = new Map();
+
+    for (const body of sim.bodies()) {
+      if (body.kind === "fruit") bodyByFruitId.set(body.fruitId, body);
     }
+
+    // Newest press first: the primary (static, id'd) marker slot below is
+    // always entries[0], and should track the most recently dropped fruit
+    // — the one a player just watched fall — not the oldest, already-
+    // landed one (which would otherwise permanently squat on the primary
+    // slot once several fruit are in the scene at once).
+    return sim
+      .fruits()
+      .sort((a, b) => b.pressIndex - a.pressIndex)
+      .map((f) => {
+        const body = bodyByFruitId.get(f.id);
+
+        // A body still exists (falling or landed, unbroken): use its real
+        // position. Once it has split, there is no single "fruit" body
+        // any more — heightBarFor's own contract is 0 once split.
+        if (body) {
+          return {
+            id: f.id,
+            fruitKey: f.fruit,
+            heightM: f.heightM,
+            state: f.state,
+            centerY: body.position[1],
+            radius: body.radius,
+            x: body.position[0],
+            z: body.position[2]
+          };
+        }
+
+        return {
+          id: f.id,
+          fruitKey: f.fruit,
+          heightM: f.heightM,
+          state: f.state,
+          centerY: 0,
+          radius: fruitByKey(f.fruit).radius,
+          x: 0,
+          z: 0
+        };
+      });
+  }
+
+  // Step 1b §11b Stage 3: the primary (static, id'd) element ALWAYS
+  // mirrors entries[0] (the newest fruit currently in the scene), tracked
+  // by fraction/colour only — not by id. This avoids a subtler bug an
+  // id-sticky slot map had: once fruit A's id had claimed the static
+  // elements, a NEWER fruit B becoming entries[0] would still try to
+  // create its own slot pointing at those same static elements (id-keyed
+  // lookup only checks "have we seen id B before", not "who currently
+  // holds the static elements"), so two ids fought over one draggable
+  // element and the STALE one (processed later in entries.forEach) won
+  // each frame. Extra elements (entries[1+]) are still pooled by id, since
+  // there is no ownership ambiguity there — an id never needs to hand its
+  // own dedicated extra element to another id.
+  let primaryBarFraction = null;
+  let primaryBarColor = null;
+  const heightBarExtraSlots = new Map(); // fruit-entry id -> { indicator, marker, lastFraction, lastColor }
+
+  function ensureHeightBarExtraSlot(id) {
+    let slot = heightBarExtraSlots.get(id);
+
+    if (slot) return slot;
+
+    const indicator = document.createElement("div");
+    const marker = document.createElement("span");
+
+    indicator.className = "height-bar-indicator";
+    marker.className = "height-bar-marker";
+    indicator.appendChild(marker);
+    heightBarTrack.appendChild(indicator);
+
+    slot = { indicator, marker, lastFraction: null, lastColor: null };
+    heightBarExtraSlots.set(id, slot);
+    return slot;
+  }
+
+  function releaseHeightBarExtraSlot(id) {
+    const slot = heightBarExtraSlots.get(id);
+
+    if (!slot) return;
+
+    slot.indicator.remove();
+    heightBarExtraSlots.delete(id);
+  }
+
+  function updateHeightBar() {
+    const entries = sceneFruitEntries();
+    // The scale (topHeightM) is the largest height among currently FALLING
+    // fruit only, falling back to the selected height when nothing is
+    // falling (`ready`, or `settled` with only landed/broken fruit
+    // around). A landed/broken fruit's own fraction is always exactly 0
+    // regardless of scale (heightBarFraction(0, h) === 0 for any h), so
+    // this does not change where old debris's marker sits — it only keeps
+    // an old, larger drop from silently re-scaling a smaller NEW drop's
+    // marker so it never reaches the top.
+    const fallingHeights = entries.filter((e) => e.state === "falling" || e.id === "__preview__").map((e) => e.heightM);
+    const topHeightM = fallingHeights.length ? Math.max(...fallingHeights) : currentHeightM;
+
+    if (topHeightM !== lastBarHeightM) {
+      const { ticks } = heightBarFor({ melonY: 0, heightM: topHeightM });
+
+      renderHeightBarTicks(ticks);
+      lastBarHeightM = topHeightM;
+    }
+
+    // Step 1b §11b Stage 3: only the primary (newest) entry gets a text
+    // label — "one height on screen" (step 1b §10) still holds with
+    // several fruit at once; it follows that fruit's own descent exactly
+    // like the pre-Stage-3 single-fruit label did (heightBarFor's `label`,
+    // not a static top-of-bar value).
+    const primaryEntry = entries[0] ?? null;
+    const nextLabel = primaryEntry
+      ? heightBarFor({ melonY: Math.max(0, primaryEntry.centerY - primaryEntry.radius), heightM: topHeightM }).label
+      : formatHeight(currentHeightM);
+
+    if (nextLabel !== lastBarLabel) {
+      heightBarLabel.textContent = nextLabel;
+      lastBarLabel = nextLabel;
+    }
+
+    if (primaryEntry) {
+      heightBarIndicator.style.display = "";
+
+      const lowestY = Math.max(0, primaryEntry.centerY - primaryEntry.radius);
+      const { fraction } = heightBarFor({ melonY: lowestY, heightM: topHeightM });
+
+      if (
+        primaryBarFraction === null ||
+        fraction === 0 ||
+        fraction === 1 ||
+        Math.abs(fraction - primaryBarFraction) >= HEIGHT_BAR_FRACTION_EPSILON
+      ) {
+        heightBarIndicator.style.setProperty("--fraction", String(fraction));
+        primaryBarFraction = fraction;
+      }
+
+      const color = hexToCssColor(fruitByKey(primaryEntry.fruitKey).skinColor);
+
+      if (color !== primaryBarColor) {
+        heightBarMarker.style.setProperty("--fruit-color", color);
+        primaryBarColor = color;
+      }
+    } else {
+      heightBarIndicator.style.display = "none";
+      primaryBarFraction = null;
+      primaryBarColor = null;
+    }
+
+    const seenExtraIds = new Set();
+
+    for (let i = 1; i < entries.length; i += 1) {
+      const entry = entries[i];
+
+      seenExtraIds.add(entry.id);
+
+      const lowestY = Math.max(0, entry.centerY - entry.radius);
+      const { fraction } = heightBarFor({ melonY: lowestY, heightM: topHeightM });
+      const slot = ensureHeightBarExtraSlot(entry.id);
+
+      if (
+        slot.lastFraction === null ||
+        fraction === 0 ||
+        fraction === 1 ||
+        Math.abs(fraction - slot.lastFraction) >= HEIGHT_BAR_FRACTION_EPSILON
+      ) {
+        slot.indicator.style.setProperty("--fraction", String(fraction));
+        slot.lastFraction = fraction;
+      }
+
+      const color = hexToCssColor(fruitByKey(entry.fruitKey).skinColor);
+
+      if (color !== slot.lastColor) {
+        slot.marker.style.setProperty("--fruit-color", color);
+        slot.lastColor = color;
+      }
+    }
+
+    for (const id of Array.from(heightBarExtraSlots.keys())) {
+      if (!seenExtraIds.has(id)) releaseHeightBarExtraSlot(id);
+    }
+
+    layoutHeightBarNames(primaryBarFraction);
+  }
+
+  // --- Incoming markers: one per falling fruit (step 1b §11b Stage 3) ----
+  // Visible while the fruit's lowest point is above the frame's top edge
+  // (rules.js incomingFor). Same primary-always-mirrors-entries[0], extras-
+  // pooled-by-id split as the height bar above, and for the same reason
+  // (see the comment on primaryBarFraction).
+  let primaryIncomingVisible = null;
+  let primaryIncomingColor = null;
+  let primaryIncomingLeft = null;
+  const incomingExtraSlots = new Map(); // id -> { container, dot, lastVisible, lastColor, lastLeft }
+
+  function ensureIncomingExtraSlot(id) {
+    let slot = incomingExtraSlots.get(id);
+
+    if (slot) return slot;
+
+    const container = document.createElement("div");
+    const arrow = document.createElement("span");
+    const dot = document.createElement("span");
+
+    container.className = "incoming-marker";
+    container.setAttribute("aria-hidden", "true");
+    arrow.className = "incoming-marker-arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = "▼";
+    dot.className = "incoming-marker-dot";
+
+    container.appendChild(arrow);
+    container.appendChild(dot);
+    incomingMarkersContainer.appendChild(container);
+
+    slot = { container, dot, lastVisible: null, lastColor: null, lastLeft: null };
+    incomingExtraSlots.set(id, slot);
+    return slot;
+  }
+
+  function releaseIncomingExtraSlot(id) {
+    const slot = incomingExtraSlots.get(id);
+
+    if (!slot) return;
+
+    slot.container.remove();
+    incomingExtraSlots.delete(id);
+  }
+
+  function horizontalLeftPercent(entry) {
+    if (!currentView) return 50;
+
+    const projected = new THREE.Vector3(entry.x, entry.centerY, entry.z).project(camera);
+
+    return Math.max(-25, Math.min(125, (projected.x * 0.5 + 0.5) * 100));
   }
 
   function updateIncomingMarker() {
-    const shownPhase = sim.uiPhase === "ready" || sim.uiPhase === "falling";
-    const fruitBody = shownPhase ? sim.bodies().find((body) => body.kind === "fruit") : null;
+    const entries = fallingFruitEntries();
+    const primaryEntry = entries[0] ?? null;
 
-    let visible = false;
+    if (primaryEntry) {
+      const visible = currentView
+        ? incomingFor({ fruitY: primaryEntry.centerY, fruitRadius: primaryEntry.radius, view: currentView }).visible
+        : false;
 
-    if (fruitBody && currentView) {
-      visible = incomingFor({ fruitY: fruitBody.position[1], fruitRadius: fruitBody.radius, view: currentView }).visible;
+      if (visible !== primaryIncomingVisible) {
+        incomingMarker.hidden = !visible;
+        primaryIncomingVisible = visible;
+      }
+
+      if (visible) {
+        const color = hexToCssColor(fruitByKey(primaryEntry.fruitKey).skinColor);
+
+        if (color !== primaryIncomingColor) {
+          incomingMarkerDot.style.setProperty("--fruit-color", color);
+          primaryIncomingColor = color;
+        }
+
+        const left = entries.length === 1 ? 50 : horizontalLeftPercent(primaryEntry);
+
+        if (primaryIncomingLeft === null || Math.abs(left - primaryIncomingLeft) >= 1) {
+          incomingMarker.style.left = `${left}%`;
+          primaryIncomingLeft = left;
+        }
+      }
+    } else if (primaryIncomingVisible !== false) {
+      incomingMarker.hidden = true;
+      primaryIncomingVisible = false;
+      primaryIncomingColor = null;
+      primaryIncomingLeft = null;
     }
 
-    if (visible !== lastIncomingVisible) {
-      setIncomingHidden(!visible);
-      lastIncomingVisible = visible;
+    const seenExtraIds = new Set();
+
+    for (let i = 1; i < entries.length; i += 1) {
+      const entry = entries[i];
+
+      seenExtraIds.add(entry.id);
+
+      const visible = currentView
+        ? incomingFor({ fruitY: entry.centerY, fruitRadius: entry.radius, view: currentView }).visible
+        : false;
+      const slot = ensureIncomingExtraSlot(entry.id);
+
+      if (visible !== slot.lastVisible) {
+        slot.container.hidden = !visible;
+        slot.lastVisible = visible;
+      }
+
+      if (!visible) continue;
+
+      const color = hexToCssColor(fruitByKey(entry.fruitKey).skinColor);
+
+      if (color !== slot.lastColor) {
+        slot.dot.style.setProperty("--fruit-color", color);
+        slot.lastColor = color;
+      }
+
+      const left = horizontalLeftPercent(entry);
+
+      if (slot.lastLeft === null || Math.abs(left - slot.lastLeft) >= 1) {
+        slot.container.style.left = `${left}%`;
+        slot.lastLeft = left;
+      }
+    }
+
+    for (const id of Array.from(incomingExtraSlots.keys())) {
+      if (!seenExtraIds.has(id)) releaseIncomingExtraSlot(id);
     }
   }
 
   function updateDom() {
+    updateFraming();
     updateControlsEnabled();
     updateStatusText();
     updatePhaseAttributes();
@@ -1020,6 +1412,17 @@ export function start(elements) {
   let lastFrameTime = null;
   let accumulator = 0;
 
+  // Step 1b §11b Stage 3: plays one splat per sim.consumeImpacts() event —
+  // not "the first impact of the drop", since a batch can have several
+  // impacts (and several breaks) landing across different frames.
+  function processImpacts() {
+    for (const impact of sim.consumeImpacts()) {
+      if (soundEnabled) {
+        playSplatSound(impact);
+      }
+    }
+  }
+
   function frameLoop(now) {
     rafId = requestAnimationFrame(frameLoop);
 
@@ -1032,39 +1435,37 @@ export function start(elements) {
     lastFrameTime = now;
     accumulator += delta;
 
-    let stepsThisFrame = 0;
+    // Step regardless of sim.phase: sim.phase reaches "settled" at UI
+    // settle (72 steps after the last impact), well before debris is done
+    // physically moving (sim.step() itself keeps stepping real physics
+    // until truly idle — asleep, or 480 steps since the last press; it is
+    // a documented no-op only then, or in `ready`). Gating this loop on
+    // "active" would freeze debris the instant the UI reads settled.
+    const stepsBefore = sim.steps;
+    let stepsAttempted = 0;
 
-    while (accumulator >= FIXED_STEP && stepsThisFrame < MAX_STEPS_PER_FRAME && sim.phase === "falling") {
+    while (accumulator >= FIXED_STEP && stepsAttempted < MAX_STEPS_PER_FRAME) {
       sim.step();
       accumulator -= FIXED_STEP;
-      stepsThisFrame += 1;
+      stepsAttempted += 1;
     }
 
-    checkImpactSound();
+    processImpacts();
+    processRemovals();
+    advancePops();
     syncSceneFromSim();
     updateDom();
     render();
 
-    if (sim.phase !== "falling") {
+    // Idle (not just "not attempted yet this frame"): we DID try to step
+    // at least once, and the sim's own step count didn't move — its
+    // no-op contract for `ready`/truly-idle. Stopping only on a genuine
+    // no-op (rather than "phase !== active") avoids freezing debris that
+    // is still physically settling after UI settle.
+    const genuinelyIdle = stepsAttempted > 0 && sim.steps === stepsBefore;
+
+    if (genuinelyIdle && poppingMeshes.size === 0) {
       stopLoop();
-    }
-  }
-
-  // Step 1b §10: plays the splat once per drop, on the first frame
-  // sim.firstImpact is non-null (immediately, whether or not sound is
-  // currently enabled — the guard just governs whether the disabled state
-  // is skipped instead of stuck waiting for a later frame).
-  function checkImpactSound() {
-    if (impactSoundPlayed) return;
-
-    const impact = sim.firstImpact;
-
-    if (!impact) return;
-
-    impactSoundPlayed = true;
-
-    if (soundEnabled) {
-      playSplatSound(impact);
     }
   }
 
@@ -1084,30 +1485,17 @@ export function start(elements) {
   }
 
   // --- control handlers ---------------------------------------------------
-  // Step 1b §7: main.dataset.layoutHash is set once, when phase becomes
-  // settled (in updateDom), and cleared here on every action that starts a
-  // fresh generation, so a test can never read a stale hash.
+  // main.dataset.layoutHash is set once, when phase becomes settled (in
+  // updateDom), and cleared here on every fresh Drop press, so a test can
+  // never read a stale hash.
   function clearLayoutHash() {
     delete main.dataset.layoutHash;
   }
 
-  // Step 1b §9: both markers use the selected fruit's own skin colour, no
-  // hard-coded colour anywhere.
-  function updateFruitColor() {
-    const cssColor = hexToCssColor(fruitByKey(currentFruitKey).skinColor);
-
-    heightBarMarker.style.setProperty("--fruit-color", cssColor);
-    incomingMarkerDot.style.setProperty("--fruit-color", cssColor);
-  }
-
+  // Step 1b §11b Stage 3 (spawn ruling v3, decision 1): a control change
+  // NEVER clears the scene — fruit/height apply to the NEXT drop only.
   function applyFruitChange() {
     currentFruitKey = checkedFruitKey();
-    sim.reset({ fruit: currentFruitKey });
-    clearLayoutHash();
-    applyImpactView();
-    applyGroundTexture();
-    updateFruitColor();
-    resetSceneMeshes();
     updateReadouts();
     updateDom();
     render();
@@ -1116,24 +1504,6 @@ export function start(elements) {
   function applyHeightChange() {
     currentHeightSliderValue = Number.parseInt(heightSlider.value, 10);
     currentHeightM = heightFromSlider(currentHeightSliderValue);
-    sim.reset({ heightM: currentHeightM });
-    clearLayoutHash();
-    resetSceneMeshes();
-    updateReadouts();
-    updateDom();
-    render();
-  }
-
-  // Step 1b §10: settled edit. Fruit/height changes above already do the
-  // equivalent (sim.reset + resetSceneMeshes); toughness previously didn't
-  // need resetSceneMeshes (toughness could only be edited in `ready`, where
-  // there was never any debris to clear) — now it can be edited from
-  // `settled` too, so it needs the same clearing.
-  function applyToughnessChange() {
-    currentToughness = Number.parseInt(toughnessSlider.value, 10);
-    sim.reset({ toughness: currentToughness });
-    clearLayoutHash();
-    resetSceneMeshes();
     updateReadouts();
     updateDom();
     render();
@@ -1143,59 +1513,69 @@ export function start(elements) {
     if (event.target && event.target.name === "fruit") applyFruitChange();
   });
   heightSlider.addEventListener("input", applyHeightChange);
-  toughnessSlider.addEventListener("input", applyToughnessChange);
 
-  // Step 1b §10: no Reset button. Drop is enabled (via aria-disabled, never
-  // the `disabled` attribute — see updateControlsEnabled) in both `ready`
-  // and `settled`; in `settled` this clears the still-there (or still
-  // moving) debris and drops again immediately with a fresh seed, as one
-  // action — the same sim.reset()-then-drop() path `ready` already used.
-  // aria-disabled is checked explicitly here because it never actually
-  // blocks a click/synthetic activation the way the `disabled` attribute
-  // would (that's the whole point of using it instead).
+  // Step 1b §11b Stage 3 (spawn ruling v3): Drop always works, instantly,
+  // in every phase. Each `click` counts (a native <button> click event
+  // fires for both a mouse/touch click and an Enter/Space keypress while
+  // it's focused, so one listener covers all three) — see the keydown
+  // listener below for the auto-repeat guard.
   dropButton.addEventListener("click", () => {
-    if (dropButton.getAttribute("aria-disabled") === "true") return;
-    if (sim.uiPhase === "falling") return; // defensive; aria-disabled already prevents reaching here
-
     // Autoplay rules (step 1b §10): create or resume the AudioContext only
     // here, inside the Drop click/key handler — never on page load, never
     // from the render loop where the sound actually plays later.
     ensureAudioContext();
 
-    // A fresh seed per drop (or the pinned ?seed= value for every drop),
-    // applied via reset() immediately before drop() so this drop's wobble,
-    // placement and jitter all come from it.
-    sim.reset({
-      seed: nextDropSeed(pinnedSeed),
-      fruit: currentFruitKey,
-      heightM: currentHeightM,
-      toughness: currentToughness
-    });
-    impactSoundPlayed = false;
-    clearLayoutHash();
-    resetSceneMeshes();
+    const seed = pinnedSeed !== null ? pinnedSeed + pressCount : nextDropSeed(null);
 
-    sim.drop();
+    pressCount += 1;
+    clearLayoutHash();
+
+    sim.drop({ fruit: currentFruitKey, heightM: currentHeightM, seed });
+
+    // Removals from spawn-overlap clearing or rolling-window eviction can
+    // happen synchronously inside drop(), before any step() — pop them
+    // right away rather than waiting for the next animation frame.
+    processRemovals();
+    syncSceneFromSim();
     updateDom();
+    render();
     startLoop();
   });
 
+  // The auto-repeat guard: a native <button> already fires `click` for a
+  // non-repeat Enter/Space keypress, so this listener's only job is to
+  // preventDefault a REPEAT keydown (held key) before it can produce
+  // another click. `event.repeat` is the only signal used — dropping this
+  // guard is the mutation the held-Space Playwright test is meant to catch.
+  dropButton.addEventListener("keydown", (event) => {
+    if ((event.key === "Enter" || event.key === " " || event.key === "Spacebar") && event.repeat) {
+      event.preventDefault();
+    }
+  });
+
   skipButton.addEventListener("click", () => {
-    if (sim.uiPhase !== "falling") return;
+    if (sim.phase !== "active") return;
 
     stopLoop();
 
     let guard = 0;
 
-    while (sim.phase === "falling" && guard < 100000) {
+    while (sim.phase === "active" && guard < 100000) {
       sim.step();
       guard += 1;
     }
 
-    checkImpactSound();
+    processImpacts();
+    processRemovals();
     syncSceneFromSim();
     updateDom();
     render();
+
+    // Skip jumps straight to UI settle (matching sim.phase), the same way
+    // a normal fall does — debris can still be physically moving past that
+    // point, so the loop resumes to keep animating it (see frameLoop's own
+    // "genuinely idle" stop condition, not "phase !== active").
+    startLoop();
   });
 
   // Step 1b §10: default on, not persisted, enabled in every phase.
@@ -1213,7 +1593,11 @@ export function start(elements) {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       stopLoop();
-    } else if (sim.phase === "falling") {
+    } else if (sim.phase !== "ready" || poppingMeshes.size > 0) {
+      // Not just "active": debris can still be physically settling after
+      // UI settle too (see frameLoop's "genuinely idle" stop condition).
+      // The loop harmlessly self-stops within one frame if there is
+      // nothing left to do.
       startLoop();
     }
   });
@@ -1227,7 +1611,7 @@ export function start(elements) {
     const height = canvas.clientHeight || 1;
 
     renderer.setSize(width, height, false);
-    applyImpactView();
+    applyImpactView(framingFruitKey);
     render();
   }
 
@@ -1235,7 +1619,6 @@ export function start(elements) {
 
   // --- initial paint -------------------------------------------------------
   renderHeightSliderTicks();
-  updateFruitColor();
   updateSoundToggleUI();
   resizeRendererToDisplaySize();
   syncSceneFromSim();
@@ -1243,4 +1626,3 @@ export function start(elements) {
   updateDom();
   render();
 }
-
