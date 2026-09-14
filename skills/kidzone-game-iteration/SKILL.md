@@ -103,26 +103,14 @@ If the default port is busy, use a nearby port:
 PORT=4174 node ./server.mjs
 ```
 
-Open the target project path in a browser, check console and page errors, and
-exercise the changed behavior. In proportion to the change, cover desktop and
-mobile, keyboard and touch when declared, blur/tab-away and return, reset,
-reduced motion, and focus transitions. Screenshots verify layout and appearance;
-they do not verify behavior. Exercise permission/device features from an explicit
-user action and cover denial or cancellation. State whether testing used a real
-device or mocks, and record unavailable device/browser coverage as residual risk.
+Open the target project path in a browser, play the changed behavior on desktop
+and at phone width, and check the console is clean. Try each declared input the
+change touches. Permission features (camera, microphone) must start from an
+explicit user action and handle denial.
 
-For lifecycle, input, progression, or phase changes, repeat each applicable
-transition twice in one page session, such as `start -> reset -> start`,
-`level -> next -> restart`, or a pending action interrupted by reset. Confirm
-enabled controls, instructions, and status copy all match the current phase.
-
-Make assertions demonstrate the expected state change and fail against the old
-bug; avoid vacuous checks that only prove code did not throw. Before marking a
-PR ready, fetch current `origin/main`, inspect the merge diff, rerun focused and
-repository checks on the final commit, and get an independent review for changes
-to gameplay, lifecycle, input, level data, or safety. The reviewer must not be the
-implementer and must inspect the final diff, challenge the tests, and replay the
-affected paths rather than relying on the author's summary.
+Before merging, run the project's tests and `node ./scripts/check.mjs`, and
+mention untested devices in the PR. Keep it light: see "Game Change Done" in
+`AGENTS.md`. Add deeper checks only for a genuinely risky change.
 
 When assets change, record source/authorship and license, and review for unused
 files rather than silently carrying them forward.
