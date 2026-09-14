@@ -862,3 +862,71 @@ test("uiPhase: a Plane watermelon smash (seed 7, t=5) is 'falling' at impact+71 
   assert.equal(sim.phase, "settled");
   assert.deepEqual(sim.summary, uiSettleSummary, "summary must not change between UI settle and physics settle");
 });
+
+function stepToUiSettleLayout(sim, maxSteps = MAX_STEPS_TO_SETTLE) {
+  let steps = 0;
+
+  while (sim.uiSettleLayout === null && steps < maxSteps) {
+    sim.step();
+    steps += 1;
+  }
+
+  assert.ok(sim.uiSettleLayout !== null, "uiSettleLayout was not captured within the step budget");
+
+  return sim.steps;
+}
+
+test("uiSettleLayout is captured at exactly the UI-settle step, stays fixed, and resets", () => {
+  const cases = [
+    { name: "Plane watermelon smash (seed 7, t=1)", opts: { seed: 7, heightM: PLANE_M, toughness: 1, fruit: "watermelon" } },
+    { name: "held watermelon (seed 7, heightM 0.3, t=5)", opts: { seed: 7, heightM: 0.3, toughness: 5, fruit: "watermelon" } }
+  ];
+
+  for (const { name, opts } of cases) {
+    const sim = createSim(opts);
+
+    sim.drop();
+    const settleStep = stepToUiSettleLayout(sim);
+
+    // The snapshot fires on whichever comes first: UI settle
+    // (firstImpact.step + 72) or physics settle (finishSettling, e.g. a
+    // held fruit that sleeps fast). If physics settle fired first, phase
+    // is already "settled" at this step; otherwise it must be exactly
+    // firstImpact.step + 72.
+    if (sim.phase !== "settled") {
+      assert.equal(
+        settleStep,
+        sim.firstImpact.step + 72,
+        `${name}: expected UI-settle step to be firstImpact.step + 72`
+      );
+    } else {
+      assert.ok(
+        settleStep <= sim.firstImpact.step + 72,
+        `${name}: physics settle before UI settle should not exceed firstImpact.step + 72`
+      );
+    }
+
+    const freshSim = createSim(opts);
+
+    freshSim.drop();
+    for (let i = 0; i < settleStep; i += 1) freshSim.step();
+
+    assert.deepEqual(
+      freshSim.bodies().map((b) => b.position),
+      sim.uiSettleLayout,
+      `${name}: a fresh sim stepped the same number of steps must match the captured layout`
+    );
+
+    const layoutAtSettle = JSON.parse(JSON.stringify(sim.uiSettleLayout));
+
+    runToSettled(sim);
+    assert.deepEqual(
+      sim.uiSettleLayout,
+      layoutAtSettle,
+      `${name}: uiSettleLayout must not drift as debris keeps moving after the snapshot`
+    );
+
+    sim.reset();
+    assert.equal(sim.uiSettleLayout, null, `${name}: reset() must clear uiSettleLayout`);
+  }
+});

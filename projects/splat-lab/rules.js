@@ -384,7 +384,7 @@ export function resultText({ fruit, heightMeters, impactSpeed, tier, outerCount,
 export function instructionsForPhase(phase) {
   if (phase === "ready") return "Pick a fruit, a height and a toughness, then press Drop.";
   if (phase === "falling") return "Watch it fall...";
-  return "Read the result below, then press Reset to try again.";
+  return "Read the result below, then change anything or press Drop to try again.";
 }
 
 // Step 1b §10: no Reset button. Fruit/height/toughness/Drop are enabled in

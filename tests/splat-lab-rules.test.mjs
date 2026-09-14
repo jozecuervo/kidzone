@@ -961,3 +961,12 @@ test("devDependency versions match the CDN URL versions declared in project.json
   }
 });
 
+test("instructions never mention a Reset button, which §10 removed", async () => {
+  const { instructionsForPhase } = await import("../projects/splat-lab/rules.js");
+
+  for (const phase of ["ready", "falling", "settled"]) {
+    assert.doesNotMatch(instructionsForPhase(phase), /reset/i, `${phase} instructions mention Reset`);
+  }
+  assert.match(instructionsForPhase("settled"), /Drop/);
+});
+

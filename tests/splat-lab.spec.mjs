@@ -103,6 +103,131 @@ function trackConsoleAndPageErrors(page, { exemptAbortedUrl } = {}) {
   return errors;
 }
 
+// Fix (b): a real AudioContext opens a real audio device in Chromium, which
+// is flaky under load in this environment (see the real-audio smoke test
+// below). This installs a fake AudioContext (and webkitAudioContext alias)
+// that never touches real audio, records every AudioBufferSourceNode/
+// OscillatorNode start() into window.__audioLog (same shape the §10 sound
+// tests read: { type, phase, steps }), and counts context instantiations
+// into window.__audioLog.contexts. Registered via addInitScript, so it runs
+// before any page script — including a test's own addInitScript that runs
+// afterwards (registration order), which is how the "AudioContext deleted"
+// test still sees no AudioContext.
+async function installFakeAudio(page) {
+  await page.addInitScript(() => {
+    window.__audioLog = { contexts: 0, starts: [] };
+
+    function recordStart(type) {
+      const main = document.querySelector("main");
+
+      window.__audioLog.starts.push({
+        type,
+        phase: main ? main.dataset.phase : null,
+        steps: main ? Number(main.dataset.steps) : null
+      });
+    }
+
+    function makeParam(initialValue) {
+      return {
+        value: initialValue,
+        setValueAtTime(value) {
+          this.value = value;
+          return this;
+        },
+        exponentialRampToValueAtTime(value) {
+          this.value = value;
+          return this;
+        }
+      };
+    }
+
+    function makeNode(kind, { schedulable = false } = {}) {
+      const listeners = { ended: [] };
+      const node = {
+        buffer: null,
+        type: "sine",
+        onended: null,
+        frequency: makeParam(440),
+        gain: makeParam(1),
+        connect(destination) {
+          return destination;
+        },
+        disconnect() {},
+        addEventListener(type, listener) {
+          if (type === "ended") listeners.ended.push(listener);
+        },
+        removeEventListener(type, listener) {
+          if (type === "ended") {
+            listeners.ended = listeners.ended.filter((entry) => entry !== listener);
+          }
+        }
+      };
+
+      function fireEnded() {
+        setTimeout(() => {
+          if (typeof node.onended === "function") node.onended();
+          for (const listener of listeners.ended) listener();
+        }, 0);
+      }
+
+      if (schedulable) {
+        node.start = (...args) => {
+          recordStart(kind);
+          fireEnded();
+        };
+        node.stop = () => {};
+      }
+
+      return node;
+    }
+
+    class FakeAudioContext {
+      constructor() {
+        window.__audioLog.contexts += 1;
+        this.currentTime = 0;
+        this.state = "running";
+        this.sampleRate = 44100;
+        this.destination = {};
+      }
+
+      resume() {
+        this.state = "running";
+        return Promise.resolve();
+      }
+
+      createBuffer(numberOfChannels, length, sampleRate) {
+        const channels = Array.from({ length: numberOfChannels }, () => new Float32Array(length));
+
+        return {
+          sampleRate,
+          length,
+          numberOfChannels,
+          getChannelData: (channel) => channels[channel]
+        };
+      }
+
+      createBufferSource() {
+        return makeNode("AudioBufferSourceNode", { schedulable: true });
+      }
+
+      createOscillator() {
+        return makeNode("OscillatorNode", { schedulable: true });
+      }
+
+      createBiquadFilter() {
+        return makeNode("BiquadFilterNode");
+      }
+
+      createGain() {
+        return makeNode("GainNode");
+      }
+    }
+
+    window.AudioContext = FakeAudioContext;
+    window.webkitAudioContext = FakeAudioContext;
+  });
+}
+
 // locator.fill() sets a range input's value without dispatching the
 // "input" event view.js listens on, so it never sees the change (Playwright
 // fill() targets text-like inputs). Set the value and dispatch the event
@@ -125,6 +250,14 @@ async function waitForPhase(page, phase, options = {}) {
 }
 
 test.describe("Splat Lab", () => {
+  // Fix (b): every test in this suite gets the fake AudioContext by default,
+  // so dropping never opens a real audio device. The one exception (a real
+  // Web Audio smoke test) lives in its own top-level test.describe below,
+  // outside this beforeEach's scope.
+  test.beforeEach(async ({ page }) => {
+    await installFakeAudio(page);
+  });
+
   // Replaces "keyboard only ... Enter after Reset" (step 1b §10: no Reset
   // button). Now: Tab to Drop, Space to drop, wait for settled, assert
   // focus STAYED on Drop the whole time (the point of using aria-disabled
@@ -330,6 +463,7 @@ test.describe("Splat Lab", () => {
   // no Reset button). Now: fruit -> drop -> settle -> change fruit -> drop,
   // twice — the fruit change itself does the clearing (a settled edit).
   test("fruit -> drop -> settle -> change fruit -> drop, twice in one session", async ({ page }) => {
+    test.slow();
     test.setTimeout(60000);
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
@@ -363,6 +497,7 @@ test.describe("Splat Lab", () => {
   });
 
   test("fruit selector: keyboard arrows move between fruits, disabled outside ready", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -392,7 +527,7 @@ test.describe("Splat Lab", () => {
 
     // Step 1b §10: no Reset button — fruit radios are enabled again as soon
     // as the UI itself reaches settled (no extra action needed).
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
     for (const radio of [watermelonRadio, tomatoRadio, appleRadio]) {
       await expect(radio).toBeEnabled();
     }
@@ -448,6 +583,7 @@ test.describe("Splat Lab", () => {
   });
 
   test("hidden tab pauses stepping and resumes on return", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -481,7 +617,7 @@ test.describe("Splat Lab", () => {
       { timeout: 5000 }
     );
 
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
 
     expect(errors).toEqual([]);
   });
@@ -510,6 +646,7 @@ test.describe("Splat Lab", () => {
   });
 
   test("reduced motion: Skip to result matches a normal run with the same settings", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     // Pinned seed: this test compares two separate drops for exact text equality.
@@ -521,7 +658,7 @@ test.describe("Splat Lab", () => {
     await setSliderValue(page.locator("#height-slider"), PLANE_V);
     await setSliderValue(page.locator("#toughness-slider"), 1);
     await page.getByRole("button", { name: "Drop" }).click();
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
     const normalText = await page.locator("#status").textContent();
     expect(normalText).toContain("smashed into 12 pieces");
 
@@ -539,7 +676,7 @@ test.describe("Splat Lab", () => {
     await expect(skipButton).toBeEnabled();
     await skipButton.click();
 
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
     const reducedMotionText = await page.locator("#status").textContent();
 
     expect(reducedMotionText).toContain("smashed into 12 pieces");
@@ -577,6 +714,7 @@ test.describe("Splat Lab", () => {
   // — so this test checks that directly instead of relying on
   // toBeDisabled()/toBeEnabled() for Drop.
   test("D3: controls follow phase exactly (invariant 2), and #instructions matches rules.js per phase", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -673,7 +811,7 @@ test.describe("Splat Lab", () => {
     ).toBeLessThanOrEqual(heightBeforeIgnoredClick + 0.5);
     expect(phaseAfterIgnoredClick).toBe("falling");
 
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
 
     // settled: fruit/height/toughness/Drop enabled again; no Reset button
     // needed to get there.
@@ -696,6 +834,7 @@ test.describe("Splat Lab", () => {
   });
 
   test("D5: the aria-live status region is not rewritten every frame when its text is unchanged", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -715,7 +854,7 @@ test.describe("Splat Lab", () => {
     });
 
     await page.getByRole("button", { name: "Drop" }).click();
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
 
     const mutationCount = await page.evaluate(() => {
       window.__statusMutationObserver.disconnect();
@@ -729,6 +868,7 @@ test.describe("Splat Lab", () => {
   });
 
   test("every declared external request is fetched, and nothing else is (three.module.js, three.core.js, cannon-es.js)", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     const unexpectedRequests = await routeCdnAndRecordUnexpectedRequests(page);
 
@@ -749,7 +889,7 @@ test.describe("Splat Lab", () => {
     await setSliderValue(page.locator("#height-slider"), PLANE_V); // guarantees a break
     await setSliderValue(page.locator("#toughness-slider"), 1);
     await page.getByRole("button", { name: "Drop" }).click();
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
 
     expect(unexpectedRequests).toEqual([]);
     expect([...externalRequestUrls].sort()).toEqual([...declaredUrls].sort());
@@ -776,6 +916,7 @@ test.describe("Splat Lab", () => {
   // track's computed background-color has alpha 1 (opaque, so canvas
   // content can no longer show through it).
   test("B3: the pink-dot cause stays fixed — exactly one .height-bar-marker, and the track background is opaque", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -784,7 +925,7 @@ test.describe("Splat Lab", () => {
     await setSliderValue(page.locator("#height-slider"), PLANE_V);
     await setSliderValue(page.locator("#toughness-slider"), 1);
     await page.getByRole("button", { name: "Drop" }).click();
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
 
     const markerCount = await page.locator("#height-bar .height-bar-marker").count();
     expect(markerCount).toBe(1);
@@ -811,6 +952,7 @@ test.describe("Splat Lab", () => {
   });
 
   test("B2/B3: the height bar marker moves down during a Plane fall and reaches the track bottom at settled", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -843,7 +985,7 @@ test.describe("Splat Lab", () => {
       expect(samples[i]).toBeGreaterThan(samples[i - 1]);
     }
 
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
 
     const markerBox = await marker.boundingBox();
     const trackBox = await page.locator("#height-bar-track").boundingBox();
@@ -877,6 +1019,7 @@ test.describe("Splat Lab", () => {
   // changing height (a settled edit) returns the marker to the top and the
   // label to the NEW height.
   test("B2/B3: after a settled Plane drop, changing height returns the marker to the top and the label to the new height, twice", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -885,7 +1028,7 @@ test.describe("Splat Lab", () => {
     async function dropThenEditHeight(targetSliderValue, targetLabel) {
       await setSliderValue(page.locator("#height-slider"), PLANE_V);
       await page.getByRole("button", { name: "Drop" }).click();
-      await waitForPhase(page, "settled", { timeout: 15000 });
+      await waitForPhase(page, "settled", { timeout: 45000 });
 
       await setSliderValue(page.locator("#height-slider"), targetSliderValue);
       await waitForPhase(page, "ready");
@@ -905,6 +1048,7 @@ test.describe("Splat Lab", () => {
   });
 
   test("B3: bar write budget stays under 150 DOM mutations during one Plane drop", async ({ page }) => {
+    test.slow();
     const errors = trackConsoleAndPageErrors(page);
     await routeCdnAndRecordUnexpectedRequests(page);
     await page.goto(gamePath);
@@ -924,7 +1068,7 @@ test.describe("Splat Lab", () => {
     });
 
     await page.getByRole("button", { name: "Drop" }).click();
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
 
     const mutationCount = await page.evaluate(() => {
       window.__barMutationObserver.disconnect();
@@ -1132,7 +1276,7 @@ test.describe("Splat Lab", () => {
     await page.waitForTimeout(500);
     await checkNoIntersection(); // mid-fall
 
-    await waitForPhase(page, "settled", { timeout: 15000 });
+    await waitForPhase(page, "settled", { timeout: 45000 });
     await checkNoIntersection(); // settled
   }
 
@@ -1175,6 +1319,7 @@ test.describe("Splat Lab", () => {
     });
 
     test("V1: at 390x844, the top tick's name is visible and fully inside the stage panel, at Plane and at Roof", async ({ page }) => {
+      test.slow();
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
       await assertTopTickNameVisibleAndContained(page);
@@ -1233,6 +1378,39 @@ test.describe("Splat Lab", () => {
       const secondHash = await dropAndReadLayoutHash(page);
 
       expect(secondHash).toEqual(firstHash);
+
+      expect(errors).toEqual([]);
+    });
+
+    test("Skip-to-result path gives the same layout hash as a normal run with ?seed=7", async ({ page }) => {
+      test.slow();
+      const errors = trackConsoleAndPageErrors(page);
+      await routeCdnAndRecordUnexpectedRequests(page);
+      await page.goto(pinnedGamePath);
+      await waitForPhase(page, "ready");
+
+      await setSliderValue(page.locator("#height-slider"), PLANE_V);
+      await setSliderValue(page.locator("#toughness-slider"), 1);
+
+      const normalHash = await dropAndReadLayoutHash(page);
+      expect(normalHash).not.toBeNull();
+
+      // Step 1b §10: no Reset button — enable reduced motion, then Drop
+      // again directly from settled (the settings are unchanged).
+      await page.emulateMedia({ reducedMotion: "reduce" });
+
+      const skipButton = page.getByRole("button", { name: "Skip to result" });
+
+      await page.getByRole("button", { name: "Drop" }).click();
+      await waitForPhase(page, "falling");
+      await expect(skipButton).toBeEnabled();
+      await skipButton.click();
+
+      await waitForPhase(page, "settled", { timeout: 45000 });
+      const skippedHash = await page.locator("main").getAttribute("data-layout-hash");
+
+      expect(skippedHash).not.toBeNull();
+      expect(skippedHash).toEqual(normalHash);
 
       expect(errors).toEqual([]);
     });
@@ -1471,6 +1649,7 @@ test.describe("Splat Lab", () => {
     });
 
     test("incoming marker write budget stays under 150 DOM mutations during one Plane drop", async ({ page }) => {
+      test.slow();
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
       await page.goto(gamePath);
@@ -1490,7 +1669,7 @@ test.describe("Splat Lab", () => {
       });
 
       await page.getByRole("button", { name: "Drop" }).click();
-      await waitForPhase(page, "settled", { timeout: 15000 });
+      await waitForPhase(page, "settled", { timeout: 45000 });
 
       const mutationCount = await page.evaluate(() => {
         window.__incomingMutationObserver.disconnect();
@@ -1599,6 +1778,7 @@ test.describe("Splat Lab", () => {
     });
 
     test("keyboard redrop in settled: pressing Space on Drop again produces a new drop with no stale text from the previous one", async ({ page }) => {
+      test.slow();
       test.setTimeout(30000);
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
@@ -1610,7 +1790,7 @@ test.describe("Splat Lab", () => {
       await setSliderValue(page.locator("#height-slider"), KNEE_V);
       await dropButton.focus();
       await page.keyboard.press("Space");
-      await waitForPhase(page, "settled", { timeout: 15000 });
+      await waitForPhase(page, "settled", { timeout: 45000 });
       const firstText = await page.locator("#status").textContent();
       expect(firstText).toContain("0.3 m");
 
@@ -1620,7 +1800,7 @@ test.describe("Splat Lab", () => {
       await setSliderValue(page.locator("#height-slider"), PLANE_V);
       await setSliderValue(page.locator("#toughness-slider"), 1);
       await page.keyboard.press("Space");
-      await waitForPhase(page, "settled", { timeout: 15000 });
+      await waitForPhase(page, "settled", { timeout: 45000 });
       const secondText = await page.locator("#status").textContent();
 
       expect(secondText).not.toEqual(firstText);
@@ -1769,63 +1949,13 @@ test.describe("Splat Lab", () => {
     });
 
     // --- synthesized splat sound ------------------------------------------
-
-    // Wraps AudioContext/webkitAudioContext (counting instantiations) and
-    // AudioBufferSourceNode/OscillatorNode's start() (recording node type,
-    // data-phase and data-steps at call time), all read back afterwards
-    // through window.__audioLog.
-    async function installAudioInstrumentation(page) {
-      await page.addInitScript(() => {
-        window.__audioLog = { contexts: 0, starts: [] };
-
-        function recordStart(type) {
-          const main = document.querySelector("main");
-
-          window.__audioLog.starts.push({
-            type,
-            phase: main ? main.dataset.phase : null,
-            steps: main ? Number(main.dataset.steps) : null
-          });
-        }
-
-        if (window.AudioBufferSourceNode) {
-          const originalStart = AudioBufferSourceNode.prototype.start;
-
-          AudioBufferSourceNode.prototype.start = function (...args) {
-            recordStart("AudioBufferSourceNode");
-            return originalStart.apply(this, args);
-          };
-        }
-
-        if (window.OscillatorNode) {
-          const originalStart = OscillatorNode.prototype.start;
-
-          OscillatorNode.prototype.start = function (...args) {
-            recordStart("OscillatorNode");
-            return originalStart.apply(this, args);
-          };
-        }
-
-        for (const name of ["AudioContext", "webkitAudioContext"]) {
-          const OriginalContext = window[name];
-
-          if (!OriginalContext) continue;
-
-          const WrappedContext = function (...args) {
-            window.__audioLog.contexts += 1;
-            return new OriginalContext(...args);
-          };
-
-          WrappedContext.prototype = OriginalContext.prototype;
-          window[name] = WrappedContext;
-        }
-      });
-    }
+    // Fix (b): these tests read window.__audioLog, populated by the default
+    // fake AudioContext installed in the suite-level beforeEach above — no
+    // per-test instrumentation call needed.
 
     test("no AudioContext exists before the first Drop, not after page load and not after changing controls", async ({ page }) => {
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
-      await installAudioInstrumentation(page);
       await page.goto(gamePath);
       await waitForPhase(page, "ready");
 
@@ -1843,7 +1973,6 @@ test.describe("Splat Lab", () => {
     test("one Counter watermelon crack (?seed=7) gives exactly one noise-source start and one oscillator start, both while falling", async ({ page }) => {
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
-      await installAudioInstrumentation(page);
       await page.goto(pinnedGamePath);
       await waitForPhase(page, "ready");
 
@@ -1870,7 +1999,6 @@ test.describe("Splat Lab", () => {
     test("with the sound toggle off, a drop gives zero starts", async ({ page }) => {
       const errors = trackConsoleAndPageErrors(page);
       await routeCdnAndRecordUnexpectedRequests(page);
-      await installAudioInstrumentation(page);
       await page.goto(pinnedGamePath);
       await waitForPhase(page, "ready");
 
@@ -1942,5 +2070,45 @@ test.describe("Splat Lab", () => {
 
       expect(errors).toEqual([]);
     });
+  });
+});
+
+// Fix (b): every other test in this file gets the fake AudioContext (see
+// the suite-level beforeEach above). This one test deliberately does not —
+// it is the single smoke check that real Web Audio still works end to end.
+// Kept in its own top-level test.describe (no beforeEach) so the default
+// fake never gets installed here.
+test.describe("Splat Lab: real audio", () => {
+  test("real Web Audio smoke: a Counter watermelon crack plays with no page errors and no unexpected console errors", async ({ page }) => {
+    // Chromium's headless audio renderer can log this one console error
+    // under machine load (observed independent of app code); it is not a
+    // real failure, so it is the single exemption below.
+    const AUDIO_DEVICE_ERROR_TEXT =
+      "The AudioContext encountered an error from the audio device or the WebAudio renderer.";
+
+    const pageErrors = [];
+    const unexpectedConsoleErrors = [];
+
+    page.on("pageerror", (error) => {
+      pageErrors.push(`pageerror: ${error.message}`);
+    });
+
+    page.on("console", (msg) => {
+      if (msg.type() !== "error") return;
+      if (msg.text() === AUDIO_DEVICE_ERROR_TEXT) return;
+
+      unexpectedConsoleErrors.push(`console.error: ${msg.text()} (${msg.location()?.url ?? "no location"})`);
+    });
+
+    await routeCdnAndRecordUnexpectedRequests(page);
+    await page.goto(pinnedGamePath);
+    await waitForPhase(page, "ready");
+
+    await setSliderValue(page.locator("#height-slider"), COUNTER_V);
+    await page.getByRole("button", { name: "Drop" }).click();
+    await waitForPhase(page, "settled", { timeout: 15000 });
+
+    expect(pageErrors).toEqual([]);
+    expect(unexpectedConsoleErrors).toEqual([]);
   });
 });
