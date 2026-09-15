@@ -20,59 +20,43 @@ When product details are missing, favor a static mini-project that can publish
 directly from GitHub Pages without a build step. Add shared infrastructure only
 after more than one project clearly needs it.
 
-## Game Quality Contract
+## Game Quality
 
-- Treat every interaction declared in `project.json` as a tested promise. Do not
-  advertise pointer, touch, keyboard, upload, camera, or other input unless its
-  main path works and is verified.
-- Behavior changes need focused checks and project-level regression tests. Every
-  critical/high-impact fix must include a test that fails without it. This
-  includes privacy or safety failures, crashes, unwinnable/incorrect progression,
-  broken declared inputs, and stale work that changes a later game session.
-- Use elapsed time or a fixed simulation step for motion; do not tie game speed
-  to display refresh rate. Pause cleanly when the page is hidden and honor
-  `prefers-reduced-motion` without hiding required state or controls.
-- Give timers, animation frames, listeners, media streams, object URLs, pending
-  async work, and engine objects one lifecycle owner. Reset/restart and replaced
-  input must invalidate stale callbacks and dispose owned resources.
-- Keep canvas and SVG experiences operable and understandable without vision:
-  expose meaningful state, instructions, and status in accessible DOM content,
-  and manage focus when views or dialogs change.
-- For random levels, support a deterministic seed for debugging/tests and verify
-  generated levels are solvable before play.
-- Browser QA must cover desktop and mobile layouts, keyboard and touch when
-  declared, blur/tab-away and return, reduced motion, reset/restart, and console
-  or page errors. Exercise permission/device flows from explicit user actions,
-  including denial or cancellation. Distinguish real-device checks from mocks
-  and record untested device/browser risk. Screenshots are visual evidence, not
-  behavioral verification.
-- Record asset source/license or authorship, and remove or explicitly justify
-  unused assets before shipping.
+These are toys, so keep the loop fast. Iterate by playing it, and let the
+checks catch real breakage, not every edge case.
 
-## Game Change Definition Of Done
+Always hold:
 
-Before marking a game pull request ready:
+- Privacy and safety: no undeclared network, storage, camera, microphone, or
+  sharing. `check.mjs` enforces the declarations.
+- Declared inputs actually work. Don't list touch or keyboard in `project.json`
+  unless you tried it.
+- Motion uses elapsed time or a fixed step, pauses when the tab is hidden, and
+  respects `prefers-reduced-motion`.
+- Put important status in the DOM, not only on the canvas, so the game is
+  playable without seeing it.
+- Record where assets came from and their licence.
 
-- State the core invariants in the PR or tests: exact win/progress gate,
-  damage/loss rule, required collectibles, legal phases, and reset result.
-- Prove every authored level is completable. Use a route/state solver for gated
-  levels; use deterministic seeds plus solvability checks for generated levels.
-- Exercise every declared input on a meaningful path. Native controls must work
-  with their standard keyboard behavior, including Enter/Space for button-like
-  controls. Held input must release after focus changes, blur, visibility loss,
-  pointer cancellation/loss, reset, and phase changes.
-- Repeat each applicable transition sequence twice in one page session, such as
-  `start -> reset -> start`, `level -> next -> restart`, or a pending action
-  interrupted by reset.
-- Derive enabled controls, instructions, and status copy from the current game
-  phase so visible UI cannot contradict accepted behavior.
-- Make regression assertions prove the intended state changed. Avoid tests that
-  pass merely because code ran without throwing or because a fixture was empty.
-- Fetch and compare against current `origin/main`, rerun focused and repository
-  checks on the final commit, and require an independent review for gameplay,
-  lifecycle, input, level-data, or safety changes. The reviewer must not be the
-  implementer and must inspect the final diff, challenge the tests, and replay
-  the affected paths; record any unavailable device/browser coverage as risk.
+Good sense, not gates:
+
+- Add a test when you fix a bug that would bother a kid: a crash, a game that
+  can't be won, controls that stop working. Tests for pure logic are cheap;
+  browser tests are for the main path only.
+- One owner for timers, listeners, and animation frames, so restart doesn't
+  leave stale work running.
+- Seed randomness when it helps debugging.
+
+## Game Change Done
+
+A game change is ready to merge when:
+
+- `node --test` for the project's tests and `node ./scripts/check.mjs` pass.
+- The project's Playwright spec passes, if it has one.
+- You played it once on desktop and at phone width, and the console is clean.
+- The PR says what changed and any known rough edges, such as untested devices.
+
+No independent reviewer, level solver, repeated-sequence tests, or mutation
+checks are required. Use them only when a change is risky enough to need them.
 
 ## Agent Skills
 
@@ -99,3 +83,8 @@ Before marking a game pull request ready:
 - Do not assume deployment at `/`; Kidzone may be served below a repository path.
 - Use the local static server for preview needs, but keep publishable projects
   deployable to GitHub Pages without server-only behavior.
+- Run Playwright per spec file, and split a large spec with `--grep` or line
+  numbers plus `--global-timeout=280000`. Agent sessions stall on a 10-minute
+  no-output watchdog, and `tests/splat-lab.spec.mjs` alone takes about 5 minutes.
+- Stop a preview or test server by the PID you started, never with
+  `pkill -f server.mjs`: that also kills anyone else's preview on another port.

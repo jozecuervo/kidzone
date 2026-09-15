@@ -143,14 +143,9 @@ After the review is approved, follow the repo's Kidzone conventions:
 - Use `projects/_template/` or `node ./scripts/new-project.mjs` when the repo state allows it.
 - Run `node ./scripts/update-project-index.mjs` after metadata changes when possible.
 - Run `node ./scripts/check.mjs` before considering the work done when possible.
-- Add focused project tests for the core loop, win/progress rules, reset, and
-  failure-prone state transitions. Every critical/high-impact fix needs a
-  regression test.
-- Repeat each applicable sequence twice in one page session, such as
-  `start -> reset -> start`, `level -> next -> restart`, or a pending action
-  interrupted by reset.
-- Make assertions prove expected state changes; do not accept a no-throw check
-  or screenshot as proof of gameplay correctness.
+- Add a few focused tests for the core loop and anything that broke before.
+  Keep it light; see "Game Change Done" in `AGENTS.md`.
+- Play it once on desktop and at phone width before calling it done.
 - Document asset authorship/source and license, then remove unused assets or
   explain why they remain.
 

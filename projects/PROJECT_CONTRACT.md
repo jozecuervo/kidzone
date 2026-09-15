@@ -46,6 +46,11 @@ the entry must stay inside the project folder.
 }
 ```
 
+The landing page shelf lists projects **newest first by `date`**; `order` only
+breaks ties between projects with the same date. Set `"shelf": false` to keep a
+project published and in `projects/index.json` but off the shelf (the
+`make-a-game` starter uses this; the hero links to it instead).
+
 ## Safety Defaults
 
 - Prefer active creation, experiments, puzzles, and making things.
@@ -64,31 +69,19 @@ root. External scripts and per-project servers should be rare and declared in
 
 ## Interaction And Behavior Contract
 
-- Every value in `interaction` is a user-facing promise. Its main path must work
-  and be exercised by project tests or browser QA before publishing.
-- Behavior changes require focused checks. Critical/high-impact fixes require a
-  regression test that fails against the broken behavior, including privacy or
-  safety failures, crashes, unwinnable/incorrect progression, broken declared
-  inputs, and stale work that changes a later session.
-- Animation and simulation must use elapsed time or a fixed step rather than
-  frame count, pause when the document is hidden, and honor reduced-motion
-  preferences without removing required feedback.
-- Timers, animation frames, listeners, media streams, object URLs, pending async
-  work, and engine objects must have one lifecycle owner. Reset, restart, or
-  replaced input must dispose them or invalidate stale callbacks.
-- Canvas and SVG projects must provide equivalent essential instructions, game
-  state, and status in accessible DOM content and keep focus usable across views.
-- Random level generation must be reproducible with a deterministic seed for
-  debugging/tests and reject or repair unsolvable levels before play.
+- Only list an input in `interaction` if you tried it and it works.
+- Motion uses elapsed time or a fixed step, pauses when the tab is hidden, and
+  respects reduced motion.
+- Put the important status and instructions in the DOM, not only on the canvas.
+- Add a regression test when you fix a bug a kid would notice, such as a crash,
+  a game that can't be won, or broken controls.
 
 ## Verification And Assets
 
-Before publishing, exercise relevant desktop and mobile layouts, declared
-keyboard and touch paths, blur/tab-away and return, reduced motion, reset, focus
-transitions, and console/page errors. Permission/device flows must start from an
-explicit user action and cover denial or cancellation. Record whether coverage
-used a real device or mocks and call out untested device/browser risk.
-Screenshots verify appearance, not game behavior.
+Before publishing, play it on desktop and at phone width, try each declared
+input, and check the console is clean. Camera, microphone, or other permission
+flows must start from an explicit user action and handle denial. Mention
+untested devices in the PR.
 
 Document asset authorship or source and license in the project README (or an
 adjacent credits file). Remove unused assets or state why they are retained.
