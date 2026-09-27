@@ -49,11 +49,12 @@ let chomps = 0;
 let mood = "idle";
 let gameActive = false;
 let brushing = false;
-let keyboardBrushing = false;
 let moodTimer = 0;
 let graceTimer = 0;
 let brushTimer = 0;
+let brushStartTimer = 0;
 let activePointerId = null;
+let pausedForVisibility = false;
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 let audioContext = null;
 let soundEnabled = true;
@@ -244,17 +245,47 @@ function updateProgress() {
   furMeter.setAttribute("aria-valuenow", String(strokes));
 }
 
-function endBrushing() {
-  if (!brushing) {
+function setStageInteractive(interactive) {
+  if (interactive) {
+    stage.setAttribute("role", "button");
+    stage.setAttribute("tabindex", "0");
+    stage.setAttribute("aria-describedby", "stageInstructions");
+    stage.setAttribute(
+      "aria-label",
+      "Brush Max. Press and hold while Max is calm, and release when he warns you."
+    );
     return;
   }
 
+  stage.removeAttribute("role");
+  stage.removeAttribute("tabindex");
+  stage.removeAttribute("aria-describedby");
+  stage.removeAttribute("aria-label");
+}
+
+function endBrushing() {
+  const pointerId = activePointerId;
+
   brushing = false;
-  keyboardBrushing = false;
   activePointerId = null;
+  window.clearTimeout(brushStartTimer);
   window.clearInterval(brushTimer);
   stopPurrSound();
   brush.classList.remove("is-brushing", "keyboard-active");
+
+  if (pointerId !== null && stage.hasPointerCapture?.(pointerId)) {
+    stage.releasePointerCapture(pointerId);
+  }
+}
+
+function releaseBrushingInput() {
+  const stoppedDuringWarning = brushing && mood === "warning";
+  endBrushing();
+
+  if (stoppedDuringWarning) {
+    window.clearTimeout(graceTimer);
+    setLiveStatus("Nice stop! You read Max's warning. Wait until he is calm again.");
+  }
 }
 
 function scheduleWarning() {
@@ -315,6 +346,7 @@ function chomp() {
 
 function completeRound() {
   gameActive = false;
+  setStageInteractive(false);
   clearMoodTimers();
   endBrushing();
   setMood("idle", "Round complete.");
@@ -360,7 +392,6 @@ function startBrushing({ keyboard = false } = {}) {
   }
 
   brushing = true;
-  keyboardBrushing = keyboard;
   brush.classList.add("is-brushing");
   playPurrSound();
 
@@ -370,7 +401,7 @@ function startBrushing({ keyboard = false } = {}) {
     brush.style.top = "64%";
   }
 
-  window.setTimeout(addStroke, 220);
+  brushStartTimer = window.setTimeout(addStroke, 220);
   brushTimer = window.setInterval(addStroke, 430);
   setLiveStatus("Brushing… keep watching Max's tail.");
 }
@@ -378,8 +409,10 @@ function startBrushing({ keyboard = false } = {}) {
 function startRound() {
   strokes = 0;
   gameActive = true;
+  pausedForVisibility = false;
   introOverlay.hidden = true;
   roundOverlay.hidden = true;
+  setStageInteractive(true);
   updateProgress();
   becomeCalm(`Round ${roundIndex + 1}. Max is calm. Start brushing.`);
   stage.focus();
@@ -425,41 +458,47 @@ stage.addEventListener("pointermove", (event) => {
 });
 
 stage.addEventListener("pointerdown", (event) => {
-  if (event.target.closest("button")) {
+  if (!gameActive || event.target.closest("button")) {
     return;
   }
 
   event.preventDefault();
-  activePointerId = event.pointerId;
-  stage.setPointerCapture?.(event.pointerId);
-  stage.classList.add("has-pointer");
   updateBrushPosition(event);
   startBrushing();
+
+  if (brushing) {
+    activePointerId = event.pointerId;
+    stage.setPointerCapture?.(event.pointerId);
+    stage.classList.add("has-pointer");
+  }
 });
 
 function releasePointer(event) {
-  if (activePointerId !== null && event.pointerId !== undefined && event.pointerId !== activePointerId) {
+  if (activePointerId === null) {
     return;
   }
 
-  const stoppedDuringWarning = brushing && mood === "warning";
-  endBrushing();
-
-  if (stoppedDuringWarning) {
-    window.clearTimeout(graceTimer);
-    setLiveStatus("Nice stop! You read Max's warning. Wait until he is calm again.");
+  if (event.pointerId !== undefined && event.pointerId !== activePointerId) {
+    return;
   }
 
-  if (event?.pointerType === "touch") {
+  releaseBrushingInput();
+
+  if (event?.pointerType === "touch" || !stage.matches(":hover")) {
     stage.classList.remove("has-pointer");
   }
 }
 
 stage.addEventListener("pointerup", releasePointer);
 stage.addEventListener("pointercancel", releasePointer);
+stage.addEventListener("lostpointercapture", releasePointer);
 window.addEventListener("pointerup", releasePointer);
 
 stage.addEventListener("keydown", (event) => {
+  if (event.target.closest("button")) {
+    return;
+  }
+
   if ((event.code === "Space" || event.code === "Enter") && !event.repeat) {
     event.preventDefault();
     startBrushing({ keyboard: true });
@@ -467,21 +506,41 @@ stage.addEventListener("keydown", (event) => {
 });
 
 stage.addEventListener("keyup", (event) => {
+  if (event.target.closest("button")) {
+    return;
+  }
+
   if (event.code !== "Space" && event.code !== "Enter") {
     return;
   }
 
   event.preventDefault();
-  const stoppedDuringWarning = keyboardBrushing && mood === "warning";
-  endBrushing();
-
-  if (stoppedDuringWarning) {
-    window.clearTimeout(graceTimer);
-    setLiveStatus("Nice stop! You read Max's warning. Wait until he is calm again.");
-  }
+  releaseBrushingInput();
 });
 
-stage.addEventListener("blur", endBrushing);
+stage.addEventListener("blur", releaseBrushingInput);
+window.addEventListener("blur", releaseBrushingInput);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pausedForVisibility = gameActive;
+
+    if (!pausedForVisibility) {
+      return;
+    }
+
+    clearMoodTimers();
+    endBrushing();
+    stopCatSounds();
+    setMood("idle", "Game paused while you were away. Max will be calm when you return.");
+    return;
+  }
+
+  if (pausedForVisibility && gameActive) {
+    pausedForVisibility = false;
+    becomeCalm("Welcome back. Max is calm again.");
+  }
+});
 
 startButton.addEventListener("click", () => {
   ensureAudio();
@@ -520,12 +579,15 @@ helpButton.addEventListener("click", () => {
   clearMoodTimers();
   endBrushing();
   gameActive = false;
+  setStageInteractive(false);
+  pausedForVisibility = false;
   setMood("idle", "Instructions opened. Press “I am ready” when you want to continue.");
   introOverlay.hidden = false;
   startButton.textContent = "Restart round";
   startButton.focus();
 });
 
+setStageInteractive(false);
 updateProgress();
 
 if (!AudioContextClass) {

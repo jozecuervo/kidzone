@@ -7,6 +7,7 @@ A static, local-only timing game starring Max. Brush while he is calm and let go
 - Pointer or touch: press and hold over Max; release on the warning.
 - Keyboard: focus the game and hold Space or Enter; release on the warning.
 - Sound: use the music-note button to mute or restore optional effects.
+- Leaving the window or tab safely releases the brush and pauses the warning timer.
 
 ## Safety and privacy
 
