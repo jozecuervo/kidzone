@@ -70,6 +70,33 @@ projects/sky-catcher/
 Keep your game inside that folder. If you add images or sounds, put them in the
 same project folder, usually under `assets/`.
 
+### Shared Game Sprites
+
+Kidzone has some sprites you can use in any game: 52 playing cards and 6 dice
+faces. They live in the root `assets/img/` folder.
+
+**Playing cards** — 52 sprites with all suits and ranks:
+
+```javascript
+// Reference from your game folder:
+const cardImage = new Image();
+cardImage.src = '../../assets/img/cards/ace-of-hearts.gif';
+```
+
+Card filenames: `2-of-clubs.gif`, `10-of-spades.gif`, `jack-of-diamonds.gif`,
+`queen-of-clubs.gif`, `king-of-hearts.gif`, `ace-of-spades.gif`, etc.
+
+**Dice** — 6 faces numbered 1–6:
+
+```javascript
+const diceImage = new Image();
+diceImage.src = '../../assets/img/dice/4.gif';
+```
+
+Dice filenames: `1.gif`, `2.gif`, `3.gif`, `4.gif`, `5.gif`, `6.gif`
+
+See [`assets/README.md`](./assets/README.md) for details.
+
 ## 4. Build A Small First Version
 
 Start tiny. A good first version might have:

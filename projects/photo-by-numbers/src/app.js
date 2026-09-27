@@ -16,12 +16,17 @@ class PhotoByNumbers {
         this.currentPhase = 'processing';
         this.currentStep = 'input';
         this.lineArtData = null;
+        this.activeObjectUrl = null;
+        this.processingFrame = null;
+        this.cameraRequestId = 0;
+        this.imageLoadId = 0;
 
         // Initialize algorithm registry
         this.algorithmRegistry = new AlgorithmRegistry();
 
         this.initElements();
         this.initEventListeners();
+        this.setStatus('Choose a photo, use the camera, or try the sample.');
     }
 
     initElements() {
@@ -36,12 +41,14 @@ class PhotoByNumbers {
 
         // Webcam controls
         this.webcamBtn = document.getElementById('webcamBtn');
+        this.uploadBtn = document.getElementById('uploadBtn');
         this.fileUpload = document.getElementById('fileUpload');
         this.sampleBtn = document.getElementById('sampleBtn');
         this.webcamSection = document.getElementById('webcamSection');
         this.webcam = document.getElementById('webcam');
         this.captureBtn = document.getElementById('captureBtn');
         this.closeWebcamBtn = document.getElementById('closeWebcamBtn');
+        this.appStatus = document.getElementById('appStatus');
 
         // Canvas elements
         this.originalCanvas = document.getElementById('originalCanvas');
@@ -95,6 +102,7 @@ class PhotoByNumbers {
     initEventListeners() {
         // Webcam events
         this.webcamBtn.addEventListener('click', () => this.startWebcam());
+        this.uploadBtn.addEventListener('click', () => this.fileUpload.click());
         this.fileUpload.addEventListener('change', (e) => this.handleFileUpload(e));
         this.sampleBtn.addEventListener('click', () => this.loadSampleImage());
         this.captureBtn.addEventListener('click', () => this.capturePhoto());
@@ -110,7 +118,7 @@ class PhotoByNumbers {
         this.algorithm.addEventListener('change', () => {
             this.updateControlsVisibility();
             if (this.processedCanvas.width > 0) {
-                this.processImage();
+                this.scheduleProcessing();
             }
         });
 
@@ -118,12 +126,12 @@ class PhotoByNumbers {
         this.useOtsu.addEventListener('change', (e) => {
             this.manualThresholdGroup.style.display = e.target.checked ? 'none' : 'flex';
             if (this.processedCanvas.width > 0) {
-                this.processImage();
+                this.scheduleProcessing();
             }
         });
         this.useContrast.addEventListener('change', (e) => {
             if (this.processedCanvas.width > 0) {
-                this.processImage();
+                this.scheduleProcessing();
             }
         });
 
@@ -147,8 +155,12 @@ class PhotoByNumbers {
 
         document.querySelectorAll('.color-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.color-btn').forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-pressed', 'false');
+                });
                 e.target.classList.add('active');
+                e.target.setAttribute('aria-pressed', 'true');
                 this.currentColor = e.target.dataset.color;
                 this.colorPicker.value = this.currentColor;
             });
@@ -172,6 +184,8 @@ class PhotoByNumbers {
             this.draw(e.touches[0]);
         });
         this.coloringCanvas.addEventListener('touchend', () => this.stopDrawing());
+
+        window.addEventListener('pagehide', () => this.cleanupResources());
     }
 
     // ==================== PHASE & STEP NAVIGATION ====================
@@ -189,16 +203,21 @@ class PhotoByNumbers {
         this.phaseColoring.classList.toggle('active', phase === 'coloring');
         this.phaseProcessing.classList.toggle('hidden', phase !== 'processing');
         this.phaseColoring.classList.toggle('hidden', phase !== 'coloring');
+        this.phaseProcessing.hidden = phase !== 'processing';
+        this.phaseColoring.hidden = phase !== 'coloring';
 
         // Update phase indicators
         this.phaseIndicators.forEach(indicator => {
             const indicatorPhase = indicator.dataset.phase;
             if (indicatorPhase === 'input' && phase === 'processing') {
                 indicator.classList.add('active');
+                indicator.setAttribute('aria-current', 'step');
             } else if (indicatorPhase === 'coloring' && phase === 'coloring') {
                 indicator.classList.add('active');
+                indicator.setAttribute('aria-current', 'step');
             } else {
                 indicator.classList.remove('active');
+                indicator.removeAttribute('aria-current');
             }
         });
 
@@ -221,23 +240,37 @@ class PhotoByNumbers {
     // ==================== WEBCAM ====================
 
     async startWebcam() {
+        this.stopWebcam();
+        const requestId = ++this.cameraRequestId;
+
         try {
-            this.stream = await navigator.mediaDevices.getUserMedia({
+            const stream = await navigator.mediaDevices.getUserMedia({
                 video: { width: 1280, height: 720 }
             });
+            if (requestId !== this.cameraRequestId) {
+                stream.getTracks().forEach(track => track.stop());
+                return;
+            }
+            this.stream = stream;
             this.webcam.srcObject = this.stream;
             this.webcamSection.classList.remove('hidden');
+            this.setStatus('Camera ready. Choose Capture Photo when you are ready.');
         } catch (error) {
-            alert('Unable to access webcam: ' + error.message);
+            if (requestId === this.cameraRequestId) {
+                this.stopWebcam();
+                this.setStatus('Camera access was not available. You can upload a photo or try the sample instead.');
+            }
         }
     }
 
     stopWebcam() {
+        this.cameraRequestId += 1;
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
-            this.webcam.srcObject = null;
-            this.webcamSection.classList.add('hidden');
         }
+        this.stream = null;
+        this.webcam.srcObject = null;
+        this.webcamSection.classList.add('hidden');
     }
 
     capturePhoto() {
@@ -248,29 +281,48 @@ class PhotoByNumbers {
         tempCtx.drawImage(this.webcam, 0, 0);
 
         tempCanvas.toBlob((blob) => {
+            if (!blob) return;
             const img = new Image();
+            const loadId = ++this.imageLoadId;
+            let objectUrl;
             img.onload = () => {
-                this.loadImage(img);
-                this.stopWebcam();
+                if (loadId === this.imageLoadId) {
+                    this.loadImage(img, objectUrl);
+                    this.stopWebcam();
+                } else {
+                    this.revokeObjectUrl(objectUrl);
+                }
             };
-            img.src = URL.createObjectURL(blob);
+            img.onerror = () => this.revokeObjectUrl(objectUrl);
+            objectUrl = this.setImageObjectUrl(img, blob);
         });
     }
 
     handleFileUpload(event) {
         const file = event.target.files[0];
         if (file && file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => this.loadImage(img);
-                img.src = e.target.result;
+            const img = new Image();
+            const loadId = ++this.imageLoadId;
+            let objectUrl;
+            img.onload = () => {
+                if (loadId === this.imageLoadId) {
+                    this.loadImage(img, objectUrl);
+                } else {
+                    this.revokeObjectUrl(objectUrl);
+                }
             };
-            reader.readAsDataURL(file);
+            img.onerror = () => {
+                this.revokeObjectUrl(objectUrl);
+                if (loadId === this.imageLoadId) {
+                    this.setStatus('That image could not be opened. Please choose another image.');
+                }
+            };
+            objectUrl = this.setImageObjectUrl(img, file);
         }
     }
 
     loadSampleImage() {
+        this.revokeObjectUrl();
         const sampleCanvas = document.createElement('canvas');
         sampleCanvas.width = 640;
         sampleCanvas.height = 420;
@@ -325,12 +377,16 @@ class PhotoByNumbers {
         ctx.strokeRect(280, 245, 50, 75);
 
         const img = new Image();
-        img.onload = () => this.loadImage(img);
+        const loadId = ++this.imageLoadId;
+        img.onload = () => {
+            if (loadId === this.imageLoadId) this.loadImage(img);
+        };
         img.src = sampleCanvas.toDataURL('image/png');
     }
 
-    loadImage(img) {
+    loadImage(img, objectUrl = null) {
         this.currentImage = img;
+        this.stopWebcam();
 
         const maxWidth = 800;
         const maxHeight = 600;
@@ -358,6 +414,8 @@ class PhotoByNumbers {
 
         // Auto-process
         this.processImage();
+        this.setStatus('Image ready. Adjust the settings or continue to coloring.');
+        this.revokeObjectUrl(objectUrl);
     }
 
     // ==================== IMAGE PROCESSING ====================
@@ -366,9 +424,45 @@ class PhotoByNumbers {
         slider.addEventListener('input', (e) => {
             valueDisplay.textContent = e.target.value;
             if (this.processedCanvas.width > 0) {
-                this.processImage();
+                this.scheduleProcessing();
             }
         });
+    }
+
+    scheduleProcessing() {
+        if (this.processingFrame !== null) return;
+
+        this.processingFrame = requestAnimationFrame(() => {
+            this.processingFrame = null;
+            this.processImage();
+        });
+    }
+
+    setStatus(message) {
+        this.appStatus.textContent = message;
+    }
+
+    revokeObjectUrl(objectUrl = this.activeObjectUrl) {
+        if (!objectUrl) return;
+        URL.revokeObjectURL(objectUrl);
+        if (this.activeObjectUrl === objectUrl) this.activeObjectUrl = null;
+    }
+
+    setImageObjectUrl(image, source) {
+        this.revokeObjectUrl();
+        this.activeObjectUrl = URL.createObjectURL(source);
+        image.src = this.activeObjectUrl;
+        return this.activeObjectUrl;
+    }
+
+    cleanupResources() {
+        this.stopWebcam();
+        this.imageLoadId += 1;
+        this.revokeObjectUrl();
+        if (this.processingFrame !== null) {
+            cancelAnimationFrame(this.processingFrame);
+            this.processingFrame = null;
+        }
     }
 
     updateControlsVisibility() {
@@ -480,6 +574,8 @@ class PhotoByNumbers {
         this.fillMode = mode === 'fill';
         this.fillModeBtn.classList.toggle('active', this.fillMode);
         this.drawModeBtn.classList.toggle('active', !this.fillMode);
+        this.fillModeBtn.setAttribute('aria-pressed', String(this.fillMode));
+        this.drawModeBtn.setAttribute('aria-pressed', String(!this.fillMode));
         this.coloringCanvas.style.cursor = this.fillMode ? 'pointer' : 'crosshair';
     }
 
@@ -625,12 +721,13 @@ class PhotoByNumbers {
     }
 
     reset() {
+        this.cleanupResources();
         this.goToPhase('processing');
         this.goToStep('input');
         this.currentImage = null;
         this.lineArtData = null;
         this.fileUpload.value = '';
-        this.stopWebcam();
+        this.setStatus('Choose a photo, use the camera, or try the sample.');
 
         // Clear canvases
         this.originalCtx.clearRect(0, 0, this.originalCanvas.width, this.originalCanvas.height);

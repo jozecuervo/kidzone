@@ -18,6 +18,7 @@ Read the local project context first:
 - `projects/<project-slug>/README.md`, when present
 - `projects/<project-slug>/project.json`
 - the files directly involved in the requested behavior
+- existing project tests and the game invariants they cover
 - the current Git branch and working tree status
 
 If the work is meant to stack on another PR, branch from the current PR branch
@@ -36,6 +37,12 @@ before editing and keep the follow-up narrowly scoped.
   update `project.json` and refresh `projects/index.json`.
 - Prefer visible, forgiving feedback over pressure loops. Keep reset/reload/help
   affordances reachable and understandable.
+- Treat each interaction listed in `project.json` as a tested promise. Update the
+  implementation, tests, or metadata when that promise changes.
+- Behavior changes need focused project-level checks; every critical/high-impact
+  fix needs a regression test that demonstrates the former failure. This
+  includes privacy/safety, crashes, progression, declared-input, and stale-work
+  failures.
 
 ## Gameplay And UI Changes
 
@@ -51,6 +58,28 @@ For new mechanics, update the full loop rather than only the code path:
 For animated or timing-sensitive behavior, verify the real interaction in a
 browser. DOM checks are helpful, but do not replace at least one live gameplay
 path for the feature being changed.
+
+Keep timing and teardown explicit:
+
+- Base motion on elapsed time or a fixed simulation step, not frame count.
+- Pause on page visibility loss and provide meaningful reduced-motion behavior.
+- Give timers, animation frames, listeners, media streams, object URLs, pending
+  async work, and engine objects one lifecycle owner; reset/restart or replaced
+  input must dispose them or invalidate every stale callback.
+- If levels are random, make failures reproducible with a seed and verify each
+  generated level is solvable.
+- For canvas or SVG games, mirror essential instructions, state, and status in
+  accessible DOM content and restore focus after view/dialog changes.
+
+Before changing code, name the affected invariants: win/progress gates,
+collectible requirements, damage/loss rules, legal phases, and reset behavior.
+For authored levels, validate a complete route through every gate and exit. For
+generated levels, test deterministic seeds and reject unsolvable output.
+
+Treat input press and release as separate contracts. Native controls must work
+with their standard keyboard behavior, including Enter/Space for button-like
+controls. Release held input even if focus moves before keyup, and on blur,
+visibility loss, pointer cancellation/loss, reset, and phase transitions.
 
 ## Validation
 
@@ -74,8 +103,18 @@ If the default port is busy, use a nearby port:
 PORT=4174 node ./server.mjs
 ```
 
-Open the target project path in a browser, check the console, and exercise the
-changed behavior. Try a narrow viewport when layout or touch controls changed.
+Open the target project path in a browser, play the changed behavior on desktop
+and at phone width, and check the console is clean. Try each declared input the
+change touches. Permission features (camera, microphone) must start from an
+explicit user action and handle denial.
+
+Before merging, run the project's tests and `node ./scripts/check.mjs`, and
+mention untested devices in the PR. Keep it light: see "Game Change Done" in
+`AGENTS.md`. Add deeper checks only for a genuinely risky change.
+
+When assets change, record source/authorship and license, and review for unused
+files rather than silently carrying them forward.
+
 Stop the preview server before handing off if the user asks to shut down or the
 server is no longer needed.
 

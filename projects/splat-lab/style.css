@@ -1,0 +1,475 @@
+:root {
+  color-scheme: light;
+  --ink: #1c2733;
+  --muted: #57626d;
+  --paper: #eef6fb;
+  --panel: #ffffff;
+  --line: #c7d7e2;
+  --accent: #2e7d32;
+  --shadow: 0 1rem 2.4rem rgba(20, 40, 60, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--paper);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+.lab-shell {
+  display: grid;
+  gap: 1rem;
+  width: min(60rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.25rem 0 2rem;
+}
+
+.back-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.back-link:hover,
+.back-link:focus-visible {
+  text-decoration: underline;
+}
+
+.lab-header h1 {
+  margin: 0.2rem 0 0;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.instructions {
+  margin: 0;
+  color: var(--muted);
+}
+
+.stage-panel {
+  position: relative;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  background: #bfe3f5;
+}
+
+#scene-canvas {
+  display: block;
+  width: 100%;
+  height: min(60vh, 26rem);
+}
+
+/* Step 1b §9: a small overlay at the canvas's top edge, horizontally at the
+   impact point's projected x (the canvas/stage-panel horizontal centre,
+   since the camera always looks straight at the impact point). Purely
+   informational/decorative — aria-hidden, pointer-events:none — visible in
+   `ready` and `falling` while the fruit is above the frame (see
+   rules.js incomingFor). */
+.incoming-marker {
+  position: absolute;
+  top: 0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  pointer-events: none;
+}
+
+.incoming-marker[hidden] {
+  display: none;
+}
+
+.incoming-marker-arrow {
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--ink);
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+.incoming-marker-dot {
+  display: block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  /* --fruit-color set from the fruit table in view.js, no colour hard-coded here. */
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), var(--fruit-color) 72%);
+  border: 2px solid #1b1b1b;
+}
+
+/* Height bar (zoomed-out view): a DOM/CSS overlay on the right edge of the
+   shot. Purely decorative/informational — aria-hidden, and never the
+   live-region text. */
+.height-bar {
+  position: absolute;
+  /* 1.65rem (not 0.75rem): at fraction 1, the top tick name and the moving
+     metres label both centre on the track's top point (a permanent, not
+     occasional, coincidence — see .height-bar-tick--top below). There is
+     only ~5px of room above the label before the stage panel's own clipped
+     top edge; extra top offset here creates enough room for the top tick's
+     name to sit above the label without either overlapping it or being
+     clipped by the panel. */
+  top: 1.65rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  pointer-events: none;
+}
+
+.height-bar-track {
+  position: relative;
+  /* Step 1b §8: a slim 16-20px track (including its border, box-sizing is
+     border-box globally), not the old 44px-minimum pill that covered ~15%
+     of the canvas. The bar is aria-hidden and pointer-events:none — it was
+     never interactive, so the old 44px touch-target minimum never applied
+     to it. An OPAQUE background (not the old translucent
+     rgba(255,255,255,0.55)): with the old alpha, a settled debris piece
+     directly behind the track showed through as a stray coloured dot (seen
+     in the 390x844 Plane screenshot review) — the cause was debris on the
+     canvas showing through the DOM overlay, not a stray DOM element (there
+     is exactly one .height-bar-marker; see the Playwright assertion). */
+  width: 18px;
+  border-radius: 999px;
+  background: #eef3f7;
+  border: 1px solid rgba(20, 40, 60, 0.3);
+}
+
+.height-bar-ticks {
+  position: absolute;
+  inset: 0;
+}
+
+/* Names go on the LEFT of the track (over the canvas), not the right: the
+   track sits close to .stage-panel's clipped right edge, and text placed to
+   its right had no room and was cut off (V1). */
+.height-bar-tick {
+  position: absolute;
+  right: 100%;
+  bottom: calc(var(--fraction, 0) * 100%);
+  transform: translateY(50%);
+  margin-right: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* The top tick always sits at fraction 1 (it names the currently chosen
+   preset) — exactly where the moving metres label sits in `ready`, since
+   the fruit starts at full height. A fixed upward offset (step 1b §5) keeps
+   its box clear of the label's box in that state, without needing a
+   proximity check (its own visibility is otherwise unconditional). */
+.height-bar-tick--top {
+  transform: translateY(calc(50% - 1.05rem));
+}
+
+.height-bar-tick-name {
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0.02rem 0.3rem;
+  border-radius: 0.3rem;
+}
+
+.height-bar-tick-dash {
+  display: block;
+  width: 0.5rem;
+  height: 2px;
+  background: var(--ink);
+  flex: none;
+}
+
+/* Collision avoidance for tick names (view.js decides which names are
+   shown; see renderHeightBarTicks): a hidden name still keeps its dash
+   mark, so every preset height still has a visible mark on the track even
+   when its name is suppressed to avoid overlapping the one above it. */
+.height-bar-tick-name[hidden] {
+  display: none;
+}
+
+.height-bar-indicator {
+  position: absolute;
+  right: 50%;
+  bottom: calc(var(--fraction, 0) * 100%);
+  transform: translateY(50%);
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.height-bar-marker {
+  display: block;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  /* Step 1b §9: --fruit-color is set from the fruit table in view.js, no
+     colour hard-coded here. */
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), var(--fruit-color) 72%);
+  border: 2px solid #1b1b1b;
+  flex: none;
+}
+
+.height-bar-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.4rem;
+  white-space: nowrap;
+}
+
+.controls-panel {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.fruit-fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+}
+
+.fruit-fieldset legend {
+  font-weight: 600;
+  padding: 0 0.3rem;
+}
+
+.fruit-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.control-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Step 1b §8: the height slider's landmark ticks are decorative CSS marks
+   (no `<datalist>` — Chromium magnetically snaps a pointer drag to a
+   datalist option near it, which is a form of stepping Jose ruled out).
+   The wrap only exists to host the ticks positioned under the native
+   track; it does not change the input's own hit area or behaviour. */
+.height-slider-wrap {
+  position: relative;
+}
+
+.height-slider-wrap input {
+  display: block;
+  width: 100%;
+}
+
+.height-slider-ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.2rem;
+  height: 0.4rem;
+  pointer-events: none;
+}
+
+.height-slider-tick {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 0.4rem;
+  background: var(--line);
+  transform: translateX(-50%);
+}
+
+.control-row label {
+  font-weight: 600;
+}
+
+.control-readout {
+  min-width: 8rem;
+  text-align: right;
+  color: var(--muted);
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.action-row button {
+  flex: 1 1 8rem;
+  padding: 0.7rem 1rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--line);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.action-row button:disabled {
+  background: #a9b6bd;
+  cursor: not-allowed;
+}
+
+#skip-button {
+  background: #9b4d24;
+}
+
+#sound-toggle {
+  background: #3d5a80;
+  flex: 1 1 6rem;
+}
+
+.status {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.7rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.load-failure {
+  padding: 0.75rem 1rem;
+  border-radius: 0.7rem;
+  background: #fdecea;
+  color: #7a1f1f;
+  border: 1px solid #f3b6b0;
+}
+
+@media (max-width: 640px) {
+  .control-row {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .control-readout {
+    text-align: left;
+  }
+
+  /* Keep the controls compact enough that Drop/Reset stay on-screen at
+     390x844 without scrolling (touch test): tighter gaps and a smaller
+     fruit-option font, not a layout change. Step 1b §1 added the fruit
+     fieldset, which pushed the total page height back past 844px on top
+     of the earlier D6/V5 compaction (round 4) — shrink the lab-shell's
+     own gap/padding and the canvas height cap too. */
+  .lab-shell {
+    gap: 0.6rem;
+    padding: 0.6rem 0 0.75rem;
+  }
+
+  #scene-canvas {
+    height: min(45vh, 16rem);
+  }
+
+  .controls-panel {
+    gap: 0.6rem;
+    padding: 0.75rem;
+  }
+
+  .fruit-fieldset {
+    gap: 0.3rem 0.6rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .fruit-option {
+    font-size: 0.85rem;
+  }
+}
+
+/* Canvas on top and controls below on narrow screens (the default, above);
+   side by side on wide ones (D6). */
+@media (min-width: 900px) {
+  .lab-shell {
+    grid-template-columns: 1fr 22rem;
+    grid-template-areas:
+      "back back"
+      "header header"
+      "instructions instructions"
+      "stage controls"
+      "status status"
+      "failure failure";
+    align-items: start;
+  }
+
+  .back-link {
+    grid-area: back;
+  }
+
+  .lab-header {
+    grid-area: header;
+  }
+
+  .instructions {
+    grid-area: instructions;
+  }
+
+  .stage-panel {
+    grid-area: stage;
+  }
+
+  .controls-panel {
+    grid-area: controls;
+  }
+
+  /* V5: at 22rem wide, the 3-column "label / slider / readout" row forced
+     the readout (min-width 8rem) past the panel's right edge. Stack the
+     label above the slider+readout row instead, and let the readout size
+     to its own content. */
+  .control-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "label label"
+      "slider readout";
+    row-gap: 0.3rem;
+  }
+
+  .control-row label {
+    grid-area: label;
+  }
+
+  .control-row input,
+  .control-row .height-slider-wrap {
+    grid-area: slider;
+    min-width: 0;
+  }
+
+  .control-readout {
+    grid-area: readout;
+    min-width: 0;
+  }
+
+  .status {
+    grid-area: status;
+  }
+
+  .load-failure {
+    grid-area: failure;
+  }
+}

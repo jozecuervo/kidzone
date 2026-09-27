@@ -90,6 +90,7 @@ export class SobelAlgorithm extends BaseAlgorithm {
      */
     applySobel(grayscale, width, height, threshold) {
         const sobelData = new Uint8ClampedArray(width * height);
+        sobelData.fill(255);
 
         // Sobel kernels for gradient approximation
         const sobelX = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]];  // Gx: horizontal changes

@@ -266,6 +266,7 @@
         </div>
     </div>
 
+    <script src="./old-rules-core.js"></script>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -284,9 +285,37 @@
         let exit = null;
         let collectedKeys = 0;
         let keysNeeded = 0;
+        let exitNoticeShown = false;
 
         // Input state
         const keysPressed = {};
+        const lifecycle = OldRulesCore.createLifecycle({
+            setTimeoutFn: setTimeout,
+            clearTimeoutFn: clearTimeout,
+            cancelFrameFn: cancelAnimationFrame
+        });
+
+        function clearHeldInput() {
+            for (const code of Object.keys(keysPressed)) delete keysPressed[code];
+        }
+
+        function clearUiTimeouts() {
+            document.getElementById('levelAnnounce').style.opacity = 0;
+            document.getElementById('dialogue').style.display = 'none';
+        }
+
+        function scheduleUiTimeout(callback, delay) {
+            lifecycle.schedule(callback, delay);
+        }
+
+        function resetTransientState() {
+            lifecycle.reset(keysPressed);
+            clearUiTimeouts();
+        }
+
+        function currentObstacles() {
+            return OldRulesCore.blockingRects(walls, furniture, doors);
+        }
 
         // Colors
         const COLORS = {
@@ -387,7 +416,7 @@
                 cat: { x: 400, y: 500, speed: 3.5 },
                 keys: [{ x: 250, y: 550 }, { x: 550, y: 50 }],
                 doors: [{ x: 300, y: 150, w: 20, h: 50, keysNeeded: 1, vertical: true }, { x: 600, y: 100, w: 20, h: 50, keysNeeded: 2, vertical: true }],
-                exit: { x: 700, y: 550, w: 60, h: 30 }
+                exit: { x: 700, y: 450, w: 60, h: 30 }
             },
             {
                 name: "The Bedroom",
@@ -416,7 +445,7 @@
                 ],
                 cat: { x: 300, y: 100, speed: 4 },
                 keys: [{ x: 150, y: 550 }, { x: 350, y: 100 }, { x: 700, y: 250 }],
-                doors: [{ x: 200, y: 200, w: 20, h: 80, keysNeeded: 2, vertical: true }, { x: 600, y: 450, w: 20, h: 60, keysNeeded: 3, vertical: true }],
+                doors: [{ x: 200, y: 200, w: 20, h: 80, keysNeeded: 1, vertical: true }, { x: 600, y: 450, w: 20, h: 60, keysNeeded: 3, vertical: true }],
                 exit: { x: 700, y: 50, w: 60, h: 40 }
             },
             {
@@ -483,12 +512,7 @@
                     dy *= 0.707;
                 }
 
-                // Check collisions
-                const newX = this.x + dx;
-                const newY = this.y + dy;
-
-                if (!this.checkCollision(newX, this.y)) this.x = newX;
-                if (!this.checkCollision(this.x, newY)) this.y = newY;
+                OldRulesCore.moveWithCollisions(this, dx, dy, currentObstacles());
 
                 // Animation
                 if (dx !== 0 || dy !== 0) {
@@ -505,34 +529,8 @@
                 this.checkExit();
             }
 
-            checkCollision(x, y) {
-                const rect = { x, y, w: this.width, h: this.height };
-
-                // Walls
-                for (const wall of walls) {
-                    if (this.rectCollision(rect, wall)) return true;
-                }
-
-                // Furniture
-                for (const f of furniture) {
-                    if (this.rectCollision(rect, { x: f.x, y: f.y, w: f.w, h: f.h })) return true;
-                }
-
-                // Locked doors
-                for (const door of doors) {
-                    if (!door.open && this.rectCollision(rect, { x: door.x, y: door.y, w: door.w, h: door.h })) {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
             rectCollision(r1, r2) {
-                return r1.x < r2.x + r2.w &&
-                       r1.x + r1.w > r2.x &&
-                       r1.y < r2.y + r2.h &&
-                       r1.h + r1.y > r2.y;
+                return OldRulesCore.rectsOverlap(r1, r2);
             }
 
             checkKeys() {
@@ -558,10 +556,12 @@
                 const exitRect = { x: exit.x, y: exit.y, w: exit.w, h: exit.h };
 
                 if (this.rectCollision(rect, exitRect)) {
-                    if (exit.isFinalExit) {
-                        victory();
-                    } else {
-                        nextLevel();
+                    if (OldRulesCore.canUseExit(collectedKeys, keysNeeded, doors)) {
+                        if (exit.isFinalExit) victory();
+                        else nextLevel();
+                    } else if (!exitNoticeShown) {
+                        exitNoticeShown = true;
+                        showDialogue(`Find ${keysNeeded - collectedKeys} more key${keysNeeded - collectedKeys === 1 ? '' : 's'} first!`);
                     }
                 }
             }
@@ -653,8 +653,12 @@
                 if (dist < 5) {
                     this.patrolIndex = (this.patrolIndex + 1) % this.patrol.length;
                 } else {
-                    this.x += (dx / dist) * this.speed;
-                    this.y += (dy / dist) * this.speed;
+                    OldRulesCore.moveWithCollisions(
+                        this,
+                        (dx / dist) * this.speed,
+                        (dy / dist) * this.speed,
+                        currentObstacles()
+                    );
                 }
 
                 this.animFrame = (this.animFrame + 0.1) % 4;
@@ -662,11 +666,10 @@
                 // Check for player collision
                 for (const player of players) {
                     if (player.health <= 0) continue;
-                    const playerDist = Math.hypot(
-                        this.x + this.width/2 - (player.x + player.width/2),
-                        this.y + this.height/2 - (player.y + player.height/2)
-                    );
-                    if (playerDist < 35) {
+                    if (OldRulesCore.rectsOverlap(
+                        { x: this.x, y: this.y, w: this.width, h: this.height },
+                        { x: player.x, y: player.y, w: player.width, h: player.height }
+                    )) {
                         player.takeDamage();
                     }
                 }
@@ -790,8 +793,12 @@
                     const dist = Math.hypot(dx, dy);
 
                     if (dist > 5) {
-                        this.x += (dx / dist) * this.speed;
-                        this.y += (dy / dist) * this.speed;
+                        OldRulesCore.moveWithCollisions(
+                            this,
+                            (dx / dist) * this.speed,
+                            (dy / dist) * this.speed,
+                            currentObstacles()
+                        );
                     }
 
                     // Attack
@@ -801,8 +808,12 @@
                     }
                 } else {
                     // Wander
-                    this.x += Math.sin(Date.now() / 500) * 0.5;
-                    this.y += Math.cos(Date.now() / 700) * 0.5;
+                    OldRulesCore.moveWithCollisions(
+                        this,
+                        Math.sin(Date.now() / 500) * 0.5,
+                        Math.cos(Date.now() / 700) * 0.5,
+                        currentObstacles()
+                    );
                 }
 
                 if (this.attackCooldown > 0) this.attackCooldown--;
@@ -915,6 +926,7 @@
                 return;
             }
 
+            resetTransientState();
             document.getElementById('menu').style.display = 'none';
             currentLevel = 0;
             loadLevel(currentLevel);
@@ -924,6 +936,7 @@
 
         // Load level
         function loadLevel(levelIndex) {
+            resetTransientState();
             const level = levels[levelIndex];
 
             // Reset collections
@@ -936,6 +949,7 @@
             cat = new Cat(level.cat.x, level.cat.y, level.cat.speed);
             collectedKeys = 0;
             keysNeeded = Math.max(...level.doors.map(d => d.keysNeeded));
+            exitNoticeShown = false;
 
             // Create players
             players = [];
@@ -963,7 +977,7 @@
             const announce = document.getElementById('levelAnnounce');
             announce.textContent = level.name;
             announce.style.opacity = 1;
-            setTimeout(() => { announce.style.opacity = 0; }, 2000);
+            scheduleUiTimeout(() => { announce.style.opacity = 0; }, 2000);
 
             // Show dialogue
             showDialogue(level.dialogue);
@@ -1006,7 +1020,7 @@
             const dialogue = document.getElementById('dialogue');
             dialogue.textContent = text;
             dialogue.style.display = 'block';
-            setTimeout(() => { dialogue.style.display = 'none'; }, 4000);
+            scheduleUiTimeout(() => { dialogue.style.display = 'none'; }, 4000);
         }
 
         // Next level
@@ -1030,6 +1044,7 @@
         // Game over
         function gameOver() {
             gameRunning = false;
+            resetTransientState();
             const gameOverDiv = document.getElementById('gameOver');
             gameOverDiv.classList.remove('victory');
             document.getElementById('gameOverTitle').textContent = 'CAUGHT!';
@@ -1040,6 +1055,7 @@
         // Victory
         function victory() {
             gameRunning = false;
+            resetTransientState();
             const gameOverDiv = document.getElementById('gameOver');
             gameOverDiv.classList.add('victory');
             document.getElementById('gameOverTitle').textContent = 'FREEDOM!';
@@ -1049,6 +1065,7 @@
 
         // Restart game
         function restartGame() {
+            resetTransientState();
             document.getElementById('gameOver').style.display = 'none';
             loadLevel(currentLevel);
             gameRunning = true;
@@ -1057,6 +1074,8 @@
 
         // Return to menu
         function returnToMenu() {
+            gameRunning = false;
+            resetTransientState();
             document.getElementById('gameOver').style.display = 'none';
             document.getElementById('menu').style.display = 'flex';
         }
@@ -1238,7 +1257,7 @@
             // Draw UI
             drawKeyCounter();
 
-            requestAnimationFrame(gameLoop);
+            if (gameRunning) lifecycle.setFrame(requestAnimationFrame(gameLoop));
         }
 
         // Input handling
@@ -1253,6 +1272,11 @@
 
         document.addEventListener('keyup', (e) => {
             keysPressed[e.code] = false;
+        });
+
+        window.addEventListener('blur', clearHeldInput);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) clearHeldInput();
         });
 
         // Prevent context menu on right click

@@ -14,8 +14,9 @@
         <div class="copy">
           <h1>Would you like to make a game?</h1>
           <p>
-            Move the comet with the arrow keys or W A S D, catch sparks, then
-            change the rules and open a pull request.
+            Move the comet with the arrow keys, W A S D, or the direction
+            buttons. Catch sparks, then change the rules and open a pull
+            request.
           </p>
           <ul>
             <li>Add a new kind of spark.</li>
@@ -23,7 +24,13 @@
             <li>Invent a win screen.</li>
           </ul>
         </div>
-        <div class="board">
+        <div
+          class="board"
+          tabindex="0"
+          aria-label="Comet game. Use the arrow keys, W A S D, or the direction buttons to move."
+          aria-describedby="control-help"
+          data-game-region
+        >
           <div class="hud">
             <p data-score aria-live="polite">0 sparks</p>
             <button type="button" data-reset>Reset</button>
@@ -34,6 +41,15 @@
             height="420"
             aria-label="A starter game canvas with a moving comet."
           ></canvas>
+          <p class="control-help" id="control-help">
+            Focus here for keyboard controls: arrows or W A S D.
+          </p>
+          <div class="direction-pad" aria-label="Move the comet">
+            <button class="move-button move-up" type="button" data-move="up" aria-label="Move up">↑</button>
+            <button class="move-button move-left" type="button" data-move="left" aria-label="Move left">←</button>
+            <button class="move-button move-down" type="button" data-move="down" aria-label="Move down">↓</button>
+            <button class="move-button move-right" type="button" data-move="right" aria-label="Move right">→</button>
+          </div>
         </div>
       </section>
     </main>

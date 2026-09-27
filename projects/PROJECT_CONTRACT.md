@@ -46,6 +46,11 @@ the entry must stay inside the project folder.
 }
 ```
 
+The landing page shelf lists projects **newest first by `date`**; `order` only
+breaks ties between projects with the same date. Set `"shelf": false` to keep a
+project published and in `projects/index.json` but off the shelf (the
+`make-a-game` starter uses this; the hero links to it instead).
+
 ## Safety Defaults
 
 - Prefer active creation, experiments, puzzles, and making things.
@@ -61,3 +66,22 @@ the entry must stay inside the project folder.
 The default runtime is static HTML, CSS, and JavaScript served from the repository
 root. External scripts and per-project servers should be rare and declared in
 `runtime` with a reason.
+
+## Interaction And Behavior Contract
+
+- Only list an input in `interaction` if you tried it and it works.
+- Motion uses elapsed time or a fixed step, pauses when the tab is hidden, and
+  respects reduced motion.
+- Put the important status and instructions in the DOM, not only on the canvas.
+- Add a regression test when you fix a bug a kid would notice, such as a crash,
+  a game that can't be won, or broken controls.
+
+## Verification And Assets
+
+Before publishing, play it on desktop and at phone width, try each declared
+input, and check the console is clean. Camera, microphone, or other permission
+flows must start from an explicit user action and handle denial. Mention
+untested devices in the PR.
+
+Document asset authorship or source and license in the project README (or an
+adjacent credits file). Remove unused assets or state why they are retained.

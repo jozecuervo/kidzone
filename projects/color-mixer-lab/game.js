@@ -1,3 +1,13 @@
+import {
+  MATCH_TOLERANCE,
+  MAX_TOTAL_DROPS,
+  canAddDrop,
+  closenessLabel,
+  colorDistance,
+  isColorMatch,
+  visibleDropHistory
+} from "./logic.js";
+
 const paints = [
   {
     id: "red",
@@ -59,13 +69,12 @@ const levels = [
   target: mixRecipe(level.recipe)
 }));
 
-const matchTolerance = 24;
-
 const state = {
   levelIndex: 0,
   counts: emptyCounts(),
   history: [],
-  locked: false
+  locked: false,
+  nextAction: null
 };
 
 const elements = {
@@ -74,6 +83,7 @@ const elements = {
   targetSwatch: document.querySelector("#target-swatch"),
   mixName: document.querySelector("#mix-name"),
   mixSwatch: document.querySelector("#mix-swatch"),
+  closeness: document.querySelector("#closeness"),
   palette: document.querySelector("#palette"),
   dropTotal: document.querySelector("#drop-total"),
   dropRow: document.querySelector("#drop-row"),
@@ -81,6 +91,7 @@ const elements = {
   resetButton: document.querySelector("#reset-button"),
   checkButton: document.querySelector("#check-button"),
   feedback: document.querySelector("#feedback"),
+  nextActionButton: document.querySelector("#next-action-button"),
   completePanel: document.querySelector("#complete-panel"),
   playAgainButton: document.querySelector("#play-again-button")
 };
@@ -119,14 +130,6 @@ function rgbToCss(rgb) {
 
 function totalDrops() {
   return Object.values(state.counts).reduce((sum, count) => sum + count, 0);
-}
-
-function colorDistance(first, second) {
-  return Math.hypot(
-    first[0] - second[0],
-    first[1] - second[1],
-    first[2] - second[2]
-  );
 }
 
 function renderPalette() {
@@ -190,6 +193,7 @@ function renderLevel() {
   elements.feedback.textContent = `Level ${state.levelIndex + 1} is ready.`;
   elements.feedback.className = "feedback";
   elements.completePanel.hidden = true;
+  hideNextAction();
   renderMix();
 }
 
@@ -207,6 +211,7 @@ function renderMix() {
     elements.mixName.textContent = "Empty cup";
     elements.mixSwatch.classList.add("empty");
     elements.mixSwatch.style.removeProperty("--swatch-color");
+    elements.closeness.textContent = "Closeness: add paint to compare";
 
     const empty = document.createElement("span");
     empty.className = "drop-empty";
@@ -218,7 +223,19 @@ function renderMix() {
     elements.mixSwatch.classList.remove("empty");
     elements.mixSwatch.style.setProperty("--swatch-color", rgbToCss(mixed));
 
-    state.history.forEach((id) => {
+    const distance = colorDistance(mixed, levels[state.levelIndex].target);
+    elements.closeness.textContent = `Closeness: ${closenessLabel(distance)}`;
+
+    const { hiddenCount, visible } = visibleDropHistory(state.history);
+
+    if (hiddenCount > 0) {
+      const summary = document.createElement("span");
+      summary.className = "drop-summary";
+      summary.textContent = `Earlier: ${hiddenCount}`;
+      elements.dropRow.append(summary);
+    }
+
+    visible.forEach((id) => {
       const chip = document.createElement("span");
       chip.className = "drop-chip";
       chip.style.setProperty("--paint-color", rgbToCss(paintById[id].rgb));
@@ -236,7 +253,11 @@ function renderMix() {
       button.dataset.action === "remove" &&
       state.counts[button.dataset.paintId] === 0;
 
-    button.disabled = state.locked || isEmptyRemove;
+    const isFullAdd =
+      button.dataset.action === "add" &&
+      !canAddDrop(drops, MAX_TOTAL_DROPS);
+
+    button.disabled = state.locked || isEmptyRemove || isFullAdd;
   });
 }
 
@@ -245,10 +266,19 @@ function addPaint(id) {
     return;
   }
 
+  if (!canAddDrop(totalDrops(), MAX_TOTAL_DROPS)) {
+    elements.feedback.textContent = `The cup is full at ${MAX_TOTAL_DROPS} drops. Undo or reset to make room.`;
+    elements.feedback.className = "feedback retry";
+    return;
+  }
+
   state.counts[id] += 1;
   state.history.push(id);
-  elements.feedback.textContent = `${paintById[id].name} added.`;
-  elements.feedback.className = "feedback";
+  const isNowFull = !canAddDrop(totalDrops(), MAX_TOTAL_DROPS);
+  elements.feedback.textContent = isNowFull
+    ? `${paintById[id].name} added. The cup is full at ${MAX_TOTAL_DROPS} drops. Undo or reset to make room.`
+    : `${paintById[id].name} added.`;
+  elements.feedback.className = isNowFull ? "feedback retry" : "feedback";
   renderMix();
 }
 
@@ -282,8 +312,11 @@ function undoDrop() {
 }
 
 function resetMix(message = `Level ${state.levelIndex + 1} is ready.`) {
+  state.locked = false;
+  state.nextAction = null;
   state.counts = emptyCounts();
   state.history = [];
+  hideNextAction();
   elements.feedback.textContent = message;
   elements.feedback.className = "feedback";
   renderMix();
@@ -304,7 +337,7 @@ function checkMix() {
   const mixed = mixRecipe(state.counts);
   const distance = colorDistance(mixed, level.target);
 
-  if (distance <= matchTolerance) {
+  if (isColorMatch(mixed, level.target, MATCH_TOLERANCE)) {
     handleCorrect();
   } else {
     handleRetry(level.target, mixed);
@@ -313,35 +346,54 @@ function checkMix() {
 
 function handleCorrect() {
   state.locked = true;
-  elements.feedback.textContent = "Great match. Moving to the next level.";
+  elements.feedback.textContent = `Great match. ${closenessLabel(0)}! Choose Continue when you are ready.`;
   elements.feedback.className = "feedback correct";
   renderMix();
-
-  window.setTimeout(() => {
-    if (state.levelIndex === levels.length - 1) {
-      finishGame();
-      return;
-    }
-
-    state.levelIndex += 1;
-    state.locked = false;
-    state.counts = emptyCounts();
-    state.history = [];
-    renderLevel();
-  }, 950);
+  showNextAction("Continue", continueAfterMatch);
 }
 
 function handleRetry(target, mixed) {
   state.locked = true;
   const hint = colorHint(target, mixed);
-  elements.feedback.textContent = `Not quite. Try this level again${hint}`;
+  const distance = colorDistance(target, mixed);
+  elements.feedback.textContent = `${closenessLabel(distance)}. Try this level again${hint} Choose Retry when you are ready.`;
   elements.feedback.className = "feedback retry";
   renderMix();
+  showNextAction("Retry this level", () => {
+    resetMix(`Level ${state.levelIndex + 1} is ready. Your cup is empty.`);
+    focusFirstPaint();
+  });
+}
 
-  window.setTimeout(() => {
-    state.locked = false;
-    resetMix(`Level ${state.levelIndex + 1} is ready.`);
-  }, 1400);
+function showNextAction(label, action) {
+  state.nextAction = action;
+  elements.nextActionButton.textContent = label;
+  elements.nextActionButton.hidden = false;
+  elements.nextActionButton.focus();
+}
+
+function hideNextAction() {
+  elements.nextActionButton.hidden = true;
+  elements.nextActionButton.textContent = "";
+}
+
+function focusFirstPaint() {
+  elements.palette.querySelector('[data-action="add"]')?.focus();
+}
+
+function continueAfterMatch() {
+  if (state.levelIndex === levels.length - 1) {
+    finishGame();
+    return;
+  }
+
+  state.levelIndex += 1;
+  state.locked = false;
+  state.counts = emptyCounts();
+  state.history = [];
+  state.nextAction = null;
+  renderLevel();
+  elements.targetName.focus({ preventScroll: true });
 }
 
 function colorHint(target, mixed) {
@@ -365,10 +417,12 @@ function colorHint(target, mixed) {
 function finishGame() {
   state.locked = true;
   elements.completePanel.hidden = false;
+  hideNextAction();
   elements.feedback.textContent = "Lab complete.";
   elements.feedback.className = "feedback correct";
   renderMix();
-  elements.completePanel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  elements.completePanel.scrollIntoView({ block: "nearest" });
+  elements.playAgainButton.focus({ preventScroll: true });
 }
 
 function playAgain() {
@@ -377,6 +431,7 @@ function playAgain() {
   state.counts = emptyCounts();
   state.history = [];
   renderLevel();
+  focusFirstPaint();
 }
 
 renderPalette();
@@ -386,3 +441,4 @@ elements.undoButton.addEventListener("click", undoDrop);
 elements.resetButton.addEventListener("click", () => resetMix());
 elements.checkButton.addEventListener("click", checkMix);
 elements.playAgainButton.addEventListener("click", playAgain);
+elements.nextActionButton.addEventListener("click", () => state.nextAction?.());

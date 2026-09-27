@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Splat Lab</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./style.css">
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+          "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main class="lab-shell" data-phase="ready" data-steps="0" data-fruit-count="0" data-mesh-count="0">
+      <a class="back-link" href="../../">Back to Kidzone</a>
+
+      <header class="lab-header">
+        <div>
+          <p class="eyebrow">Kidzone Physics Lab</p>
+          <h1>Splat Lab</h1>
+        </div>
+      </header>
+
+      <p class="instructions" id="instructions">Pick a fruit and a height, then press Drop.</p>
+
+      <section class="stage-panel" aria-label="Drop scene">
+        <canvas id="scene-canvas"></canvas>
+        <!-- Step 1b §11b Stage 3: up to 5 fruit can be falling at once (the
+             rolling window). The oldest falling fruit uses this static,
+             id'd marker (kept for every pre-Stage-3 single-fruit test);
+             any additional simultaneously-falling fruit get dynamically
+             created `.incoming-marker` siblings appended alongside it
+             (view.js), so a single-fruit drop's DOM shape here is
+             unchanged. -->
+        <div id="incoming-marker" class="incoming-marker" aria-hidden="true" hidden>
+          <span class="incoming-marker-arrow" aria-hidden="true">&#9660;</span>
+          <span id="incoming-marker-dot" class="incoming-marker-dot"></span>
+        </div>
+        <div id="height-bar" class="height-bar" aria-hidden="true">
+          <div id="height-bar-track" class="height-bar-track">
+            <div id="height-bar-ticks" class="height-bar-ticks"></div>
+            <div id="height-bar-indicator" class="height-bar-indicator">
+              <span id="height-bar-marker" class="height-bar-marker"></span>
+              <span id="height-bar-label" class="height-bar-label">10 m</span>
+            </div>
+            <!-- Step 1b §11b Stage 3: additional falling fruit (beyond the
+                 primary one above) get dynamically created
+                 `.height-bar-indicator` siblings appended directly here by
+                 view.js, so a single-fruit drop's track shape stays
+                 exactly (ticks, indicator) — see the B3 Playwright test. -->
+          </div>
+        </div>
+      </section>
+
+      <section class="controls-panel" aria-label="Experiment controls">
+        <fieldset id="fruit-fieldset" class="fruit-fieldset">
+          <legend>Fruit</legend>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="tomato">
+            Tomato
+          </label>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="watermelon" checked>
+            Watermelon
+          </label>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="apple">
+            Apple
+          </label>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="orange">
+            Orange
+          </label>
+          <label class="fruit-option">
+            <input type="radio" name="fruit" value="coconut">
+            Coconut
+          </label>
+        </fieldset>
+
+        <div class="control-row">
+          <label for="height-slider">Height</label>
+          <div class="height-slider-wrap">
+            <input
+              id="height-slider"
+              type="range"
+              min="0"
+              max="1000"
+              step="1"
+              value="662"
+              aria-valuetext="10 m (about Roof)"
+            >
+            <div id="height-slider-ticks" class="height-slider-ticks" aria-hidden="true"></div>
+          </div>
+          <span id="height-readout" class="control-readout">10 m (about Roof)</span>
+        </div>
+
+        <div class="action-row">
+          <button id="drop-button" type="button">Drop</button>
+          <button id="skip-button" type="button" hidden>Skip to result</button>
+          <button id="sound-toggle" type="button" aria-pressed="true">Sound: on</button>
+        </div>
+      </section>
+
+      <p id="status" class="status" role="status" aria-live="polite">Pick a fruit and a height, then press Drop.</p>
+
+      <p id="load-failure" class="load-failure" hidden>
+        The 3D engine couldn't load. Check the internet connection and reload.
+      </p>
+    </main>
+
+    <script type="module">
+      import("./view.js")
+        .then((viewModule) => viewModule.start({
+          main: document.querySelector("main"),
+          canvas: document.getElementById("scene-canvas"),
+          fruitFieldset: document.getElementById("fruit-fieldset"),
+          heightSlider: document.getElementById("height-slider"),
+          heightSliderTicks: document.getElementById("height-slider-ticks"),
+          heightReadout: document.getElementById("height-readout"),
+          dropButton: document.getElementById("drop-button"),
+          skipButton: document.getElementById("skip-button"),
+          soundToggle: document.getElementById("sound-toggle"),
+          statusEl: document.getElementById("status"),
+          instructionsEl: document.getElementById("instructions"),
+          loadFailureEl: document.getElementById("load-failure"),
+          heightBarTrack: document.getElementById("height-bar-track"),
+          heightBarTicks: document.getElementById("height-bar-ticks"),
+          heightBarIndicator: document.getElementById("height-bar-indicator"),
+          heightBarLabel: document.getElementById("height-bar-label"),
+          heightBarMarker: document.getElementById("height-bar-marker"),
+          incomingMarker: document.getElementById("incoming-marker"),
+          incomingMarkerDot: document.getElementById("incoming-marker-dot")
+        }))
+        .catch(() => {
+          document.getElementById("load-failure").hidden = false;
+        });
+    </script>
+  </body>
+</html>

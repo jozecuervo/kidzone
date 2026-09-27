@@ -26,9 +26,10 @@
         <article class="swatch-card target-card">
           <div class="card-heading">
             <span>Target</span>
-            <h2 id="target-name">Light Gold</h2>
+            <h2 id="target-name" tabindex="-1">Light Gold</h2>
           </div>
           <div id="target-swatch" class="paint-swatch" aria-label="Target color"></div>
+          <p class="match-note">Digital paint is approximate. A close mix counts.</p>
         </article>
 
         <article class="swatch-card mix-card">
@@ -37,6 +38,7 @@
             <h2 id="mix-name">Empty cup</h2>
           </div>
           <div id="mix-swatch" class="paint-swatch empty" aria-label="Your mixed color"></div>
+          <p id="closeness" class="closeness">Closeness: add paint to compare</p>
         </article>
       </section>
 
@@ -57,7 +59,10 @@
           <button id="check-button" class="check-button" type="button">Check mix</button>
         </div>
 
-        <p id="feedback" class="feedback" aria-live="polite">Level 1 is ready.</p>
+        <div class="feedback-area">
+          <p id="feedback" class="feedback" role="status" aria-live="polite" tabindex="-1">Level 1 is ready.</p>
+          <button id="next-action-button" class="check-button next-action" type="button" hidden></button>
+        </div>
       </section>
 
       <section id="complete-panel" class="complete-panel" hidden>
@@ -66,11 +71,11 @@
           <span></span>
           <span></span>
         </div>
-        <h2>All 5 colors matched.</h2>
+        <h2 id="complete-heading" tabindex="-1">All 5 colors matched.</h2>
         <p>You finished the lab with red, yellow, blue, white, and brown.</p>
         <button id="play-again-button" class="check-button" type="button">Play again</button>
       </section>
     </main>
-    <script src="./game.js"></script>
+    <script type="module" src="./game.js"></script>
   </body>
 </html>

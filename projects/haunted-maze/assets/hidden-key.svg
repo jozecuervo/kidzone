@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 190" role="img" aria-labelledby="title desc">
+  <title id="title">Hidden key</title>
+  <desc id="desc">A glowing key found in the haunted maze.</desc>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="58%">
+      <stop offset="0" stop-color="#d9fff2" stop-opacity="0.85"/>
+      <stop offset="0.5" stop-color="#64f0be" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#64f0be" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff6d6"/>
+      <stop offset="0.38" stop-color="#ffd166"/>
+      <stop offset="1" stop-color="#d9781f"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="130" cy="96" rx="104" ry="70" fill="url(#glow)"/>
+  <ellipse cx="130" cy="162" rx="80" ry="14" fill="#05070c" opacity="0.28"/>
+  <g transform="rotate(-28 130 95)">
+    <circle cx="82" cy="92" r="34" fill="none" stroke="url(#gold)" stroke-width="18"/>
+    <circle cx="82" cy="92" r="14" fill="#151827"/>
+    <rect x="111" y="83" width="102" height="18" rx="9" fill="url(#gold)"/>
+    <rect x="181" y="96" width="15" height="25" rx="3" fill="url(#gold)"/>
+    <rect x="205" y="96" width="15" height="34" rx="3" fill="url(#gold)"/>
+    <path d="M114 84c12 10 32 10 48 0" fill="none" stroke="#fff1a8" stroke-linecap="round" stroke-width="5" opacity="0.7"/>
+  </g>
+  <g fill="#fff6d6" opacity="0.8">
+    <path d="M54 34l6 12 13 2-10 9 3 13-12-6-12 6 3-13-10-9 13-2z"/>
+    <path d="M207 44l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z"/>
+    <path d="M59 134l4 8 9 1-7 6 2 9-8-4-8 4 2-9-7-6 9-1z"/>
+  </g>
+</svg>

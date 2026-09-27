@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 190" role="img" aria-labelledby="title desc">
+  <title id="title">Pirate treasure</title>
+  <desc id="desc">A treasure chest overflowing with gold coins.</desc>
+  <defs>
+    <radialGradient id="coinGlow" cx="50%" cy="38%" r="64%">
+      <stop offset="0" stop-color="#fff6d6"/>
+      <stop offset="0.32" stop-color="#ffd166"/>
+      <stop offset="1" stop-color="#d9781f"/>
+    </radialGradient>
+    <linearGradient id="wood" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#8b4323"/>
+      <stop offset="1" stop-color="#3a1b15"/>
+    </linearGradient>
+    <linearGradient id="lid" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#b65a2c"/>
+      <stop offset="1" stop-color="#5a271a"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="130" cy="166" rx="96" ry="16" fill="#05070c" opacity="0.32"/>
+  <circle cx="92" cy="69" r="18" fill="url(#coinGlow)"/>
+  <circle cx="119" cy="56" r="20" fill="url(#coinGlow)"/>
+  <circle cx="150" cy="62" r="18" fill="url(#coinGlow)"/>
+  <circle cx="174" cy="82" r="17" fill="url(#coinGlow)"/>
+  <circle cx="74" cy="92" r="16" fill="url(#coinGlow)"/>
+  <circle cx="135" cy="87" r="21" fill="url(#coinGlow)"/>
+  <g fill="none" stroke="#fff1a8" stroke-linecap="round" stroke-width="4" opacity="0.7">
+    <path d="M86 63h11"/>
+    <path d="M113 50h12"/>
+    <path d="M145 56h10"/>
+    <path d="M129 80h13"/>
+  </g>
+  <path d="M54 87c5-34 27-54 76-54s72 20 76 54v25H54z" fill="url(#lid)"/>
+  <path d="M72 87c8-23 25-36 58-36s50 13 58 36" fill="none" stroke="#f4b65d" stroke-width="10" opacity="0.72"/>
+  <path d="M45 91h170v63c0 10-8 18-18 18H63c-10 0-18-8-18-18z" fill="url(#wood)"/>
+  <path d="M45 106h170" stroke="#f2a94b" stroke-width="9"/>
+  <path d="M78 94v74M182 94v74" stroke="#2b1512" stroke-width="9" opacity="0.8"/>
+  <rect x="111" y="105" width="38" height="37" rx="6" fill="#f7bb4a"/>
+  <circle cx="130" cy="123" r="7" fill="#4c2418"/>
+  <path d="M130 130v7" stroke="#4c2418" stroke-linecap="round" stroke-width="5"/>
+  <g opacity="0.95">
+    <circle cx="64" cy="132" r="10" fill="url(#coinGlow)"/>
+    <circle cx="84" cy="144" r="10" fill="url(#coinGlow)"/>
+    <circle cx="197" cy="132" r="10" fill="url(#coinGlow)"/>
+    <circle cx="177" cy="147" r="10" fill="url(#coinGlow)"/>
+  </g>
+  <path d="M214 35l9 18 20 3-15 14 4 20-18-10-18 10 4-20-15-14 20-3z" fill="#ffd166" opacity="0.86"/>
+</svg>

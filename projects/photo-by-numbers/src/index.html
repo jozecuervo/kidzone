@@ -11,8 +11,8 @@
         <header>
             <h1>Photo by Numbers</h1>
             <p>Transform your photos into line drawings to color in</p>
-            <div class="phase-indicator">
-                <div class="phase-step active" data-phase="input">
+            <div class="phase-indicator" aria-label="Activity progress">
+                <div class="phase-step active" data-phase="input" aria-current="step">
                     <span class="step-number">1</span>
                     <span class="step-label">Process Image</span>
                 </div>
@@ -24,7 +24,9 @@
         </header>
 
         <!-- PHASE 1: Image Input & Processing -->
-        <div id="phase-processing" class="phase active">
+        <p id="appStatus" class="status-message" role="status" aria-live="polite"></p>
+
+        <section id="phase-processing" class="phase active" aria-label="Image processing">
 
             <!-- Step 1: Input Selection -->
             <div id="step-input" class="step-section active">
@@ -37,15 +39,15 @@
                         </svg>
                         Use Webcam
                     </button>
-                    <label for="fileUpload" class="btn btn-secondary">
+                    <button id="uploadBtn" type="button" class="btn btn-secondary">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
                         Upload Photo
-                    </label>
-                    <input type="file" id="fileUpload" accept="image/*" hidden>
+                    </button>
+                    <input type="file" id="fileUpload" accept="image/*" class="visually-hidden" tabindex="-1" aria-hidden="true">
                     <button id="sampleBtn" class="btn btn-secondary">Try Sample</button>
                 </div>
 
@@ -149,10 +151,10 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
         <!-- PHASE 2: Coloring Tool -->
-        <div id="phase-coloring" class="phase hidden">
+        <section id="phase-coloring" class="phase hidden" aria-label="Coloring workspace" hidden>
             <div class="coloring-header">
                 <h2>Color Your Drawing!</h2>
                 <div class="button-group">
@@ -169,13 +171,13 @@
                     <div class="tool-section">
                         <h4>Mode</h4>
                         <div class="mode-toggle">
-                            <button id="fillModeBtn" class="btn btn-mode active">
+                            <button id="fillModeBtn" class="btn btn-mode active" aria-pressed="true">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                                 </svg>
                                 Fill Regions
                             </button>
-                            <button id="drawModeBtn" class="btn btn-mode">
+                            <button id="drawModeBtn" class="btn btn-mode" aria-pressed="false">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
                                     <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
@@ -189,24 +191,25 @@
 
                     <div class="tool-section">
                         <h4>Color Picker</h4>
-                        <input type="color" id="colorPicker" value="#2f80ed">
+                        <label for="colorPicker" class="visually-hidden">Choose a custom color</label>
+                        <input type="color" id="colorPicker" value="#2f80ed" aria-label="Choose a custom color">
                     </div>
 
                     <div class="tool-section">
                         <h4>Preset Colors</h4>
                         <div class="preset-colors">
-                            <button class="color-btn" data-color="#000000" style="background: #000000;"></button>
-                            <button class="color-btn" data-color="#FFFFFF" style="background: #FFFFFF; border: 2px solid #ccc;"></button>
-                            <button class="color-btn" data-color="#FF0000" style="background: #FF0000;"></button>
-                            <button class="color-btn" data-color="#00FF00" style="background: #00FF00;"></button>
-                            <button class="color-btn active" data-color="#2F80ED" style="background: #2F80ED;"></button>
-                            <button class="color-btn" data-color="#FFFF00" style="background: #FFFF00;"></button>
-                            <button class="color-btn" data-color="#FF00FF" style="background: #FF00FF;"></button>
-                            <button class="color-btn" data-color="#00FFFF" style="background: #00FFFF;"></button>
-                            <button class="color-btn" data-color="#FFA500" style="background: #FFA500;"></button>
-                            <button class="color-btn" data-color="#800080" style="background: #800080;"></button>
-                            <button class="color-btn" data-color="#FFC0CB" style="background: #FFC0CB;"></button>
-                            <button class="color-btn" data-color="#A52A2A" style="background: #A52A2A;"></button>
+                            <button class="color-btn" data-color="#000000" aria-label="Black" aria-pressed="false" style="background: #000000;"></button>
+                            <button class="color-btn" data-color="#FFFFFF" aria-label="White" aria-pressed="false" style="background: #FFFFFF; border: 2px solid #ccc;"></button>
+                            <button class="color-btn" data-color="#FF0000" aria-label="Red" aria-pressed="false" style="background: #FF0000;"></button>
+                            <button class="color-btn" data-color="#00FF00" aria-label="Green" aria-pressed="false" style="background: #00FF00;"></button>
+                            <button class="color-btn active" data-color="#2F80ED" aria-label="Blue" aria-pressed="true" style="background: #2F80ED;"></button>
+                            <button class="color-btn" data-color="#FFFF00" aria-label="Yellow" aria-pressed="false" style="background: #FFFF00;"></button>
+                            <button class="color-btn" data-color="#FF00FF" aria-label="Magenta" aria-pressed="false" style="background: #FF00FF;"></button>
+                            <button class="color-btn" data-color="#00FFFF" aria-label="Cyan" aria-pressed="false" style="background: #00FFFF;"></button>
+                            <button class="color-btn" data-color="#FFA500" aria-label="Orange" aria-pressed="false" style="background: #FFA500;"></button>
+                            <button class="color-btn" data-color="#800080" aria-label="Purple" aria-pressed="false" style="background: #800080;"></button>
+                            <button class="color-btn" data-color="#FFC0CB" aria-label="Pink" aria-pressed="false" style="background: #FFC0CB;"></button>
+                            <button class="color-btn" data-color="#A52A2A" aria-label="Brown" aria-pressed="false" style="background: #A52A2A;"></button>
                         </div>
                     </div>
                 </div>
@@ -215,7 +218,7 @@
                     <canvas id="coloringCanvas"></canvas>
                 </div>
             </div>
-        </div>
+        </section>
     </div>
 
     <script type="module" src="app.js"></script>

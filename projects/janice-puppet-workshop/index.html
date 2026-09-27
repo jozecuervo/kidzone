@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JANICE Puppet Workshop</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main class="workshop">
+      <header class="topbar">
+        <a class="back-link" href="../../">Back to Kidzone</a>
+        <div>
+          <h1>JANICE Puppet Workshop</h1>
+          <p>Build browser-safe puppet skeletons, outfits, accessories, and moves.</p>
+        </div>
+      </header>
+
+      <section class="workspace" aria-label="JANICE puppet testbed">
+        <section class="stage-panel" aria-label="Puppet stage">
+          <div class="stage-header">
+            <div>
+              <h2 data-puppet-name>JANICE</h2>
+              <p data-puppet-summary>Runway model fixture</p>
+            </div>
+            <label class="toggle">
+              <input data-show-skeleton type="checkbox">
+              <span>Show skeleton</span>
+            </label>
+          </div>
+          <svg
+            class="stage"
+            data-stage
+            viewBox="-180 -170 360 360"
+            role="img"
+            aria-label="Animated digital puppet preview"
+          ></svg>
+        </section>
+
+        <aside class="control-panel" aria-label="Puppet controls">
+          <section>
+            <h2>Puppet</h2>
+            <div class="button-row" data-puppet-buttons></div>
+          </section>
+
+          <section>
+            <h2>Outfit</h2>
+            <div class="button-row" data-outfit-buttons></div>
+          </section>
+
+          <section>
+            <h2>Accessories</h2>
+            <div class="button-row" data-accessory-buttons></div>
+          </section>
+
+          <section>
+            <h2>Moves</h2>
+            <div class="button-row" data-move-buttons></div>
+          </section>
+
+          <section>
+            <h2>Schema Checks</h2>
+            <div class="check-list" data-checks aria-live="polite"></div>
+            <a class="test-link" href="./tests.html">Open full edge-case tests</a>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

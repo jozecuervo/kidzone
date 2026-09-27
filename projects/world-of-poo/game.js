@@ -1,3 +1,5 @@
+import { hasReachedGoal } from './game-rules.js';
+
 // Matter.js module aliases
 const { Engine, Render, Runner, World, Bodies, Body, Events, Constraint, Composite, Vector } = Matter;
 
@@ -112,6 +114,7 @@ class GooGame {
         this.goalCount = this.currentLevel.goalCount;
         this.gooBallsInPipe = 0;
         this.platforms = [];
+        this.levelBodies = [];
 
         // Interaction state
         this.selectedGoo = null;
@@ -124,6 +127,7 @@ class GooGame {
         this.poopBalls = [];
         this.goalReached = false;
         this.winAnimationActive = false;
+        this.levelTimers = new Set();
 
         // Audio context for sounds
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -167,6 +171,7 @@ class GooGame {
             { isStatic: true, label: 'ground' }
         );
         World.add(this.world, ground);
+        this.levelBodies.push(ground);
 
         // Draw ground in SVG
         const groundRect = this.createSVGElement('rect', {
@@ -188,6 +193,7 @@ class GooGame {
                 { isStatic: true, label: 'platform' }
             );
             World.add(this.world, platform);
+            this.levelBodies.push(platform);
 
             const platformRect = this.createSVGElement('rect', {
                 x: platformConfig.x - platformConfig.width / 2,
@@ -223,6 +229,7 @@ class GooGame {
             }
         );
         World.add(this.world, this.pipeSensor);
+        this.levelBodies.push(this.pipeSensor);
 
         // Draw toilet emoji as goal
         const pipeGroup = this.createSVGElement('g', {});
@@ -426,7 +433,7 @@ class GooGame {
         // Set initial active level button
         this.updateLevelButtons();
 
-        // Collision detection for pipe
+        // One game-owned collision handler covers goals and temporary poop balls.
         Events.on(this.engine, 'collisionStart', (event) => {
             event.pairs.forEach(pair => {
                 if (pair.bodyA.label === 'pipe' || pair.bodyB.label === 'pipe') {
@@ -438,9 +445,9 @@ class GooGame {
                         if (gooBall && !gooBall.inPipe && !this.goalReached) {
                             gooBall.inPipe = true;
                             this.gooBallsInPipe++;
+                            this.updateUI();
 
-                            // First goo ball reaches goal - trigger win animation!
-                            if (!this.goalReached) {
+                            if (hasReachedGoal(this.gooBallsInPipe, this.goalCount)) {
                                 this.goalReached = true;
                                 this.playGoalSound();
                                 this.startWinAnimation();
@@ -448,8 +455,34 @@ class GooGame {
                         }
                     }
                 }
+
+                const poopBody = pair.bodyA.label === 'poop' ? pair.bodyA :
+                    (pair.bodyB.label === 'poop' ? pair.bodyB : null);
+                if (!poopBody) return;
+
+                const poop = this.poopBalls.find(item => item.body === poopBody);
+                const otherBody = pair.bodyA === poopBody ? pair.bodyB : pair.bodyA;
+                if (poop && !poop.hasExploded &&
+                    (otherBody.label === 'ground' || otherBody.label === 'platform')) {
+                    poop.hasExploded = true;
+                    this.scheduleLevelTimeout(() => this.explodePoop(poop), 50);
+                }
             });
         });
+    }
+
+    scheduleLevelTimeout(callback, delay) {
+        const timer = setTimeout(() => {
+            this.levelTimers.delete(timer);
+            callback();
+        }, delay);
+        this.levelTimers.add(timer);
+        return timer;
+    }
+
+    cancelLevelTimers() {
+        this.levelTimers.forEach(timer => clearTimeout(timer));
+        this.levelTimers.clear();
     }
 
     toggleExplodeMode() {
@@ -546,7 +579,7 @@ class GooGame {
 
         // Add some sparkle sounds
         for (let i = 0; i < 10; i++) {
-            setTimeout(() => {
+            this.scheduleLevelTimeout(() => {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
 
@@ -576,7 +609,7 @@ class GooGame {
         if (this.pickupMode) this.togglePickupMode();
 
         // Remove all connections to free the goo balls
-        setTimeout(() => {
+        this.scheduleLevelTimeout(() => {
             this.connections.forEach(conn => {
                 World.remove(this.world, conn.constraint);
                 conn.element.remove();
@@ -591,7 +624,7 @@ class GooGame {
         });
 
         // Show win message after all balls flush away
-        setTimeout(() => {
+        this.scheduleLevelTimeout(() => {
             alert('🚽 FLUSHED! All poop made it to the toilet! 🚽');
         }, 4000);
     }
@@ -646,7 +679,7 @@ class GooGame {
         };
 
         // Start animation with slight delay based on index
-        setTimeout(() => {
+        this.scheduleLevelTimeout(() => {
             requestAnimationFrame(animate);
         }, index * 50);
     }
@@ -702,19 +735,6 @@ class GooGame {
         this.poopBalls.push(poop);
         this.gooLayer.appendChild(poopText);
 
-        // Listen for collisions
-        Events.on(this.engine, 'collisionStart', (event) => {
-            event.pairs.forEach(pair => {
-                if ((pair.bodyA === body || pair.bodyB === body) && !poop.hasExploded) {
-                    const otherBody = pair.bodyA === body ? pair.bodyB : pair.bodyA;
-                    // Explode on contact with ground or platforms
-                    if (otherBody.label === 'ground' || otherBody.label === 'platform') {
-                        poop.hasExploded = true;
-                        setTimeout(() => this.explodePoop(poop), 50);
-                    }
-                }
-            });
-        });
     }
 
     explodePoop(poop) {
@@ -1026,6 +1046,10 @@ class GooGame {
 
     updateUI() {
         document.getElementById('goo-count').textContent = this.availableGoo;
+        const goalCounter = document.getElementById('goal-counter');
+        if (!document.getElementById('goal-count')) {
+            goalCounter.innerHTML = 'Need: <span id="goal-count"></span> goo balls in pipe';
+        }
         document.getElementById('goal-count').textContent = Math.max(0, this.goalCount - this.gooBallsInPipe);
     }
 
@@ -1085,6 +1109,9 @@ class GooGame {
     }
 
     reset() {
+        this.cancelLevelTimers();
+        this.winAnimationActive = false;
+
         // Clear everything
         this.gooBalls.forEach(goo => {
             World.remove(this.world, goo.body);
@@ -1115,11 +1142,10 @@ class GooGame {
         });
         this.poopBalls = [];
 
-        // Clear platforms
+        // Clear level-owned ground, pipe sensor, and platforms.
+        this.levelBodies.forEach(body => World.remove(this.world, body));
+        this.levelBodies = [];
         this.platforms.forEach(platform => {
-            if (platform.body) {
-                World.remove(this.world, platform.body);
-            }
             if (platform.element) {
                 platform.element.remove();
             }
@@ -1159,6 +1185,9 @@ class GooGame {
     loadLevel(levelId) {
         if (levelId < 0 || levelId >= LEVELS.length) return;
 
+        this.cancelLevelTimers();
+        this.winAnimationActive = false;
+
         // Stop any active modes
         if (this.poopRainActive) {
             this.togglePoopRain();
@@ -1179,10 +1208,9 @@ class GooGame {
             World.remove(this.world, conn.constraint);
             conn.element.remove();
         });
+        this.levelBodies.forEach(body => World.remove(this.world, body));
+        this.levelBodies = [];
         this.platforms.forEach(platform => {
-            if (platform.body) {
-                World.remove(this.world, platform.body);
-            }
             if (platform.element) {
                 platform.element.remove();
             }
