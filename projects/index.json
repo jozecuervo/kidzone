@@ -336,7 +336,7 @@
       "safety": {
         "privacy": "Local-only play using repo-local images of Max; no accounts, chat, sharing, tracking, or saved data.",
         "adultHelp": "None required for ordinary play; an adult can reinforce that real cats should be given space when they show discomfort.",
-        "notes": "Includes a comic bite directed at the grooming brush, with no injury or lost progress. Warnings use motion, text, shape, and color together, so optional synthesized cues and local cat-growl clips are never required. An always-visible mute button is provided."
+        "notes": "Includes a comic bite directed at the grooming brush, with no injury or lost progress. Warnings use motion, text, shape, and color together, so optional synthesized cues and local purr-and-hiss clips are never required. An always-visible mute button is provided."
       },
       "runtime": {
         "type": "static",

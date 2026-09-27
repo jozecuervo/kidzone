@@ -57,10 +57,8 @@ let activePointerId = null;
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 let audioContext = null;
 let soundEnabled = true;
-const catGrowls = [
-  document.querySelector("#catGrowlOne"),
-  document.querySelector("#catGrowlTwo")
-];
+const purrAudio = document.querySelector("#catPurr");
+const hissAudio = document.querySelector("#catHiss");
 
 function ensureAudio() {
   if (!soundEnabled || !AudioContextClass) {
@@ -137,34 +135,52 @@ function playBrushSound() {
   playTone({ frequency: 190, endFrequency: 155, duration: 0.07, type: "triangle", volume: 0.018 });
 }
 
-function playCatGrowl(index, volume) {
+function playPurrSound() {
   if (!soundEnabled) {
     return;
   }
 
-  stopCatGrowls();
-  const growl = catGrowls[index];
-  growl.volume = volume;
-  growl.play().catch(() => {
+  purrAudio.pause();
+  purrAudio.currentTime = 0;
+  purrAudio.loop = true;
+  purrAudio.volume = 0.42;
+  purrAudio.play().catch(() => {
     // The synthesized cue still plays if a browser declines the audio file.
   });
 }
 
-function stopCatGrowls() {
-  catGrowls.forEach((growl) => {
-    growl.pause();
-    growl.currentTime = 0;
+function stopPurrSound() {
+  purrAudio.pause();
+  purrAudio.currentTime = 0;
+}
+
+function playHissSound() {
+  if (!soundEnabled) {
+    return;
+  }
+
+  stopPurrSound();
+  hissAudio.pause();
+  hissAudio.currentTime = 0;
+  hissAudio.volume = 0.78;
+  hissAudio.play().catch(() => {
+    // The synthesized chomp still plays if a browser declines the audio file.
   });
 }
 
+function stopCatSounds() {
+  stopPurrSound();
+  hissAudio.pause();
+  hissAudio.currentTime = 0;
+}
+
 function playWarningSound() {
-  playCatGrowl(0, 0.48);
   playTone({ frequency: 260, endFrequency: 210, duration: 0.1, type: "square", volume: 0.055 });
   playTone({ frequency: 190, endFrequency: 145, duration: 0.13, type: "square", volume: 0.05, delay: 0.11 });
 }
 
 function playChompSound() {
-  playCatGrowl(1, 0.68);
+  playHissSound();
   playNoise({ duration: 0.22, volume: 0.13, filterFrequency: 520 });
   playTone({ frequency: 125, endFrequency: 48, duration: 0.28, type: "sawtooth", volume: 0.12 });
   playTone({ frequency: 70, endFrequency: 42, duration: 0.2, type: "triangle", volume: 0.1, delay: 0.08 });
@@ -237,6 +253,7 @@ function endBrushing() {
   keyboardBrushing = false;
   activePointerId = null;
   window.clearInterval(brushTimer);
+  stopPurrSound();
   brush.classList.remove("is-brushing", "keyboard-active");
 }
 
@@ -260,6 +277,7 @@ function beginWarning() {
     return;
   }
 
+  stopPurrSound();
   setMood("warning", "Tail twitch! Stop brushing and give Max space.");
   playWarningSound();
 
@@ -344,6 +362,7 @@ function startBrushing({ keyboard = false } = {}) {
   brushing = true;
   keyboardBrushing = keyboard;
   brush.classList.add("is-brushing");
+  playPurrSound();
 
   if (keyboard) {
     brush.classList.add("keyboard-active");
@@ -484,8 +503,12 @@ soundButton.addEventListener("click", () => {
   if (soundEnabled) {
     ensureAudio();
     playTone({ frequency: 440, endFrequency: 660, duration: 0.16, type: "triangle", volume: 0.045 });
+
+    if (brushing && mood === "calm") {
+      playPurrSound();
+    }
   } else {
-    stopCatGrowls();
+    stopCatSounds();
 
     if (audioContext?.state === "running") {
       audioContext.suspend();
