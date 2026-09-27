@@ -14,9 +14,13 @@ A static, local-only timing game starring Max. Brush while he is calm and let go
 - Progress is never removed after a chomp.
 - Max's warning uses movement, text, shape, and color together.
 - The game makes no network requests and saves no data.
-- Brush, warning, chomp, and round-complete sounds are synthesized locally with the Web Audio API; there are no audio files or network calls.
+- Brush and round-complete sounds are synthesized locally with the Web Audio API. Warning and chomp cues add two short, repo-local CC0 cat growls; sound is always optional and the game makes no runtime network calls.
 - `assets/max.png` is the user-provided calm photo of Max, resized for the game.
 - `assets/max-chomp.jpg` is a project-local image edit of the user-provided `IMG_4191.heic`, preserving Max's face while adding obviously fake paper teeth for the comic bite.
+
+## Audio credits
+
+`assets/audio/cat-growl-1.mp3` and `assets/audio/cat-growl-2.mp3` are preview encodings of “Cat Growl 1.wav” and “Cat Growl 2.wav” by HenKonen on Freesound. Both source recordings are released under CC0 1.0. Attribution is not required, but source and checksum details are preserved in `assets/audio/README.md`.
 
 ## Visual direction
 

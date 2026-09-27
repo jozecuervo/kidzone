@@ -57,6 +57,10 @@ let activePointerId = null;
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 let audioContext = null;
 let soundEnabled = true;
+const catGrowls = [
+  document.querySelector("#catGrowlOne"),
+  document.querySelector("#catGrowlTwo")
+];
 
 function ensureAudio() {
   if (!soundEnabled || !AudioContextClass) {
@@ -133,12 +137,34 @@ function playBrushSound() {
   playTone({ frequency: 190, endFrequency: 155, duration: 0.07, type: "triangle", volume: 0.018 });
 }
 
+function playCatGrowl(index, volume) {
+  if (!soundEnabled) {
+    return;
+  }
+
+  stopCatGrowls();
+  const growl = catGrowls[index];
+  growl.volume = volume;
+  growl.play().catch(() => {
+    // The synthesized cue still plays if a browser declines the audio file.
+  });
+}
+
+function stopCatGrowls() {
+  catGrowls.forEach((growl) => {
+    growl.pause();
+    growl.currentTime = 0;
+  });
+}
+
 function playWarningSound() {
+  playCatGrowl(0, 0.48);
   playTone({ frequency: 260, endFrequency: 210, duration: 0.1, type: "square", volume: 0.055 });
   playTone({ frequency: 190, endFrequency: 145, duration: 0.13, type: "square", volume: 0.05, delay: 0.11 });
 }
 
 function playChompSound() {
+  playCatGrowl(1, 0.68);
   playNoise({ duration: 0.22, volume: 0.13, filterFrequency: 520 });
   playTone({ frequency: 125, endFrequency: 48, duration: 0.28, type: "sawtooth", volume: 0.12 });
   playTone({ frequency: 70, endFrequency: 42, duration: 0.2, type: "triangle", volume: 0.1, delay: 0.08 });
@@ -458,8 +484,12 @@ soundButton.addEventListener("click", () => {
   if (soundEnabled) {
     ensureAudio();
     playTone({ frequency: 440, endFrequency: 660, duration: 0.16, type: "triangle", volume: 0.045 });
-  } else if (audioContext?.state === "running") {
-    audioContext.suspend();
+  } else {
+    stopCatGrowls();
+
+    if (audioContext?.state === "running") {
+      audioContext.suspend();
+    }
   }
 });
 
