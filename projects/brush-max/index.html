@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Brush Max while he is calm, then stop when his tail starts to twitch."
+    >
+    <title>Brush Max… If You Dare!</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./game.js" defer></script>
+  </head>
+  <body>
+    <div class="page-noise" aria-hidden="true"></div>
+
+    <main class="poster-shell">
+      <header class="masthead">
+        <a class="back-link" href="../../">← Kidzone</a>
+        <div class="title-block">
+          <p class="kicker">A totally calm grooming experience</p>
+          <h1>
+            Brush <span>Max</span>
+            <small>…if you dare!</small>
+          </h1>
+        </div>
+        <div class="warning-stamp" aria-label="Warning: feisty boy">
+          <span>Warning</span>
+          feisty boy
+        </div>
+      </header>
+
+      <div class="game-layout">
+        <aside class="scrap rules-card" aria-labelledby="how-to-play">
+          <p class="tape-label">How to play</p>
+          <h2 id="how-to-play">Read the cat.</h2>
+          <ol>
+            <li><strong>Press and hold</strong> on Max to brush him.</li>
+            <li>When his tail twitches and the warning appears, <strong>let go!</strong></li>
+            <li>Wait for “calm” before brushing again.</li>
+          </ol>
+          <p class="keyboard-note">
+            <span>Keyboard:</span> focus the game and hold the space bar.
+          </p>
+        </aside>
+
+        <section class="game-card" aria-labelledby="game-heading">
+          <h2 id="game-heading" class="visually-hidden">Brush Max game</h2>
+
+          <div class="game-toolbar">
+            <p class="round-label">Round <strong id="roundNumber">1</strong>/3</p>
+            <p id="moodBadge" class="mood-badge" data-mood="calm">
+              <span class="mood-dot" aria-hidden="true"></span>
+              <span id="moodText">Max is sizing you up</span>
+            </p>
+            <div class="toolbar-actions">
+              <button
+                id="soundButton"
+                class="icon-button"
+                type="button"
+                aria-label="Turn sound off"
+                aria-pressed="true"
+                title="Turn sound off"
+              >♪</button>
+              <button id="helpButton" class="icon-button" type="button" aria-label="Show instructions">?</button>
+            </div>
+          </div>
+
+          <div
+            id="catStage"
+            class="cat-stage"
+            data-mood="idle"
+            tabindex="0"
+            role="button"
+            aria-describedby="stageInstructions"
+            aria-label="Brush Max. Press and hold while Max is calm, and release when he warns you."
+          >
+            <p id="stageInstructions" class="visually-hidden">
+              Press and hold on Max, or hold the space bar. Release as soon as the warning appears.
+            </p>
+
+            <div class="tail" aria-hidden="true">
+              <span></span>
+            </div>
+
+            <div class="photo-frame">
+              <img
+                class="max-photo"
+                src="./assets/max.png"
+                alt="Max, a sleek black cat with green-gold eyes and a blue collar"
+                draggable="false"
+              >
+              <div class="photo-grain" aria-hidden="true"></div>
+              <p class="name-strip" aria-hidden="true">MAX // sweet angel?</p>
+            </div>
+
+            <div id="brush" class="brush" aria-hidden="true">
+              <span class="brush-handle"></span>
+              <span class="brush-head"><i></i><i></i><i></i><i></i><i></i></span>
+            </div>
+
+            <img
+              class="chomp-photo"
+              src="./assets/max-chomp.jpg"
+              alt=""
+              aria-hidden="true"
+              draggable="false"
+            >
+
+            <div id="warningBurst" class="warning-burst" aria-hidden="true">
+              <strong>TAIL TWITCH!</strong>
+              <span>LET GO!</span>
+            </div>
+
+            <div id="chompBurst" class="chomp-burst" aria-hidden="true">
+              <strong>CHOMP!</strong>
+              <span>the brush, not you</span>
+            </div>
+
+            <div id="introOverlay" class="stage-overlay">
+              <div class="overlay-card intro-card">
+                <p class="eyebrow">The mission</p>
+                <h3>Make him magnificent.</h3>
+                <p>Brush only while Max is calm. His tail always warns you before he chomps.</p>
+                <button id="startButton" class="big-button" type="button">I am ready</button>
+              </div>
+            </div>
+
+            <div id="roundOverlay" class="stage-overlay" hidden>
+              <div class="overlay-card round-card">
+                <p class="eyebrow" id="roundEyebrow">Round complete</p>
+                <h3 id="roundTitle">Respectable fluff!</h3>
+                <p id="roundMessage">Max is getting suspicious.</p>
+                <button id="nextButton" class="big-button" type="button">Next round</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="progress-panel">
+            <div class="meter-copy">
+              <span>Magnificence</span>
+              <strong><span id="strokeCount">0</span>/<span id="strokeGoal">9</span> brushes</strong>
+            </div>
+            <div
+              id="furMeter"
+              class="fur-meter"
+              role="progressbar"
+              aria-label="Brushing progress"
+              aria-valuemin="0"
+              aria-valuemax="9"
+              aria-valuenow="0"
+            >
+              <span id="furFill"></span>
+            </div>
+          </div>
+
+          <p id="liveStatus" class="live-status" aria-live="polite">
+            Press “I am ready” to begin.
+          </p>
+        </section>
+
+        <aside class="side-stack">
+          <section class="scrap dossier" aria-labelledby="max-file">
+            <p class="tape-label red">Case file</p>
+            <h2 id="max-file">Max</h2>
+            <dl>
+              <div><dt>Coat</dt><dd>Midnight</dd></div>
+              <div><dt>Eyes</dt><dd>Judgmental</dd></div>
+              <div><dt>Attitude</dt><dd>Feisty</dd></div>
+              <div><dt>Innocent</dt><dd>Allegedly</dd></div>
+            </dl>
+          </section>
+
+          <section class="scrap score-card" aria-labelledby="brush-report">
+            <p class="tape-label blue">Brush report</p>
+            <h2 id="brush-report">Damage</h2>
+            <p class="chomp-counter"><strong id="chompCount">0</strong> brushes chomped</p>
+            <p class="tiny-note">Your progress is always safe. Max is dramatic, not cruel.</p>
+          </section>
+        </aside>
+      </div>
+
+      <footer class="footer-note">
+        <strong>Real-cat rule:</strong> Cats tell us when they need space. Stop when they say so.
+      </footer>
+    </main>
+  </body>
+</html>
