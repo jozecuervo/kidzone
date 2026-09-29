@@ -1,8 +1,8 @@
 # Kidzone
 
-Kidzone is a small open-source playground for kids who want to make web games,
-creative tools, and playful experiments with help from a parent or trusted
-adult.
+Play it: https://jozecuervo.github.io/kidzone/
+
+Kidzone is a small open-source playground where kids make web games, creative tools and playful experiments, with help from a parent or trusted adult. Built by Jose Miguel Hernandez (https://jose.io) with dezi-bot and a crew of young game designers.
 
 The projects are meant to be simple enough to open, read, change, and share.
 Most of them use plain HTML, CSS, and JavaScript, so a first contribution can be
@@ -37,6 +37,18 @@ Kidzone is designed for parent-assisted coding. The repo favors:
 
 Please help kids avoid adding personal information, photos of themselves,
 addresses, school names, private API keys, or open-ended communication features.
+
+## How It's Built
+
+Kids bring the idea. An AI coding agent builds a rough first draft. Then the kid and a parent iterate together: they play it, talk about how they want the game to work, and make refinements, with the parent reviewing and guiding each step. Kidzone is as much about that creative back-and-forth as it is about agentic coding.
+
+The guardrails follow the pattern that keeps production AI agents safe: say what the tool may do, check it automatically, and keep a person in the loop.
+
+- `skills/kidzone-new-game` starts every new game with questions: what the player does, what makes it fun, and what it must never do. A parent reviews the plan before anything is built. Measure twice, cut once.
+- `skills/kidzone-game-iteration` handles changes to an existing game, one small pull request at a time.
+- `AGENTS.md` gives any agent the house rules: no network, storage, camera, microphone or sharing unless the project declares it, and controls that really work.
+- `scripts/check.mjs` enforces those declarations on every pull request, so a rule an agent forgets still gets caught.
+- Ten games have Playwright tests that play the main path, so a game that can't be won, or controls that stop working, turn up before a kid finds them.
 
 ## Play Locally
 
@@ -102,7 +114,7 @@ The check looks for stale project metadata, JavaScript syntax errors, undeclared
 external URLs, and privacy-sensitive features that are missing from
 `project.json`.
 
-## Take Project Snapshots
+## Run The Browser Tests
 
 Install the Playwright package and Chromium browser once:
 
