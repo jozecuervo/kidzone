@@ -1,6 +1,6 @@
 # Color Mixer Lab
 
-Author: Lu
+Author: Kidzone contributor
 
 Color Mixer Lab is a five-level color mixing game. Players only get red,
 yellow, blue, white, and brown, then try to mix the target color for each level.
