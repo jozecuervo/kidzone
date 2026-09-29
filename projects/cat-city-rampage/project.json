@@ -1,0 +1,32 @@
+{
+  "title": "Cat City Rampage",
+  "summary": "Two mischievous cats race to grab the yarn at the top of a skyscraper, smashing and clawing their way up.",
+  "description": "Race your friend's cat up a crumbling building. Destroy walls to create paths, dodge obstacles, and be the first to reach the yarn ball at the top!",
+  "date": "2026-07-27",
+  "dateSource": "project creation",
+  "entry": "index.html",
+  "cta": "Start Rampage",
+  "tags": [
+    "arcade",
+    "competitive",
+    "physics"
+  ],
+  "order": 70,
+  "ageRange": "7-12",
+  "interaction": [
+    "keyboard",
+    "touch"
+  ],
+  "safety": {
+    "privacy": "Local-only play with no accounts, chat, sharing, or saved data.",
+    "adultHelp": "None required. This is a silly, playful game about cartoon destruction with no consequence or pressure.",
+    "notes": "Two-player competitive game. Cartoon destruction of buildings. No timers, no failure states, just fun chaos. Both cats are always visible on screen."
+  },
+  "runtime": {
+    "type": "static",
+    "requiresServer": false,
+    "networkAccess": "none",
+    "storesData": false,
+    "externalDependencies": []
+  }
+}
