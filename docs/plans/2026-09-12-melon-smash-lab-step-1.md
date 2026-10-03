@@ -1,7 +1,7 @@
 # Plan: Melon Smash Lab, step 1 (drop a watermelon)
 
 Status: APPROVED by Jose 2026-09-12; delegated to xo, who dispatches engineer and reviews
-Branch: `feature/melon-smash-lab` in the primary checkout `/Users/jose/dev/jozecuervo/kidzone`
+Branch: `feature/melon-smash-lab` in the primary kidzone checkout
 Language: **JavaScript (ES modules)**, because it is a browser runtime and this repo's
 convention (package.json, node:test, Playwright). No shell scripts.
 Engine decision: `docs/decisions/2026-09-12-melon-smash-lab-uses-cannon-es.md`
